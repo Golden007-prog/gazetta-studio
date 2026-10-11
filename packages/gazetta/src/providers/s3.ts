@@ -2,6 +2,7 @@ import {
   S3Client,
   GetObjectCommand,
   PutObjectCommand,
+  DeleteObjectsCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
   DeleteObjectCommand,
@@ -155,18 +156,40 @@ export function createS3Provider(options: S3ProviderOptions): StorageProvider & 
     },
 
     async rm(path: string): Promise<void> {
-      const prefix = normalizePath(path)
-      // Try deleting as a single object first
+      const key = normalizePath(path)
+      // The path as a single object (a file)…
       try {
-        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: prefix }))
+        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
       } catch {
         /* ignore */
       }
-      // Delete all objects with this prefix
-      const response = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }))
-      for (const obj of response.Contents ?? []) {
-        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: obj.Key! }))
-      }
+      // …and as a "directory": every key UNDER it. The trailing '/' is the
+      // folder boundary — listing by the bare key also matched siblings that
+      // merely share the prefix ('home' → 'homepage/…', '.hash' → '.hash.fr')
+      // and deleted them. Paginate: one listing returns at most 1000 keys.
+      if (!key) return // never treat rm('') as "delete the whole bucket"
+      let continuationToken: string | undefined
+      do {
+        const response = await client.send(
+          new ListObjectsV2Command({ Bucket: bucket, Prefix: `${key}/`, ContinuationToken: continuationToken }),
+        )
+        // One batch per listing page (both cap at 1000 keys): two requests
+        // for 1005 objects instead of 1005. Surface per-key failures — a
+        // partial delete must not look like success.
+        const keys = (response.Contents ?? []).map(o => ({ Key: o.Key! }))
+        if (keys.length > 0) {
+          const result = await client.send(
+            new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys, Quiet: true } }),
+          )
+          if (result.Errors?.length) {
+            const first = result.Errors[0]
+            throw new Error(
+              `Cannot delete ${result.Errors.length} object(s) under ${key}/: ${first.Key} — ${first.Message}`,
+            )
+          }
+        }
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
+      } while (continuationToken)
     },
 
     async readStream(path: string, range?: ByteRange): Promise<ReadableStream<Uint8Array>> {

@@ -125,17 +125,6 @@ export function runProviderConformance(factory: ProviderFactory): void {
       expect(await provider.readFile('rm-sib-file/.ab12cd34.hash.fr')).toBe('fr')
     })
 
-    it('rm deletes a directory with more objects than one listing page (1000)', async () => {
-      const n = 1005
-      for (let i = 0; i < n; i += 50) {
-        await Promise.all(
-          Array.from({ length: Math.min(50, n - i) }, (_, j) => provider.writeFile(`rm-many/f${i + j}.txt`, 'x')),
-        )
-      }
-      await provider.rm('rm-many')
-      expect(await provider.exists('rm-many')).toBe(false)
-    }, 120_000)
-
     it('mkdir is safe to call (no-op on object stores, creates on fs)', async () => {
       // No assertion beyond "doesn't throw" — object stores have no
       // real directories, filesystem does but we don't need to verify
@@ -181,6 +170,20 @@ export function runProviderConformance(factory: ProviderFactory): void {
       const actual = await drainStream(await provider.readStream(path))
       expect(actual).toEqual(replacement)
     })
+
+    // Kept LAST in the battery: ~1000 writes against MinIO can leave dropped
+    // keep-alive sockets behind, and a test running after it would see
+    // 'socket hang up' (seen on the first run of this test, #903).
+    it('rm deletes a directory with more objects than one listing page (1000)', async () => {
+      const n = 1005
+      for (let i = 0; i < n; i += 10) {
+        await Promise.all(
+          Array.from({ length: Math.min(10, n - i) }, (_, j) => provider.writeFile(`rm-many/f${i + j}.txt`, 'x')),
+        )
+      }
+      await provider.rm('rm-many')
+      expect(await provider.exists('rm-many')).toBe(false)
+    }, 120_000)
   })
 }
 
