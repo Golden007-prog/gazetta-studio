@@ -100,6 +100,42 @@ export function runProviderConformance(factory: ProviderFactory): void {
       expect(await provider.exists('rm-dir/sub/c.txt')).toBe(false)
     })
 
+    // Object stores have no real directories: a folder delete is "delete every
+    // key under the folder". It must stop at the folder boundary. S3's rm
+    // listed keys by the bare prefix, so rm('…/home') also deleted
+    // '…/homepage/…' and '…/home.bak' — and a file rm of '.ab12.hash' took
+    // '.ab12.hash.fr' with it. Found by the Opus 5.5 reviewer check on #881.
+    it('rm on a directory leaves same-prefix siblings alone', async () => {
+      await provider.writeFile('rm-sib/home/state.json', 'home')
+      await provider.writeFile('rm-sib/home/approvers/alice', '')
+      await provider.writeFile('rm-sib/homepage/state.json', 'homepage')
+      await provider.writeFile('rm-sib/home.bak', 'backup')
+      await provider.rm('rm-sib/home')
+      expect(await provider.exists('rm-sib/home/state.json')).toBe(false)
+      expect(await provider.exists('rm-sib/home/approvers/alice')).toBe(false)
+      expect(await provider.readFile('rm-sib/homepage/state.json')).toBe('homepage')
+      expect(await provider.readFile('rm-sib/home.bak')).toBe('backup')
+    })
+
+    it('rm on a file leaves same-prefix sibling files alone', async () => {
+      await provider.writeFile('rm-sib-file/.ab12cd34.hash', '')
+      await provider.writeFile('rm-sib-file/.ab12cd34.hash.fr', 'fr')
+      await provider.rm('rm-sib-file/.ab12cd34.hash')
+      expect(await provider.exists('rm-sib-file/.ab12cd34.hash')).toBe(false)
+      expect(await provider.readFile('rm-sib-file/.ab12cd34.hash.fr')).toBe('fr')
+    })
+
+    it('rm deletes a directory with more objects than one listing page (1000)', async () => {
+      const n = 1005
+      for (let i = 0; i < n; i += 50) {
+        await Promise.all(
+          Array.from({ length: Math.min(50, n - i) }, (_, j) => provider.writeFile(`rm-many/f${i + j}.txt`, 'x')),
+        )
+      }
+      await provider.rm('rm-many')
+      expect(await provider.exists('rm-many')).toBe(false)
+    }, 120_000)
+
     it('mkdir is safe to call (no-op on object stores, creates on fs)', async () => {
       // No assertion beyond "doesn't throw" — object stores have no
       // real directories, filesystem does but we don't need to verify
