@@ -19,13 +19,8 @@ name: Bots monthly compaction
 #   - cut-planner:compact — rewrite lessons-learned.md from the
 #     decision log (no skip-list; design-cut-planner.md Q7a).
 on:
-  schedule:
-    # First Saturday of the month at 03:00 UTC = 05:00 CEST.
-    # Cron syntax `* * 1-7 * 6` means "Saturdays where day-of-month
-    # is 1-7" — i.e., the first Saturday. Stays 30 min after the
-    # weekly dead-code-watcher fires (02:30 UTC) so they don't
-    # collide on the same morning.
-    - cron: '0 3 1-7 * 6'
+  # No schedule of its own: night-shift.yml starts it on the first Sunday night of the month, one bot at
+  # a time, after checking the Claude quota.
   workflow_dispatch:
     # Manual trigger for testing or one-off compaction.
     inputs:

@@ -1,0 +1,181 @@
+name: Night shift
+
+# Runs the heavy Claude bots one at a time, at night, in priority order.
+# They share one Claude subscription budget with the maintainer's
+# interactive sessions, so running them in parallel or during the day
+# made them starve each other and the maintainer (see
+# design-cut-planner.md Q6 for the measured quota stops).
+#
+# Weekly rhythm (the maintainer reviews on Saturdays, so everything that
+# opens PRs finishes by Saturday morning):
+#
+#   Fri night   feature-bot alone, with the whole budget
+#   Thu night   dead-code-watcher, then fix-bot
+#   Sun, Tue    fix-bot, then review-bot (+ compactors on the first Sunday)
+#   Mon, Wed, Sat   fix-bot
+#
+# The cheap bots (triage, flake-watcher, discovery-prep, cut-planner,
+# mutation) keep their own schedules.
+#
+# GitHub starts scheduled runs late: a 03:00 UTC schedule here has
+# started between 05:40 and 10:00 UTC. The 20:37 UTC schedule therefore
+# lands around 01:00-04:00 UTC. The 21:37 schedule is a backup for the
+# nights GitHub drops a scheduled run; whichever starts second sees that
+# the other already ran the night's lineup and skips.
+#
+# Before each bot, a one-line Haiku call reports the account's 5-hour
+# and 7-day usage (`rate_limit_event` in stream-json). The chain stops
+# there if usage is high, instead of starting a run that would be cut
+# off and lose its partial work.
+
+on:
+  schedule:
+    - cron: '37 20 * * 5' # Fri: feature-bot
+    - cron: '37 21 * * 5'
+    - cron: '37 20 * * 4' # Thu: dead-code-watcher, fix-bot
+    - cron: '37 21 * * 4'
+    - cron: '37 20 * * 0,2' # Sun, Tue: fix-bot, review-bot
+    - cron: '37 21 * * 0,2'
+    - cron: '37 20 * * 1,3,6' # Mon, Wed, Sat: fix-bot
+    - cron: '37 21 * * 1,3,6'
+  workflow_dispatch:
+    inputs:
+      lineup:
+        description: 'Space-separated bots to run in order, e.g. "fix-bot review-bot". Options: feature-bot fix-bot review-bot dead-code-watcher bots-compact'
+        required: true
+      dry_run:
+        description: 'Set to "1" to dispatch only bots that support dry_run (feature-bot, review-bot), in dry-run mode. Proves the chain without spending budget.'
+        required: false
+        default: ''
+
+concurrency:
+  # Primary and backup queue behind each other instead of overlapping.
+  group: night-shift
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      lineup: ${{ steps.lineup.outputs.lineup }}
+    steps:
+      - id: lineup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_LINEUP: ${{ inputs.lineup }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "lineup=$INPUT_LINEUP" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Skip if the other schedule of this night already ran the chain.
+          # Only scheduled runs count, so a manual dispatch never blocks a night.
+          since=$(date -u -d '12 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          for id in $(gh run list --workflow night-shift.yml --event schedule --created ">=$since" --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "$GITHUB_RUN_ID" ] && continue
+            ran=$(gh run view "$id" --json jobs --jq '[.jobs[] | select(.name == "chain" and .conclusion != "skipped" and .conclusion != "cancelled")] | length')
+            if [ "$ran" != 0 ]; then
+              echo "::notice::Run $id already ran tonight's lineup; skipping."
+              echo "lineup=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+
+          case "${SCHEDULE#* }" in
+            '20 * * 5'|'21 * * 5') lineup='feature-bot' ;;
+            '20 * * 4'|'21 * * 4') lineup='dead-code-watcher fix-bot' ;;
+            '20 * * 0,2'|'21 * * 0,2') lineup='fix-bot review-bot' ;;
+            '20 * * 1,3,6'|'21 * * 1,3,6') lineup='fix-bot' ;;
+            *) echo "::error::No lineup for schedule '$SCHEDULE'"; exit 1 ;;
+          esac
+          # Compactors on the first Sunday night of the month. The run starts
+          # hours after the schedule, so date the night, not the start time.
+          night=$(date -u -d '12 hours ago')
+          if [ "$(date -u -d "$night" +%u)" = 7 ] && [ "$(date -u -d "$night" +%-d)" -le 7 ]; then
+            lineup="$lineup bots-compact"
+          fi
+          echo "lineup=$lineup" >> "$GITHUB_OUTPUT"
+          echo "Tonight: $lineup"
+
+  chain:
+    needs: plan
+    if: needs.plan.outputs.lineup != ''
+    runs-on: ubuntu-latest
+    # feature-bot alone can take 180 min; two 60-min bots plus waiting fit too.
+    timeout-minutes: 300
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      LINEUP: ${{ needs.plan.outputs.lineup }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    steps:
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run the lineup
+        run: |
+          set -uo pipefail
+
+          # Prints "<five_hour> <seven_day> <status>" from a one-line Haiku call.
+          # Empty output means the CLI reported no usage; treated as unknown.
+          probe() {
+            claude -p 'Reply with OK.' --model haiku --output-format stream-json --verbose 2>/dev/null \
+              | jq -r 'select(.type == "rate_limit_event") | .rate_limit_info
+                       | "\(.unifiedWindows.five_hour.utilization // 0) \(.unifiedWindows.seven_day.utilization // 0) \(.status)"' \
+              | tail -1
+          }
+
+          first=1
+          for bot in $LINEUP; do
+            read -r five seven status <<< "$(probe)"
+            echo "Before $bot: five_hour=${five:-?} seven_day=${seven:-?} status=${status:-?}"
+            if [ "${status:-}" = rejected ]; then
+              echo "::warning::Quota exhausted before $bot; stopping the chain."
+              break
+            fi
+            # The first bot runs unless the limit is already hit; later bots
+            # need headroom, so one bot's run doesn't use the night up.
+            if [ "$first" = 0 ] && [ -n "${five:-}" ] && \
+               awk -v f="$five" -v s="$seven" 'BEGIN { exit !(f >= 0.8 || s >= 0.9) }'; then
+              echo "::warning::Usage high before $bot (5h $five, 7d $seven); stopping the chain."
+              break
+            fi
+            first=0
+
+            args=()
+            case "$bot" in
+              feature-bot|review-bot) [ -n "$DRY_RUN" ] && args=(-f dry_run=1) ;;
+              *) if [ -n "$DRY_RUN" ]; then echo "Skipping $bot (no dry_run)"; continue; fi ;;
+            esac
+            [ "$bot" = bots-compact ] && args+=(-f target=all)
+
+            started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            gh workflow run "$bot.yml" --ref "$GITHUB_REF_NAME" "${args[@]}"
+            id=''
+            for _ in $(seq 1 30); do
+              id=$(gh run list --workflow "$bot.yml" --event workflow_dispatch --created ">=$started" \
+                     --json databaseId --jq '.[0].databaseId // empty')
+              [ -n "$id" ] && break
+              sleep 10
+            done
+            if [ -z "$id" ]; then
+              echo "::error::Dispatched $bot but its run never appeared; stopping."
+              exit 1
+            fi
+            echo "$bot: https://github.com/$GH_REPO/actions/runs/$id"
+            # A failed bot run doesn't stop the chain; each bot reports its
+            # own failures. Only the quota check above does.
+            gh run watch "$id" --interval 60 > /dev/null || echo "::warning::$bot run $id did not succeed"
+            echo "$bot finished: $(gh run view "$id" --json conclusion --jq .conclusion)"
+          done

@@ -10,13 +10,8 @@ name: Review bot
 # workflow ships now so the cron schedule + concurrency group + cache
 # layout are in place when the pipeline implementation lands.
 on:
-  schedule:
-    # 04:31 UTC daily (~06:31 CEST / 05:31 CET). Runs last in the producer
-    # chain, after fix-bot (04:03) + feature-bot (04:17). Off the contended
-    # :00/:30 cron minutes (GitHub deprioritizes those under load — the old
-    # 04:30 cluster was getting skipped). Lands before the 10:00 CET review
-    # window.
-    - cron: '31 4 * * *'
+  # No schedule of its own: night-shift.yml starts it on Sunday and Tuesday nights, one bot at
+  # a time, after checking the Claude quota.
   workflow_dispatch:
     inputs:
       area:

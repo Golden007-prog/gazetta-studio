@@ -11,16 +11,8 @@ name: Fix bot
 # TDD-first hard contract: bot's first commit MUST be a failing test or
 # it stops. See bots/fix-bot/prompt.md.
 on:
-  schedule:
-    # 04:00 UTC daily = 06:00 CEST / 05:00 CET. Runs after flake-watcher
-    # (02:00 UTC) and triage-bot (03:00 UTC) so today's freshly-filed
-    # bug + ready-for-agent issues from BOTH producer bots and triage's
-    # confident-bug auto-advance are visible in the same morning's run.
-    # 04:03 UTC daily. After discovery-prep-bot (03:47) — different label
-    # inputs so no race. Off the contended :00 cron minute (GitHub
-    # deprioritizes :00/:30 under load — the 04:00 cluster was getting
-    # skipped). Lands the PR well before the 10:00 CET review window.
-    - cron: '3 4 * * *'
+  # No schedule of its own: night-shift.yml starts it every night except Friday, one bot at
+  # a time, after checking the Claude quota.
   workflow_dispatch:
     inputs:
       issue:
@@ -29,7 +21,7 @@ on:
       max_attempts:
         description: 'Generator-critic loop cap (default 3; lower for cost-bounded testing)'
         required: false
-        default: '5'
+        default: '3'
       budget_ms:
         description: 'Per-run wall-clock budget in ms (default 3000000 = 50min)'
         required: false

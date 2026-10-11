@@ -9,11 +9,8 @@ name: Dead code watcher
 # enforces doesn't compose well with code deletion — the verification
 # is "existing tests pass," not "a new failing test passes."
 on:
-  schedule:
-    # Saturday 02:30 UTC = 04:30 CEST. 1h after Saturday's flake-watcher
-    # to avoid runner contention. Weekly cadence — knip output is stable
-    # across days; daily would mostly re-find the same things.
-    - cron: '30 2 * * 6'
+  # No schedule of its own: night-shift.yml starts it on Thursday nights, one bot at
+  # a time, after checking the Claude quota.
   workflow_dispatch:
     # Manual trigger for testing or backfill after prompt iteration.
     inputs:
@@ -28,7 +25,7 @@ on:
       per_run_finding_cap:
         description: 'Override PER_RUN_FINDING_CAP (default 3).'
         required: false
-        default: '5'
+        default: '3'
 
 # Single-instance invariant for cache safety. The bot appends to a
 # cached reviewer-log.jsonl; two concurrent runs would race on the

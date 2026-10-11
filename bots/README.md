@@ -96,12 +96,12 @@ GITHUB_REPOSITORY=gazetta-studio/gazetta-studio GH_TOKEN=$(gh auth token) \
 |---|---|---|---|---|
 | `flake-watcher` | Daily 02:00 UTC + workflow_dispatch | CI events (run_attempt >= 2) — not labels | New issue with `bug` + `flake` + `area: X` + `ready-for-agent` (+ `recurring-flake` when applicable) | **Producer** — self-classifies, bypasses triage |
 | `mutation-watcher` | `workflow_run` on Mutation completion + workflow_dispatch | Latest Mutation artifact — not labels | New issue with `bug` + `area: X` + `ready-for-agent` per source file with surviving mutants | **Producer** — self-classifies, bypasses triage |
-| `dead-code-watcher` | Weekly Sat 02:30 UTC + workflow_dispatch | knip JSON output (files, exports, types, deps) — not labels; ≥30-day stable filter | Delete-PR per safe finding (full pipeline, NOT delegated to fix-bot) OR skip-list-entry PR | **Producer** — autonomous fixer with durable memory + generator-critic reviewer loop |
-| `bots-compact` | Monthly 1st Sat 03:00 UTC + workflow_dispatch | All memoryful bots' skip-lists (one job per bot) | Per-bot PRs: glob-rule compaction (dead-code-watcher), lessons-learned.md rewrite (fix-bot, review-bot, cut-planner) | Memory compactor |
+| `dead-code-watcher` | [`night-shift`](../.github/workflows/night-shift.yml), Thu night + workflow_dispatch | knip JSON output (files, exports, types, deps) — not labels; ≥30-day stable filter | Delete-PR per safe finding (full pipeline, NOT delegated to fix-bot) OR skip-list-entry PR | **Producer** — autonomous fixer with durable memory + generator-critic reviewer loop |
+| `bots-compact` | [`night-shift`](../.github/workflows/night-shift.yml), first Sun night of the month + workflow_dispatch | All memoryful bots' skip-lists (one job per bot) | Per-bot PRs: glob-rule compaction (dead-code-watcher), lessons-learned.md rewrite (fix-bot, review-bot, cut-planner) | Memory compactor |
 | `triage-bot` | Daily 03:00 UTC + workflow_dispatch | Open issue lacking all of `bug`, `enhancement`, `triage-uncertain`, `ready-for-agent`, `ready-for-human`, `wontfix`, `needs-info` | One of `bug` / `enhancement` / `triage-uncertain` + `area: X`. Reproducible bug also gets `ready-for-agent`. | Classifier |
 | `discovery-prep-bot` | Daily 04:00 UTC + workflow_dispatch | `enhancement` AND lacks all of `ready-for-human`, `ready-for-agent`, `wontfix`, `needs-info` AND body has no `**Feature**:` front-matter (design-passed work — planner issues and cuts — is never researched) | Research comment + `ready-for-human` label | Researcher |
-| `fix-bot` | Daily 04:00 UTC + workflow_dispatch | `bug` + `ready-for-agent` AND lacks all of `ready-for-human`, `wontfix`, `needs-info` AND no `fix-bot-attempted` since reopen AND no skip-list match | PR (two commits: failing test + fix) on approve, skip-list entry on reject/needs-human, OR stuck-comment + `ready-for-human` on stuck path; on an approved fix whose push or PR fails, the work saved as a patch + comment + `ready-for-human` (`delivery-failed`) | Implementer — generator-critic reviewer loop + durable memory + lessons-learned |
-| `feature-bot` | Daily 04:17 UTC + workflow_dispatch | `enhancement` + `ready-for-agent` AND lacks all of `ready-for-human`, `wontfix`, `needs-info` AND `**Depends on**:` refs all **landed** (closed by a merged PR that names them — `_lib/cut-landing.ts`) | Draft PR on APPROVE; `ready-for-human` + skip-list entry on NEEDS_HUMAN (the issue stays open); comment + `needs-info` on NEEDS_INPUT; comment + `needs-refinement` hand-off to cut-planner when the loop exhausts on a cut-planner-filed cut; comment + `needs-info` when a dependency is closed but has no evidence it landed (`dep-unverified`); on an approved cut whose push or PR fails, the work saved as a patch + comment + `ready-for-human` (`delivery-failed`) | Implementer — feature cuts via generator-critic reviewer loop + durable memory + lessons-learned. See [design-feature-bot.md](../.claude/rules/design-feature-bot.md). |
+| `fix-bot` | [`night-shift`](../.github/workflows/night-shift.yml), every night except Fri + workflow_dispatch | `bug` + `ready-for-agent` AND lacks all of `ready-for-human`, `wontfix`, `needs-info` AND no `fix-bot-attempted` since reopen AND no skip-list match | PR (two commits: failing test + fix) on approve, skip-list entry on reject/needs-human, OR stuck-comment + `ready-for-human` on stuck path; on an approved fix whose push or PR fails, the work saved as a patch + comment + `ready-for-human` (`delivery-failed`) | Implementer — generator-critic reviewer loop + durable memory + lessons-learned |
+| `feature-bot` | [`night-shift`](../.github/workflows/night-shift.yml), Fri night + workflow_dispatch | `enhancement` + `ready-for-agent` AND lacks all of `ready-for-human`, `wontfix`, `needs-info` AND `**Depends on**:` refs all **landed** (closed by a merged PR that names them — `_lib/cut-landing.ts`) | Draft PR on APPROVE; `ready-for-human` + skip-list entry on NEEDS_HUMAN (the issue stays open); comment + `needs-info` on NEEDS_INPUT; comment + `needs-refinement` hand-off to cut-planner when the loop exhausts on a cut-planner-filed cut; comment + `needs-info` when a dependency is closed but has no evidence it landed (`dep-unverified`); on an approved cut whose push or PR fails, the work saved as a patch + comment + `ready-for-human` (`delivery-failed`) | Implementer — feature cuts via generator-critic reviewer loop + durable memory + lessons-learned. See [design-feature-bot.md](../.claude/rules/design-feature-bot.md). |
 | `cut-planner` | Daily 03:00 UTC + workflow_dispatch | Planner issues (`enhancement` + `**Feature**:` + `**Design**:`/`## State`, no `ready-for-agent`) AND cut issues labelled `needs-refinement` | At most ONE action per run: a new cut sub-issue (`ready-for-agent`, or `ready-for-human` when it edits `.github/workflows/**`), a revised spec + `needs-refinement` → `ready-for-agent`, a re-decomposition, or an escalation (`needs-info` on the planner / `ready-for-human` on the cut). Before filing it checks that the feature's closed cuts actually landed; an unverified one escalates the feature (`unverified-close`) instead | **Planner** — owns the per-feature cut pipeline; feature-bot's peer, never imports it. See [design-cut-planner.md](../.claude/rules/design-cut-planner.md). |
 | `mutation-area-picker` | Weekly Sun 03:30 UTC + workflow_dispatch | `stryker.config.json` + git/GitHub cross-references (AI-pairing, churn, flake, fix-rate) | Draft PR adding/swapping/removing one module in `mutate` glob, OR silent NOOP | **Strategic portfolio manager** — owns mutation scope under runtime budget. Design: [`.claude/rules/design-mutation-area-picker.md`](../.claude/rules/design-mutation-area-picker.md). Empirical eviction per [ADR-0014](../docs/adr/0014-mutation-eviction-by-empirical-evidence.md). |
 
@@ -183,7 +183,7 @@ compactor IS the memory-trimmer for that surface, keeping the cached
 file size bounded across many months of runs.
 
 Both run in the same `bots-compact.yml` workflow (one job per bot)
-on the first Saturday of each month.
+on the first Sunday night of each month, started by `night-shift.yml`.
 
 **cut-planner's memory is two-tier, with no skip-list.** Per-feature
 state lives in the planner issue (body = current `## State`, comments =
@@ -270,7 +270,7 @@ All confident-bug paths converge here:
                           ↓
                           ↓ (bug + ready-for-agent from any source)
                           ↓
-fix-bot (cron 04:00 UTC) — input: bug + ready-for-agent + no prior fix-bot comment
+fix-bot (night-shift, every night except Fri) — input: bug + ready-for-agent + no prior fix-bot comment
     ↓ EITHER opens draft PR (failing test + fix),
       OR posts stuck-comment + applies ready-for-human
 maintainer reviews PR, merges
@@ -287,7 +287,7 @@ cut-planner (cron 03:00 UTC) — one action per run, feedback first (Q5a):
     2. a cut still in flight?       → do nothing this run
     3. otherwise                    → file the next cut (enhancement + ready-for-agent)
     ↓
-feature-bot (cron 04:17 UTC) — implements the cut
+feature-bot (night-shift, Fri night) — implements the cut
     ├─→ APPROVE → draft PR; maintainer merges; cut closes
     └─→ loop exhausts on substantive rejects
           → comment + ready-for-agent → needs-refinement   ("hand-off")
@@ -343,7 +343,9 @@ specifics in both cases. Remove the label (or have the bot remove it on
 its next cron after the comment thread resolves) to re-trigger bot
 processing.
 
-Each bot is independent. Failures are isolated (per-bot try/catch + workflow `continue-on-error`). No chained workflow_dispatch — each bot's cron is the trigger, the issue's label state is the input.
+Each bot is independent. Failures are isolated (per-bot try/catch + workflow `continue-on-error`). The cheap bots run on their own crons; the heavy ones (feature-bot, fix-bot, review-bot, dead-code-watcher, the compactors) have no cron and are started one at a time by [`night-shift.yml`](../.github/workflows/night-shift.yml), which checks the shared Claude quota before each and stops when it is high. Either way the issue's label state is the input, and a failed bot never blocks the next.
+
+**Night shift.** Fri: feature-bot alone. Thu: dead-code-watcher, fix-bot. Sun, Tue: fix-bot, review-bot (+ compactors on the first Sunday). Mon, Wed, Sat: fix-bot. Scheduled at 20:37 UTC with a 21:37 backup; GitHub starts scheduled runs hours late, so they actually run around 01:00–04:00 UTC. Run one lineup by hand with `gh workflow run night-shift.yml -f lineup="fix-bot review-bot"` (add `-f dry_run=1` to exercise the chain without spending budget).
 
 ## Improving a bot
 
