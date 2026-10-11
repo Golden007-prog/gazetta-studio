@@ -56,38 +56,41 @@ export interface ClaudeOptions {
    */
   transcriptPath: string
   /**
-   * Model to use. Defaults to `DEFAULT_MODEL` below — Opus 4.7 with 1M
-   * context. Override per-call to use a smaller / cheaper model when the
-   * task is small.
-   *
-   * Pass either an alias (`'opus'`, `'sonnet'`, `'haiku'`) which resolves
-   * to the latest model in that line, or a full model ID like
-   * `'claude-opus-4-7[1m]'`. The `[1m]` bracket suffix selects the 1M
-   * context window for models that support it; without the suffix you
-   * get the default 200K window.
+   * Model to use. Defaults to `DEFAULT_MODEL` below (Opus 5.5). Pass
+   * `LIGHT_MODEL` for light roles (compaction, summarising, picking).
+   * Opus 5.5 and Sonnet 5.5 both have a 1M context window without a
+   * `[1m]` suffix; older models needed it (`'claude-opus-4-7[1m]'`).
    */
   model?: string
 }
 
 /**
- * Default model for all bot Claude invocations: Opus 4.7 with the 1M
- * context window.
+ * Default model for bot Claude invocations: Opus 5.5 (1M context natively,
+ * no `[1m]` suffix; needs Claude Code CLI >= 2.1.280, which CI's
+ * `npm install -g @anthropic-ai/claude-code` provides).
  *
- * Why Opus 4.7 [1m]: bots routinely read multiple source files + tests +
- * issue bodies (fix-bot reads 30-50KB; mutation-watcher consumes a
- * pre-parsed summary but Claude still reads source files to ground fix
- * recommendations). Sonnet 4.6 (200K — the CLI default) blew the
- * context window on fix-bot's first dispatch against
- * `publish-rendered.ts` (22.7KB × 6 re-reads → autocompact thrash, run
- * 25639089938 exit 1 with no work product).
+ * Bots read many files per run, so most of their spend is CACHE READS: every
+ * turn re-reads the growing context. Sampled 2026-10-11 (103 transcripts on
+ * Opus 4.7): one feature-bot Agent A run was $42 of which $33 was cache reads
+ * (66M tokens over 104 turns). Opus 5.5 is cheaper on exactly that line
+ * ($0.20 vs $0.50 per MTok cached; $4/$20 vs $5/$25 in/out, list prices),
+ * so moving to it roughly halves bot usage of the shared subscription
+ * budget without dropping to a smaller model.
  *
- * Cost note: Opus is more expensive per-token, but bots run 1-2 times
- * per cron and read ~30-50KB. The dollar cost is cents per call. The
- * alternative (Sonnet 4.6) is the bot failing entirely, wasting the
- * full attempt — net more expensive. See team-preferences.md rule 21
- * on capturing this kind of operational lesson.
+ * History: Sonnet 4.6 (200K window) once blew the context on fix-bot
+ * (run 25639089938, autocompact thrash) — the reason bots moved to a 1M
+ * Opus. Both models below have a 1M window, so that failure doesn't recur.
  */
-const DEFAULT_MODEL = 'claude-opus-4-7[1m]'
+const DEFAULT_MODEL = 'claude-opus-5-5'
+
+/**
+ * Model for LIGHT roles: compaction, parsing / summarising bot output,
+ * classification, picking a candidate. Sonnet 5.5 (1M context, $0.10 cached
+ * / $10 out per MTok). Implementers (Agent A), reviewers (Agent B) and spec
+ * writers stay on DEFAULT_MODEL: they decide what reaches the maintainer's
+ * review queue.
+ */
+export const LIGHT_MODEL = 'claude-sonnet-5-5'
 
 export interface ClaudeResult {
   /** Exit code from the claude binary. 0 = success. */
@@ -114,7 +117,7 @@ export interface ClaudeResult {
  *                                   for the transcript + summary split
  *   --verbose                     : required alongside stream-json (CLI
  *                                   refuses without it)
- *   --model <id>                  : Opus 4.7 with 1M context by default —
+ *   --model <id>                  : Opus 5.5 (1M context) by default —
  *                                   see DEFAULT_MODEL below for rationale
  *   --allowedTools <list>         : restrict to tools the prompt needs
  *   --dangerously-skip-permissions: no human in CI to approve tool calls;

@@ -41,7 +41,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runClaude } from '../_lib/claude.js'
+import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import {
   branchHasCommits as branchHasCommitsLib,
   captureCommitMessages,
@@ -431,7 +431,7 @@ async function runPicker(
 
   const prompt = `${promptTemplate}\n\n# Inputs\n\nCANDIDATES:\n${candidatesBlock}\n\nLESSONS_LEARNED:\n${lessons}\n\nRUN_ID: ${runId}\n`
   const transcriptPath = resolve(TRANSCRIPT_DIR, `picker-${runId}.jsonl`)
-  const result = await runClaude({ prompt, transcriptPath, allowedTools: ['Bash', 'Read'] })
+  const result = await runClaude({ model: LIGHT_MODEL, prompt, transcriptPath, allowedTools: ['Bash', 'Read'] })
 
   if (!result.success) return { area: null, reasoning: `picker Claude exited ${result.exitCode}` }
   return parsePickerOutput(extractLastAssistantText(transcriptPath))
@@ -456,6 +456,7 @@ fence with prose explaining what was checked. Pass that through too — the
 parses correctly.
 `
   const result = await runClaude({
+    model: LIGHT_MODEL,
     prompt,
     transcriptPath,
     allowedTools: ['Bash', 'Read', 'Grep', 'Glob', 'Skill'],

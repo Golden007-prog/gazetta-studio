@@ -18,7 +18,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runClaude } from '../_lib/claude.js'
+import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import { printBanner, printNotice, printRunSummary, printTranscriptPath, printWarning } from '../_lib/ui.js'
 import { composeCompactPrompt, shouldCompact } from './compact-helpers.js'
 import { DECISION_LOG_PATH, pruneDecisionLog, tailDecisionLog } from './decision-log.js'
@@ -71,6 +71,7 @@ async function main(): Promise<void> {
   const startedAt = Date.now()
 
   const result = await runClaude({
+    model: LIGHT_MODEL,
     prompt: composeCompactPrompt({
       template: readFileSync(resolve(HERE, 'prompts/compact.md'), 'utf-8'),
       lessonsPath: LESSONS_PATH,

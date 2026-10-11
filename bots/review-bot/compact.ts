@@ -26,7 +26,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runClaude } from '../_lib/claude.js'
+import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import { printBanner, printNotice, printRunSummary, printTranscriptPath, printWarning } from '../_lib/ui.js'
 import { pruneReviewerLog, REVIEWER_LOG_PATH, tailReviewerLog } from './reviewer-log.js'
 import { readSkipList, SKIP_LIST_PATH } from './skip-list.js'
@@ -124,6 +124,7 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
   let claudeSucceeded = false
   try {
     const result = await runClaude({
+      model: LIGHT_MODEL,
       prompt,
       transcriptPath,
       allowedTools: ['Bash', 'Read', 'Write', 'Edit'],

@@ -27,7 +27,7 @@ on:
         description: 'Optional: fix one specific issue (otherwise scans all candidates)'
         required: false
       max_attempts:
-        description: 'Generator-critic loop cap (default 5; lower for cost-bounded testing)'
+        description: 'Generator-critic loop cap (default 3; lower for cost-bounded testing)'
         required: false
         default: '5'
       budget_ms:
@@ -127,7 +127,7 @@ jobs:
           # Optional overrides via workflow_dispatch inputs. Cron runs
           # use the orchestrator's defaults (`||` fallback below passes
           # the same defaults the TS code defines).
-          MAX_ATTEMPTS: ${{ inputs.max_attempts || '5' }}
+          MAX_ATTEMPTS: ${{ inputs.max_attempts || '3' }}
           BUDGET_MS: ${{ inputs.budget_ms || '3000000' }}
         run: npm run fix-bot -w @gazetta/bots
 

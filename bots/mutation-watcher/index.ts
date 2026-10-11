@@ -43,7 +43,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runClaude } from '../_lib/claude.js'
+import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import { findWorkflowId, octokitFromEnv, repoFromEnv } from '../_lib/github.js'
 import { type FileSummary, parseStrykerReport, pathToArea, summarizeReport } from './stryker-parse.js'
 import {
@@ -281,6 +281,7 @@ WATCHER_RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
   writeFileSync(resolve(TRANSCRIPTS_DIR, `${RUN_TIMESTAMP}-payload-${file.path.replace(/[/.]/g, '-')}.json`), prompt)
 
   const result = await runClaude({
+    model: LIGHT_MODEL,
     prompt,
     transcriptPath,
     // Bash for `gh` (issue search/file/comment/label), Read for

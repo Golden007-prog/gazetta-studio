@@ -25,7 +25,7 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runClaude } from '../_lib/claude.js'
+import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import { findFlakeCandidates, findWorkflowId, octokitFromEnv, repoFromEnv } from '../_lib/github.js'
 import {
   printBanner,
@@ -117,7 +117,7 @@ LOOKBACK_HOURS=${LOOKBACK_HOURS}`
     printTranscriptPath(transcriptPath)
 
     try {
-      const result = await runClaude({ prompt, transcriptPath })
+      const result = await runClaude({ model: LIGHT_MODEL, prompt, transcriptPath })
       if (!result.success) {
         // Don't let one failed investigation kill the whole job.
         printWarning(`investigation of run ${flake.runId} exited ${result.exitCode}; continuing.`)

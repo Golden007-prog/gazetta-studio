@@ -29,7 +29,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runClaude } from '../_lib/claude.js'
+import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import { printBanner, printNotice, printRunSummary, printTranscriptPath, printWarning } from '../_lib/ui.js'
 import { composePrompt, handlePostClaude, shouldRunCompaction } from './compact-helpers.js'
 import { REVIEWER_LOG_PATH, tailReviewerLog } from './reviewer-log.js'
@@ -130,6 +130,7 @@ async function main(): Promise<void> {
   let claudeSucceeded = false
   try {
     const result = await runClaude({
+      model: LIGHT_MODEL,
       prompt,
       transcriptPath,
       allowedTools: ['Bash', 'Read', 'Write', 'Edit'],

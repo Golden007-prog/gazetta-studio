@@ -26,7 +26,7 @@ on:
         required: false
         default: '5'
       per_run_finding_cap:
-        description: 'Override PER_RUN_FINDING_CAP (default 5).'
+        description: 'Override PER_RUN_FINDING_CAP (default 3).'
         required: false
         default: '5'
 
@@ -115,7 +115,7 @@ jobs:
           # and the `||` selects the literal.
           MIN_STABLE_DAYS: ${{ inputs.min_stable_days || '14' }}
           MAX_ATTEMPTS: ${{ inputs.max_attempts || '5' }}
-          PER_RUN_FINDING_CAP: ${{ inputs.per_run_finding_cap || '5' }}
+          PER_RUN_FINDING_CAP: ${{ inputs.per_run_finding_cap || '3' }}
         run: npm run dead-code-watcher -w @gazetta/bots
 
       # Save the appended reviewer-log under a per-run key. `if: always()`

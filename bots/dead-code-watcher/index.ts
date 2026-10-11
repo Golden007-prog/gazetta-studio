@@ -78,7 +78,9 @@ const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
 const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
 
 /** Per-run cap on findings investigated. Backlog drains over weeks. */
-const PER_RUN_FINDING_CAP = Number(process.env.PER_RUN_FINDING_CAP ?? '5')
+// 3, not 5: each finding is an Agent A + Agent B pair (~$8 on the 2026-10-11
+// sample); the remainder is picked up by the next weekly run.
+const PER_RUN_FINDING_CAP = Number(process.env.PER_RUN_FINDING_CAP ?? '3')
 
 /** Per-run wall-clock budget. Workflow timeout is 60min; we exit at 55. */
 const PER_RUN_BUDGET_MS = Number(process.env.BUDGET_MS ?? 55 * 60 * 1000)

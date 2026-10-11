@@ -114,7 +114,10 @@ const PER_RUN_BUDGET_MS = Number(process.env.BUDGET_MS ?? 50 * 60 * 1000)
  * After this cap, the orchestrator gives up and records `needs-human`
  * in the skip-list.
  */
-const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS ?? '5')
+// 3, not 5: each extra Agent A + Agent B round on a stuck issue is ~$15-30
+// of the shared subscription budget (2026-10-11 sample); rounds 4-5 rarely
+// turned a reject into an approve. feature-bot uses 2.
+const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS ?? '3')
 
 async function main(): Promise<void> {
   const repo = repoFromEnv()
