@@ -8,8 +8,7 @@ import { useThemeStore } from '../stores/theme.js'
 import { useUnsavedGuardStore } from '../stores/unsavedGuard.js'
 import { hashToSelection, fragmentLinkDestinationHash } from '../composables/editorSelection.js'
 import { useEditorMount } from '../composables/useEditorMount.js'
-import { createEditorMount } from 'gazetta/editor'
-import type { EditorMount } from 'gazetta/types'
+import { useActiveEditorMount } from '../composables/useActiveEditorMount.js'
 import FragmentBlastRadius from './FragmentBlastRadius.vue'
 import PageMetadataEditor from './PageMetadataEditor.vue'
 import ValidationBanner from './ValidationBanner.vue'
@@ -53,19 +52,7 @@ async function goToFragment() {
 // the fragment's reach, not the current sub-edit.
 const fragmentName = computed(() => (selection.type === 'fragment' ? selection.name : null))
 
-const hasProperties = computed(() => {
-  const s = editing.schema as Record<string, unknown> | null
-  if (!s) return false
-  const props = s.properties as Record<string, unknown> | undefined
-  return props && Object.keys(props).length > 0
-})
-
-const editorMountRef = computed<EditorMount | null>(() => {
-  if (!editing.schema || !hasProperties.value) return null
-  // Use custom editor if loaded, otherwise default @rjsf form
-  if (editing.customEditorMount) return editing.customEditorMount
-  return createEditorMount(editing.schema)
-})
+const { editorMount: editorMountRef, hasProperties } = useActiveEditorMount()
 
 const contentRef = computed(() => editing.content)
 const schemaRef = computed(() => editing.schema as Record<string, unknown> | null)
