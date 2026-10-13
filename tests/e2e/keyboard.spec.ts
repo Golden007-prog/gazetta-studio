@@ -116,4 +116,36 @@ test.describe('Keyboard shortcuts', () => {
     await page.keyboard.press('Control+Shift+z')
     await expect(titleField).toHaveValue(original + ' edited', { timeout: 2000 })
   })
+
+  test('undo/redo survive a slow-loading custom editor', async ({ page }) => {
+    // The hero template has a custom editor that loads by dynamic import.
+    // Delay that module so it resolves after the author has already edited:
+    // the field must not be editable until the editor that will own its
+    // undo history is mounted (#886).
+    await page.route('**/admin/editors/hero.tsx*', async route => {
+      await new Promise(resolve => setTimeout(resolve, 2500))
+      await route.continue()
+    })
+    const editorLoaded = page.waitForResponse(r => r.url().includes('/admin/editors/hero.tsx'))
+    await openEditor(page, 'home')
+    await new ComponentTreePom(page).open('hero')
+    const titleField = page.locator('input[name="root_title"]').first()
+    await titleField.waitFor({ timeout: 10000 })
+    const original = await titleField.inputValue()
+
+    await titleField.fill(original + ' edited')
+    await titleField.blur()
+    await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
+
+    // Outlast the delayed import, so a late custom-editor mount would
+    // already have replaced the form the edit was made in.
+    await editorLoaded
+    await expect(titleField).toHaveValue(original + ' edited')
+
+    await page.keyboard.press('Control+z')
+    await expect(titleField).toHaveValue(original, { timeout: 2000 })
+
+    await page.keyboard.press('Control+Shift+z')
+    await expect(titleField).toHaveValue(original + ' edited', { timeout: 2000 })
+  })
 })
