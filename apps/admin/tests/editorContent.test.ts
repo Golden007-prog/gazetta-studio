@@ -71,6 +71,30 @@ describe('editorContent', () => {
       expect(store.customEditorMount).toBeNull()
     })
 
+    it('reports editorLoading while the custom editor imports, then clears it', async () => {
+      const store = useEditorContentStore()
+      const pending = store.open(
+        makeTarget({ hasEditor: true, editorUrl: 'data:text/javascript,export default { mount(){}, unmount(){} }' }),
+      )
+      expect(store.editorLoading).toBe(true)
+      await pending
+      expect(store.editorLoading).toBe(false)
+      expect(store.customEditorMount).not.toBeNull()
+    })
+
+    it('clears editorLoading when the custom editor fails to import', async () => {
+      const store = useEditorContentStore()
+      await store.open(makeTarget({ hasEditor: true, editorUrl: 'data:text/javascript,throw new Error("boom")' }))
+      expect(store.editorLoading).toBe(false)
+      expect(store.customEditorMount).toBeNull()
+    })
+
+    it('never sets editorLoading for a template without a custom editor', () => {
+      const store = useEditorContentStore()
+      void store.open(makeTarget())
+      expect(store.editorLoading).toBe(false)
+    })
+
     it('clears fragmentLink and loadError', async () => {
       const store = useEditorContentStore()
       store.showFragmentLink('header')

@@ -61,7 +61,7 @@ const hasProperties = computed(() => {
 })
 
 const editorMountRef = computed<EditorMount | null>(() => {
-  if (!editing.schema || !hasProperties.value) return null
+  if (!editing.schema || !hasProperties.value || editing.editorLoading) return null
   // Use custom editor if loaded, otherwise default @rjsf form
   if (editing.customEditorMount) return editing.customEditorMount
   return createEditorMount(editing.schema)

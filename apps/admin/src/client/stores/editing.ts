@@ -30,6 +30,7 @@ export const useEditingStore = defineStore('editing', () => {
     loadError: computed(() => ec.loadError),
     mountVersion: computed(() => ec.mountVersion),
     customEditorMount: computed(() => ec.customEditorMount),
+    editorLoading: computed(() => ec.editorLoading),
     fragmentLink: computed(() => ec.fragmentLink),
     // State from editorPersistence
     saving: computed(() => persistence.saving),
