@@ -22,7 +22,7 @@ export interface PromptTemplates {
 const NONE = '_(none)_'
 
 export function composePrompt(t: PromptTemplates, mode: Mode, c: PlanContext): string {
-  const assembled = t.modes[mode].replace('$CONTEXT', t.context).replace('$CONTRACT', t.contract)
+  const assembled = t.modes[mode].replace('$CONTEXT', () => t.context).replace('$CONTRACT', () => t.contract)
   const vars: Record<string, string> = {
     PLANNER_ISSUE: String(c.plannerIssueNumber),
     FEATURE: c.planner.feature,
