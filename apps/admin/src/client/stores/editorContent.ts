@@ -32,6 +32,8 @@ export const useEditorContentStore = defineStore('editorContent', () => {
   const loadError = ref<string | null>(null)
   const mountVersion = ref(0)
   const customEditorMount = ref<EditorMount | null>(null)
+  /** True while a custom editor import is pending — nothing may mount until it settles. */
+  const customEditorLoading = ref(false)
   const fragmentLink = ref<string | null>(null)
   /** Generation counter — incremented on every open(). Used to discard stale async results. */
   let openGeneration = 0
@@ -59,6 +61,7 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     saved.value = deepClone(t.content)
     savedJson.value = JSON.stringify(t.content)
     customEditorMount.value = null
+    customEditorLoading.value = !!(t.hasEditor && t.editorUrl)
 
     if (t.hasEditor && t.editorUrl) {
       try {
@@ -73,6 +76,7 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     }
 
     if (gen !== openGeneration) return
+    customEditorLoading.value = false
     mountVersion.value++
   }
 
@@ -126,6 +130,7 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     loadError,
     mountVersion,
     customEditorMount,
+    customEditorLoading,
     fragmentLink,
     template,
     path,

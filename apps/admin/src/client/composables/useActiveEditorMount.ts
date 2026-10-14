@@ -15,7 +15,7 @@ export function useActiveEditorMount() {
   })
 
   const editorMount = computed<EditorMount | null>(() => {
-    if (!ec.schema || !hasProperties.value) return null
+    if (!ec.schema || !hasProperties.value || ec.customEditorLoading) return null
     if (ec.customEditorMount) return ec.customEditorMount
     return createEditorMount(ec.schema)
   })
