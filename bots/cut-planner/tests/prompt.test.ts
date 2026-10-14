@@ -56,6 +56,12 @@ describe('composePrompt — substitution safety', () => {
     expect(p).toContain('body mentioning $FEATURE literally')
   })
 
+  it('inserts shared fragments verbatim, even when they contain $-replacement patterns', () => {
+    const fragment = "literal $& and $' and $$ and $` here"
+    const p = composePrompt({ ...templates, context: fragment, contract: fragment }, 'refine', ctx)
+    expect(p.split(fragment).length - 1).toBe(2)
+  })
+
   it('includes the reviewer verdict for refine, and says so when there is none', () => {
     expect(composePrompt(templates, 'refine', ctx)).toContain('Architecture gap')
     const none = composePrompt(templates, 'refine', { ...ctx, cut: { ...ctx.cut!, reviewerNote: null } })
