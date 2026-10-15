@@ -41,7 +41,7 @@ export function appendReviewerLog(absolutePath: string, entry: ReviewerLogEntry)
   appendFileSync(absolutePath, `${JSON.stringify(entry)}\n`)
 }
 
-export function readReviewerLog(absolutePath: string): ReviewerLogEntry[] {
+function readReviewerLog(absolutePath: string): ReviewerLogEntry[] {
   if (!existsSync(absolutePath)) return []
   const raw = readFileSync(absolutePath, 'utf-8')
   const entries: ReviewerLogEntry[] = []
