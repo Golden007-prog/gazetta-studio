@@ -52,7 +52,7 @@ import type { AssetManifest } from '../schema/types.js'
  * type system catches an analyzer that tries to override identity
  * fields by accident.
  */
-export interface ManifestEnrichment {
+interface ManifestEnrichment {
   /** Width in pixels — null for non-image formats. */
   width?: number | null
   /** Height in pixels — null for non-image formats. */
