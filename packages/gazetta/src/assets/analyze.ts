@@ -73,7 +73,7 @@ export interface ManifestEnrichment {
  * relevant via `poster`/etc. paths). The runner adds these to the
  * write plan so they participate in atomic-rollback.
  */
-export interface SupplementaryFile {
+interface SupplementaryFile {
   /** Path relative to `assetsRoot` — e.g. `hero-{hash}-poster.png`. */
   path: string
   /** Bytes to write. */
