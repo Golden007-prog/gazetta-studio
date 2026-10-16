@@ -26,16 +26,16 @@
  * hooks observe the result. Reordering breaks invariants — audit
  * before write would lie about success.
  *
- * Reserved slots in the sequence (no-ops today; wired by future cuts):
- *   - Review-state precheck (Review-Workflow Cut 5: pending-review
- *     state → 409 EDIT_LOCKED)
- *   - Cascades (Soft-Delete Q6: auto-cancel scheduled actions on
- *     archive transition; Review Cut 5: invalidateOnSave policy
- *     transitions approved → draft)
+ * Review-workflow gating (design-review-workflow.md) runs only when the
+ * target's `reviewWorkflow.enabled` is true: the review-state precheck
+ * locks `pending-review` items before validators run, and the cascade
+ * slot applies `invalidateOnSave` to `approved` items after the write.
+ * Reserved: Soft-Delete Q6's auto-cancel of scheduled actions on archive
+ * shares the cascade slot.
  *
  * Throws are reserved for infrastructure failures (storage write
  * fail, audit infra fail per locked fail-open). Expected outcomes
- * — STALE / VALIDATION_FAILED / HOOK_CANCELLED — are typed
+ * — STALE / EDIT_LOCKED / VALIDATION_FAILED / HOOK_CANCELLED — are typed
  * `SaveResult` variants. Callers `switch` exhaustively; TS narrows.
  */
 
@@ -55,6 +55,14 @@ import { rebuildAssetRefs, type ItemRef } from './assets/asset-deps.js'
 import { rebuildFragmentDeps } from './fragment-deps.js'
 import { rebuildArchiveAliases } from './archive-aliases.js'
 import { computeSaveEtag } from './save-etag.js'
+import {
+  EDIT_LOCKED_MESSAGE,
+  invalidateApproval,
+  isEditLocked,
+  readSaveReviewState,
+  resolveSaveReviewPolicy,
+  type ReviewPolicySource,
+} from './review/save-gate.js'
 import type { Site } from './site-loader.js'
 import type { StorageProvider } from './types.js'
 import { hasBlockingIssues, runSaveDelta } from './validation/save-delta.js'
@@ -95,6 +103,17 @@ export interface SaveStale {
 }
 
 /**
+ * The item is in `pending-review` on a target with review enabled.
+ * Edits are locked until the submitter withdraws (design-review-workflow.md
+ * locked invariant), so nothing was written.
+ */
+export interface SaveEditLocked {
+  readonly ok: false
+  readonly code: 'EDIT_LOCKED'
+  readonly message: string
+}
+
+/**
  * Save-delta validation produced blocking issues (per
  * `design-validation.md` four-phase model). Only issues introduced
  * by THIS edit are surfaced — pre-existing site debt is the
@@ -127,7 +146,7 @@ export interface SaveHookCancelled {
  * compile error at every call site — intentional, per the locked
  * decision in Q1.
  */
-export type SaveResult = SaveOk | SaveStale | SaveValidationFailed | SaveHookCancelled
+export type SaveResult = SaveOk | SaveStale | SaveEditLocked | SaveValidationFailed | SaveHookCancelled
 
 /**
  * Audit recorder shape the pipeline calls. Matches the existing
@@ -177,7 +196,7 @@ export interface SaveSourceWiring {
   readonly cache: { invalidatePrefix(prefix: string): Promise<number> }
   readonly history?: HistoryProvider
   readonly targetName?: string
-  readonly manifest?: { name?: string }
+  readonly manifest?: { name?: string } & ReviewPolicySource
 }
 
 /**
@@ -270,7 +289,7 @@ export interface SaveManifestInput {
  * Pipeline sequence (locked per Q5):
  *
  *   1. etag precheck                 → STALE
- *   2. review-state precheck         (reserved slot — no-op today)
+ *   2. review-state precheck         → EDIT_LOCKED
  *   3. validators                    → VALIDATION_FAILED
  *   4. beforeSave hooks              → HOOK_CANCELLED
  *   5. history record (pre-write)
@@ -280,7 +299,7 @@ export interface SaveManifestInput {
  *   9. compute new etag
  *  10. audit success
  *  11. afterSave hooks               (fail-open observers)
- *  12. cascades                      (reserved slot — no-op today)
+ *  12. cascades                      (invalidateOnSave → approved → draft)
  *  13. scanner.rescan                (fire-and-forget)
  */
 export async function saveManifestCore(input: SaveManifestInput): Promise<SaveResult> {
@@ -303,8 +322,15 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
     }
   }
 
-  // Step 2 — review-state precheck. Reserved slot for Review-Workflow
-  // Cut 5 (pending-review state → 409 EDIT_LOCKED). No-op today.
+  // Step 2 — review-state precheck. Off-target sites never read review
+  // state. Runs before validators: a locked item can't be saved, so
+  // validating it would report issues the author can't act on.
+  const reviewPolicy = resolveSaveReviewPolicy(input.source.manifest, input.source.targetName)
+  const reviewItem = { contentRoot: input.source.contentRoot, kind: input.kind, name: input.name }
+  const reviewState = reviewPolicy ? await readSaveReviewState(reviewItem) : null
+  if (isEditLocked(reviewState)) {
+    return { ok: false, code: 'EDIT_LOCKED', message: EDIT_LOCKED_MESSAGE }
+  }
 
   // Step 3 — save-delta validation. Same shape as pages.ts:370-394.
   // Validators are pure functions; orchestrator catches infra errors
@@ -471,10 +497,14 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
     await dispatchAfterSave(hooks, hookScope, { payload: finalManifest, etag: newEtag }, hookCtx)
   }
 
-  // Step 12 — cascades. Reserved slot for Soft-Delete Q6
-  // (auto-cancel scheduled actions on archive transition) and
-  // Review Cut 5 (invalidateOnSave policy → approved → draft).
-  // No-op today.
+  // Step 12 — cascades. `invalidateOnSave: 'content-diff'` compares save
+  // etags, never the publish-state hash: the latter folds in template +
+  // fragment hashes and would revoke approval on unrelated dependency
+  // changes (design-review-workflow.md "Locked invariants").
+  if (reviewPolicy && reviewState?.state === 'approved') {
+    const beforeEtag = input.before ? await computeSaveEtag({ ...input.before, ...input.etagExtras }) : null
+    await invalidateApproval(reviewItem, reviewState, beforeEtag !== newEtag, input.principal, reviewPolicy)
+  }
 
   // Step 13 — background validation scanner. Fire-and-forget — the
   // save response shouldn't block on scanner work; the scanner

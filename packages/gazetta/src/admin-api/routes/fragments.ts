@@ -212,6 +212,9 @@ export function fragmentRoutes(
         ETag: `"${result.currentEtag}"`,
       })
     }
+    if (result.code === 'EDIT_LOCKED') {
+      return c.json({ code: 'EDIT_LOCKED' as const, message: result.message }, 409)
+    }
     if (result.code === 'VALIDATION_FAILED') {
       return c.json({ code: 'VALIDATION_FAILED' as const, issues: result.issues }, 409)
     }

@@ -257,9 +257,9 @@ How review workflow composes with each of the other 12 foundational dimensions p
 - Render-time SSR with `Principal`: a future "show this only to approvers" template hint isn't in v1 review-workflow scope (would belong to RBAC capability checks at render time).
 
 ### Validation (#9)
-- Validators run independently of review state. Save-delta validation runs on every save (regardless of review state); pre-publish validation runs on publish (gated by publish approval when enabled).
+- Save-delta validation runs on every save that reaches it; pre-publish validation runs on publish (gated by publish approval when enabled). The review-state check runs first in the save pipeline (step 2 of `manifest-save.ts`, before validators at step 3), so a save of a `pending-review` item stops with `409 EDIT_LOCKED` and never reaches the validators.
 - A "ready for review" transition can require zero open errors on the item — composition with validation, not v1.
-- Validator failures during save in `pending-review` state still return 409 + `validation-failed` audit event; review state unchanged because save was rejected.
+- A locked save never reaches `validation-failed`: `EDIT_LOCKED` is returned before validators run, and review state is unchanged because the save was rejected. In `draft` and `approved` states, validator failures return 409 + `validation-failed` as usual, and an `approved` item stays approved because nothing was written.
 
 ### Plugin (#10)
 - Future plugin-supplied review providers (e.g., GitHub PR-as-review) reserved per stub. v1 uses hooks for external integration; provider surface deferred until concrete demand.

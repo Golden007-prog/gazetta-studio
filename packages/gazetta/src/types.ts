@@ -660,7 +660,10 @@ export function getHistoryRetention(target: TargetConfig): number {
  * target block AND the site block, has to mentally combine); wholesale
  * override means the target block is THE policy when set.
  */
-export function resolveReviewWorkflow(target: TargetConfig, site: SiteManifest): ReviewWorkflowConfig | undefined {
+export function resolveReviewWorkflow(
+  target: Pick<TargetConfig, 'reviewWorkflow'>,
+  site: Pick<SiteManifest, 'reviewWorkflow'>,
+): ReviewWorkflowConfig | undefined {
   return target.reviewWorkflow ?? site.reviewWorkflow
 }
 
