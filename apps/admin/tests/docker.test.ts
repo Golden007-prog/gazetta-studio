@@ -1,6 +1,12 @@
 /**
  * All tests that require Docker (MinIO + Azurite via docker-compose).
  * Docker-compose starts once, shared across all describe blocks.
+ *
+ * `npm test` runs this file in its own vitest pass, after the rest of the
+ * admin suite (apps/admin/package.json). Run alongside the other files,
+ * MinIO competes with vitest's workers for the runner's CPU and drops or
+ * stalls connections (`socket hang up`, `ECONNRESET`, 5 s timeouts):
+ * 7 failures in 160 CI runs alongside, 0 in 108 run alone (#879, #880).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { resolve } from 'node:path'

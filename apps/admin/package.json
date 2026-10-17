@@ -8,7 +8,7 @@
     "dev:ui": "vite",
     "dev": "npm run dev:api & npm run dev:ui",
     "build": "vite build",
-    "test": "vitest run"
+    "test": "vitest run --exclude tests/docker.test.ts && vitest run tests/docker.test.ts"
   },
   "dependencies": {
     "@formkit/drag-and-drop": "0.5.3",
