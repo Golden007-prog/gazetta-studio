@@ -219,7 +219,7 @@ async function findFragmentDependentsImpl(
 
   // BFS: find everything that transitively references `fragmentName`.
   const queue = [fragmentName]
-  const seen = new Set<string>([fragmentName])
+  const seen = new Set<string>([`fragment:${fragmentName}`])
   while (queue.length) {
     const current = queue.shift()!
     for (const item of manifestsToScan) {
