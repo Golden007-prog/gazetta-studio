@@ -98,12 +98,21 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     mountVersion.value++
   }
 
+  /** Invalidates any pending open() so its custom editor import can't mount into a closed editor. */
+  function abandonPendingOpen() {
+    openGeneration++
+    customEditorMount.value = null
+    customEditorLoading.value = false
+  }
+
   function setLoadError(message: string) {
+    abandonPendingOpen()
     target.value = null
     loadError.value = message
   }
 
   function showFragmentLink(nameOrPath: string) {
+    abandonPendingOpen()
     loadError.value = null
     target.value = null
     content.value = null
@@ -113,6 +122,7 @@ export const useEditorContentStore = defineStore('editorContent', () => {
   }
 
   function clear() {
+    abandonPendingOpen()
     loadError.value = null
     fragmentLink.value = null
 
