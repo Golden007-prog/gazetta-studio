@@ -71,6 +71,28 @@ describe('editorContent', () => {
       expect(store.customEditorMount).toBeNull()
     })
 
+    it.each([
+      ['clear', (s: ReturnType<typeof useEditorContentStore>) => s.clear()],
+      ['setLoadError', (s: ReturnType<typeof useEditorContentStore>) => s.setLoadError('broken')],
+      ['showFragmentLink', (s: ReturnType<typeof useEditorContentStore>) => s.showFragmentLink('header')],
+    ])('discards a pending custom editor import after %s()', async (_name, reset) => {
+      const store = useEditorContentStore()
+      const pending = store.open(
+        makeTarget({
+          hasEditor: true,
+          editorUrl: 'data:text/javascript,export default { mount(){}, unmount(){} }',
+        }),
+      )
+      expect(store.customEditorLoading).toBe(true)
+      const versionBefore = store.mountVersion
+      reset(store)
+      expect(store.customEditorLoading).toBe(false)
+      await pending
+      expect(store.customEditorMount).toBeNull()
+      expect(store.customEditorLoading).toBe(false)
+      expect(store.mountVersion).toBe(versionBefore)
+    })
+
     it('clears fragmentLink and loadError', async () => {
       const store = useEditorContentStore()
       store.showFragmentLink('header')
