@@ -250,6 +250,7 @@ For bot-authored PRs (see "Reading bot-authored PRs" above), also:
 - **Does the runtime exercise actually prove the fix works?** For `behavioral` / `mixed` modes, the repro path's actual output must match the linked issue's expected behavior.
 - **Are `Discovered:` items genuinely adjacent (not incomplete-fix dodges)?** If a discovered item is what the bot should have fixed in-scope, push back instead of accepting + filing follow-up.
 - **Are there leftover `tmp-*` files in the diff?** The runtime exercise's scratch should never appear in commits.
+- **Does another open PR fix the same thing?** Bots work issue by issue, so two issues with one root cause become two PRs. Before reviewing bot PRs one by one, look for PRs that change the same files or name the same cause in their summaries. When two overlap, merge the cleaner fix and close the other with a pointer — but first check whether the closed one has something the winner lacks (usually a test), and carry it over as your own commit on top of the winner's branch (rule 42). Confirm the carried test fails on main and passes with the winner before pushing. Merging both stacks two fixes for one failure mode (rule 37). (2026-10-17: #908 and #912 both fixed the hero custom editor remounting with a fresh undo history, filed as two flakes, #886 and #909. #912 had the cleaner fix and #908 the only test that reproduced the race every run; #912 merged with that test added.)
 
 ## Merge protocol
 
