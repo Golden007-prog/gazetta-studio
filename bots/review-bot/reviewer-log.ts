@@ -13,7 +13,7 @@
  * Persistence: actions/cache@v4 keyed `review-bot-reviewer-log-v1`
  * per ADR-0011. Single-instance invariant via concurrency group.
  */
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import * as shared from '../_lib/reviewer-log.js'
 import type { Fingerprint } from './skip-list.js'
 
 export interface ReviewerLogEntry {
@@ -32,41 +32,13 @@ export interface ReviewerLogEntry {
 }
 
 export function appendReviewerLog(absolutePath: string, entry: ReviewerLogEntry): void {
-  appendFileSync(absolutePath, `${JSON.stringify(entry)}\n`)
-}
-
-function readReviewerLog(absolutePath: string): ReviewerLogEntry[] {
-  if (!existsSync(absolutePath)) return []
-  const raw = readFileSync(absolutePath, 'utf-8')
-  const entries: ReviewerLogEntry[] = []
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    try {
-      entries.push(JSON.parse(line) as ReviewerLogEntry)
-    } catch {
-      // malformed — skip; old schema or partial write
-    }
-  }
-  return entries
+  shared.appendReviewerLog(absolutePath, entry)
 }
 
 export function tailReviewerLog(absolutePath: string, n: number): ReviewerLogEntry[] {
-  return readReviewerLog(absolutePath).slice(-n)
+  return shared.tailReviewerLog<ReviewerLogEntry>(absolutePath, n)
 }
 
-/**
- * Truncate the file to the last `keepLast` entries — the compactor
- * calls this AFTER producing its lessons-learned rewrite, so the
- * cached file stays bounded across months. Old entries are
- * intentionally dropped; per ADR-0011, raw history preservation
- * (artifact-upload path) is deferred until concrete demand surfaces.
- */
-export function pruneReviewerLog(absolutePath: string, keepLast: number): { dropped: number; kept: number } {
-  const all = readReviewerLog(absolutePath)
-  if (all.length <= keepLast) return { dropped: 0, kept: all.length }
-  const kept = all.slice(-keepLast)
-  writeFileSync(absolutePath, `${kept.map(e => JSON.stringify(e)).join('\n')}\n`)
-  return { dropped: all.length - keepLast, kept: kept.length }
-}
+export const pruneReviewerLog = shared.pruneReviewerLog
 
 export const REVIEWER_LOG_PATH = 'bots/review-bot/reviewer-log.jsonl'

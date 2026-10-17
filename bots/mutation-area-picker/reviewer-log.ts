@@ -8,10 +8,8 @@
  * compactor reads recent entries and produces
  * `lessons-learned.md` patterns.
  *
- * Why per-bot, not shared `_lib`: per the project's "bots should have
- * separate memory" rule. The action enum + payload shape are
- * mutation-area-picker-specific; sharing would force a generic
- * `payload: unknown` type that loses information.
+ * The entry type is per-bot (bots keep separate memory); the file I/O
+ * lives in `_lib/reviewer-log.ts`, generic over the entry type.
  *
  * NOTE: there is no Agent A / Agent B reviewer-loop here — the
  * decision is computed deterministically in the orchestrator. The
@@ -20,7 +18,7 @@
  * mutation-watcher fix-rates) ARE the implicit reviewers; each entry
  * records "what did the bot decide, with what evidence."
  */
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import * as shared from '../_lib/reviewer-log.js'
 
 type DecisionAction = 'add' | 'swap' | 'remove' | 'noop'
 
@@ -44,29 +42,6 @@ export interface ReviewerLogEntry {
   bootstrapWeek: number | null
 }
 
-export function appendReviewerLog(absolutePath: string, entry: ReviewerLogEntry): void {
-  appendFileSync(absolutePath, `${JSON.stringify(entry)}\n`)
-}
-
-export function readReviewerLog(absolutePath: string): ReviewerLogEntry[] {
-  if (!existsSync(absolutePath)) return []
-  const raw = readFileSync(absolutePath, 'utf-8')
-  const entries: ReviewerLogEntry[] = []
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    try {
-      entries.push(JSON.parse(line) as ReviewerLogEntry)
-    } catch {
-      // malformed — skip
-    }
-  }
-  return entries
-}
-
-export function tailReviewerLog(absolutePath: string, n: number): ReviewerLogEntry[] {
-  return readReviewerLog(absolutePath).slice(-n)
-}
-
 /**
  * Count distinct weekly run timestamps. Used to determine the
  * bootstrap-week counter (first 4 weeks: ADD-only, no eviction).
@@ -81,18 +56,18 @@ export function countWeeklyRuns(entries: ReviewerLogEntry[]): number {
   return days.size
 }
 
-/**
- * Truncate the file to the last `keepLast` entries. Mirrors
- * dead-code-watcher's pruneReviewerLog — the compactor calls this
- * after producing its lessons rewrite to keep the cached file
- * bounded.
- */
-export function pruneReviewerLog(absolutePath: string, keepLast: number): { dropped: number; kept: number } {
-  const all = readReviewerLog(absolutePath)
-  if (all.length <= keepLast) return { dropped: 0, kept: all.length }
-  const kept = all.slice(-keepLast)
-  writeFileSync(absolutePath, `${kept.map(e => JSON.stringify(e)).join('\n')}\n`)
-  return { dropped: all.length - keepLast, kept: kept.length }
+export function appendReviewerLog(absolutePath: string, entry: ReviewerLogEntry): void {
+  shared.appendReviewerLog(absolutePath, entry)
 }
+
+export function readReviewerLog(absolutePath: string): ReviewerLogEntry[] {
+  return shared.readReviewerLog<ReviewerLogEntry>(absolutePath)
+}
+
+export function tailReviewerLog(absolutePath: string, n: number): ReviewerLogEntry[] {
+  return shared.tailReviewerLog<ReviewerLogEntry>(absolutePath, n)
+}
+
+export const pruneReviewerLog = shared.pruneReviewerLog
 
 export const REVIEWER_LOG_PATH = 'bots/mutation-area-picker/reviewer-log.jsonl'
