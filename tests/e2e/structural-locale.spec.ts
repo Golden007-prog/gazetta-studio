@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test, expect } from './fixtures'
+import { storedDraftKeys } from './helpers'
 import { ComponentTreePom } from './pages/ComponentTree'
 
 /**
@@ -33,18 +34,24 @@ test('a reorder on fr is saved to page.fr.json, even from the English page', asy
       .evaluateAll(els => els.map(e => e.getAttribute('data-testid')).join(','))
 
   try {
+    // English and French lists can differ (other scenarios reset English
+    // home), so record English's own order first.
+    await page.goto('/admin/pages/home/edit')
+    await tree.row('hero').waitFor({ timeout: 20000 })
+    const enTree = await order()
+
     await page.goto('/admin/pages/home/edit?locale=fr')
     await tree.row('hero').waitFor({ timeout: 20000 })
-    const original = await order()
+    const frTree = await order()
     await tree.moveDown('hero')
-    await expect.poll(order).not.toBe(original)
-    // Let the debounced write reach the draft store before reloading.
-    await page.waitForTimeout(1000)
+    await expect.poll(order).not.toBe(frTree)
+    // Wait for the debounced write so the reload can't happen first.
+    await expect.poll(() => storedDraftKeys(page, 'structural')).toContain(JSON.stringify(['page', 'home', 'fr']))
 
     // Reload in English: English shows its own order, not the French reorder.
     await page.goto('/admin/pages/home/edit')
     await tree.row('hero').waitFor({ timeout: 20000 })
-    expect(await order()).toBe(original)
+    expect(await order()).toBe(enTree)
 
     // Save from the English page writes the pending French reorder to the French file.
     const saveBtn = page.locator('[data-testid="save-btn"]')

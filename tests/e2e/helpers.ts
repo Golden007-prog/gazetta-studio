@@ -26,3 +26,20 @@ export function storedDraftTitles(page: Page): Promise<string[]> {
     return rows.filter(r => r.id[3] === 'edit').map(r => r.value?.editedContent?.title ?? '')
   })
 }
+
+/** Keys of the drafts of one kind ('edit' | 'structural') held in the draft store. */
+export function storedDraftKeys(page: Page, kind: 'edit' | 'structural'): Promise<string[]> {
+  return page.evaluate(async kind => {
+    const db: IDBDatabase = await new Promise((res, rej) => {
+      const req = indexedDB.open('gazetta-drafts')
+      req.onsuccess = () => res(req.result)
+      req.onerror = () => rej(req.error)
+    })
+    if (!db.objectStoreNames.contains('drafts')) return []
+    const rows = await new Promise<Array<{ id: string[] }>>(res => {
+      const req = db.transaction('drafts').objectStore('drafts').getAll()
+      req.onsuccess = () => res(req.result)
+    })
+    return rows.filter(r => r.id[3] === kind).map(r => r.id[4])
+  }, kind)
+}
