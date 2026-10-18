@@ -444,6 +444,37 @@ describe('GET /preview/*', () => {
   })
 })
 
+describe('GET /preview/* for archived pages (#971)', () => {
+  it('shows a redirect placeholder for a Manual Redirect instead of a template error', async () => {
+    const created = await app.request('/api/page-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-about-971', to: 'about' }),
+    })
+    expect(created.status).toBe(201)
+    const { status, body } = await getText('/preview/old-about-971')
+    expect(status).toBe(200)
+    expect(body).not.toContain('Template Error')
+    expect(body).toContain('301')
+    expect(body).toContain('href="/about"')
+  })
+
+  it('shows a gone placeholder for an archived page without an alias', async () => {
+    const created = await app.request('/api/pages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'gone-971', template: 'page-default' }),
+    })
+    expect(created.status).toBeLessThan(300)
+    const archived = await app.request('/api/pages/gone-971/archive', { method: 'POST' })
+    expect(archived.status).toBeLessThan(300)
+    const { status, body } = await getText('/preview/gone-971')
+    expect(status).toBe(200)
+    expect(body).not.toContain('Template Error')
+    expect(body).toContain('410')
+  })
+})
+
 describe('GET /preview/@fragment', () => {
   it('renders fragment standalone', async () => {
     const { status, body } = await getText('/preview/@header')
