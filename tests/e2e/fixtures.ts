@@ -23,7 +23,16 @@ interface TestSite {
  * Override playwright's `baseURL` so `page.goto('/admin')` hits the worker's
  * server automatically.
  */
-export const test = base.extend<{ page: Page }, { testSite: TestSite; baseURL: string }>({
+/**
+ * Worker option: an `admin.auth` config for this worker's site copy. Specs
+ * that need a trust mode set it with `test.use({ siteAdminAuth: {...} })`;
+ * Playwright gives them their own worker (own copy, own dev server).
+ */
+type SiteAdminAuth = Record<string, unknown> | undefined
+
+export const test = base.extend<{ page: Page }, { testSite: TestSite; baseURL: string; siteAdminAuth: SiteAdminAuth }>({
+  siteAdminAuth: [undefined, { option: true, scope: 'worker' }],
+
   // Capture browser console + page errors.
   // - Console errors and uncaught exceptions fail the test (silent bugs fly
   //   under text-assertion radar; this catches Vue runtime errors, unhandled
@@ -72,7 +81,7 @@ export const test = base.extend<{ page: Page }, { testSite: TestSite; baseURL: s
   },
 
   testSite: [
-    async ({}, use, workerInfo) => {
+    async ({ siteAdminAuth }, use, workerInfo) => {
       const workerDir = resolve(repoRoot, '.tmp', `e2e-${workerInfo.workerIndex}`)
       const projectDir = resolve(workerDir, 'project')
       const port = 3100 + workerInfo.workerIndex
@@ -120,7 +129,13 @@ export const test = base.extend<{ page: Page }, { testSite: TestSite; baseURL: s
         `      environment: 'production',\n` +
         `      storage: { type: 'filesystem', path: './dist/prod-test' },\n` +
         `    },`
-      await writeFileFs(siteConfigPath, ts.slice(0, startIdx) + replacement + ts.slice(endIdx))
+      let config = ts.slice(0, startIdx) + replacement + ts.slice(endIdx)
+      if (siteAdminAuth) {
+        const anchor = 'defineSite({'
+        if (!config.includes(anchor)) throw new Error('Could not locate `defineSite({` in starter site.config.ts')
+        config = config.replace(anchor, `${anchor}\n  admin: { auth: ${JSON.stringify(siteAdminAuth)} },`)
+      }
+      await writeFileFs(siteConfigPath, config)
 
       const server = spawnDev(projectDir, port)
       try {

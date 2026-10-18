@@ -88,7 +88,31 @@ navigate to those pages after reload. The saved baseline is
 fetched fresh from the server; your dirty edits overlay on top.
 
 Save clears the dirty state for the saved item; navigating to a
-different page doesn't lose the others.
+different page doesn't lose the others. **Don't Save** discards them.
+
+Unsaved edits belong to the target you made them on. Switch from
+`local` to `staging` and the edits you left on `local` stay there;
+they come back when you switch back. Edits in two tabs are kept
+separately, so one tab never erases the other's — but if both tabs
+edit the *same* field, the last one written wins.
+
+### Shared computers
+
+When the admin sits behind an auth proxy (Cloudflare Access,
+oauth2-proxy and the other trust modes in [auth.md](auth.md)), unsaved
+edits belong to the person who made them. When someone else signs in
+on the same browser, the admin deletes the previous person's unsaved
+edits — it doesn't keep them for later, because anything left in the
+browser can be read by whoever uses it next.
+
+Two limits to know:
+
+- **Opening the admin offline** can't ask the server who you are, so it
+  shows the unsaved edits of whoever last used the admin online in this
+  browser.
+- **If the admin can't tell who you are** (your sign-in expired and the
+  proxy answers with its login page), it shows no unsaved edits and
+  keeps them as they are. Sign in again and reload.
 
 ### "Send now"
 
@@ -109,7 +133,7 @@ your saved items." Dismissing the banner suppresses it at that level;
 it reappears only if usage climbs strictly above the dismissal point.
 
 This is rare in practice. The admin's persistent storage is small
-(query results + structural pending edits); the warning fires when
+(query results + unsaved edits); the warning fires when
 the whole-origin storage budget is being consumed by something else
 (other apps on the same domain, browser caches accumulating).
 
@@ -226,7 +250,8 @@ Quick check after deploying a new version:
 2. DevTools → Application → Service Workers → confirm /admin/sw.js
    is registered + active.
 3. DevTools → Application → Storage → confirm IndexedDB has a
-   `gazetta-cache` database.
+   `gazetta-cache` database (query results) and a `gazetta-drafts`
+   database (unsaved edits).
 4. DevTools → Network → throttle to "Offline."
 5. Reload the page.
 6. Admin should still load (from SW cache) with the "Offline" banner

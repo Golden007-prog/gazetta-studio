@@ -29,7 +29,7 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 | 7 | Health endpoint `GET /api/health` | ✓ | Low | Server-side support |
 | 8a | Pending-edits store migration — `editorStructural` only (pure-data subset) | ✓ | Medium | Structural edits survive reload |
 | 8b | usePersistedEditsStore (cross-page key) + auto-mirror on markDirty/stashCurrent + navigate seam rebuilds target via buildTarget + clear-on-save | ✓ | Medium | Content edits survive reload |
-| 8c | Draft store + principal scoping: own IndexedDB store keyed `[site, owner, target, …]`, `GET /api/me`, boot classification + purge before hydration (design-offline.md "Unsaved drafts live in their own store"; #962) | ☐ | Medium-high | No draft crosses users, targets, sites or tabs |
+| 8c | Draft store + principal scoping: own IndexedDB store keyed `[site, owner, target, …]`, `GET /api/me`, boot classification + purge before hydration (design-offline.md "Unsaved drafts live in their own store"; #962) | ✓ | Medium-high | No draft crosses users, targets, sites or tabs |
 | 9 | Save-etag plumbing: server `ETag` + `If-Match` + 409 STALE + client `StaleSaveError` + `getPageWithEtag` / `updatePage(..., ifMatch)` | ✓ | High | Conflict-detection contract |
 | 9b | useEditorEtags Pinia store + useEditorActions integration (selection.ts If-Match plumbing, updateManifest helper, EditorPanel ConflictBanner wiring) | ✓ | High | End-to-end save-conflict flow |
 | 10 | Conflict UX: useSaveConflictsStore + ConflictBanner.vue + ConflictDiffView.vue (Show / Discard actions; no overwrite per Krug lock) | ✓ | High | Conflict resolution UX |
@@ -116,7 +116,7 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 
 **Tests:** browser reload preserves stashed edits across pages; current-page dirty state restored on reload via navigate flow; stash restore picks up persisted dirty content during multi-page-edit scenario.
 
-### Cut 8c: Draft store + principal scoping (pending, #962)
+### Cut 8c: Draft store + principal scoping (shipped, #962)
 
 Replaces Cuts 8a/8b's snapshot persistence (two coordinators writing whole snapshots into `AdminCache`) with a dedicated draft store. Closes, all reproduced 2026-10-18: drafts crossing users on a shared profile; tabs overwriting each other's drafts. Also closes drafts crossing targets and sites, and eviction of drafts.
 

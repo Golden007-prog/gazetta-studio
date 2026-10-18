@@ -1,6 +1,5 @@
-import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures'
-import { openEditor } from './helpers'
+import { openEditor, storedDraftTitles } from './helpers'
 import { SiteTreePom } from './pages/SiteTree'
 import { ComponentTreePom } from './pages/ComponentTree'
 import { join } from 'node:path'
@@ -235,20 +234,3 @@ test.describe('Target in URL', () => {
     await expect(page.locator('[data-testid="active-target-indicator"]')).toContainText('staging')
   })
 })
-
-/** Titles of the unsaved field drafts held in the draft store (IndexedDB). */
-function storedDraftTitles(page: Page): Promise<string[]> {
-  return page.evaluate(async () => {
-    const db: IDBDatabase = await new Promise((res, rej) => {
-      const req = indexedDB.open('gazetta-drafts')
-      req.onsuccess = () => res(req.result)
-      req.onerror = () => rej(req.error)
-    })
-    if (!db.objectStoreNames.contains('drafts')) return []
-    const rows = await new Promise<Array<{ id: string[]; value?: { editedContent?: { title?: string } } }>>(res => {
-      const req = db.transaction('drafts').objectStore('drafts').getAll()
-      req.onsuccess = () => res(req.result)
-    })
-    return rows.filter(r => r.id[3] === 'edit').map(r => r.value?.editedContent?.title ?? '')
-  })
-}
