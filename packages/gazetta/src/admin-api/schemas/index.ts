@@ -17,6 +17,7 @@
  *   - POST /api/fetch (cross-target copy)
  *   - DELETE /api/assets/:name (AssetRef + 409 AssetInUseResponse)
  *   - GET  /api/system/cache/stats (CacheStats snapshot)
+ *   - GET  /api/me (requesting principal)
  *   - GET  /api/audit (forensic event query + external-sink links)
  *   - 409 VALIDATION_FAILED on save handlers + GET /api/validation/issues
  *
@@ -40,3 +41,4 @@ export * from './system.js'
 export * from './audit.js'
 export * from './validation.js'
 export * from './redirects.js'
+export * from './me.js'

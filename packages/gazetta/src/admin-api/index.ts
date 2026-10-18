@@ -44,6 +44,7 @@ import { systemRoutes } from './routes/system.js'
 import { auditRoutes } from './routes/audit.js'
 import { validationRoutes } from './routes/validation.js'
 import { healthRoutes } from './routes/health.js'
+import { meRoutes } from './routes/me.js'
 import { archiveRoutes } from './routes/archive.js'
 import { renameRoutes } from './routes/rename.js'
 import { redirectRoutes } from './routes/redirects.js'
@@ -456,6 +457,7 @@ export function createAdminApp(opts: AdminAppOptions): AdminApp {
   app.route('/', auditRoutes({ providers: auditProviders }))
   app.route('/', validationRoutes({ scanner: opts.validationScanner ?? null }))
   app.route('/', healthRoutes())
+  app.route('/', meRoutes())
 
   // Periodic cache stats log — fires every 5 minutes against the
   // bootstrap source's cache. Runs unobtrusively (timer.unref()
