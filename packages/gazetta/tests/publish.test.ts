@@ -4,7 +4,10 @@ import { writeFile, mkdir, rm, readdir } from 'node:fs/promises'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { filesystemStorage, r2Storage, s3Storage } from '../src/providers/factories.js'
 import { publishItems, resolveDependencies } from '../src/publish.js'
-import { publishPageRendered, publishPageStatic, publishFragmentRendered } from '../src/publish-rendered.js'
+import { publishPage } from '../src/pages/publish.js'
+import { publishFragment } from '../src/fragments/publish.js'
+import type { PublishItemResult, PublishTarget } from '../src/publish-item.js'
+import type { StorageProvider } from '../src/types.js'
 import { createContentRoot } from '../src/content-root.js'
 import { loadSite, type Site } from '../src/site-loader.js'
 import { tempDir } from './_helpers/temp.js'
@@ -18,6 +21,38 @@ async function writeTestFile(base: string, path: string, content: string) {
   const full = join(base, path)
   await mkdir(join(full, '..'), { recursive: true })
   await writeFile(full, content)
+}
+
+type PublishOk = Extract<PublishItemResult, { ok: true }>
+type PubOpts = { type?: PublishTarget['type']; manifestHash?: string; cache?: PublishTarget['cache']; locale?: string }
+
+/**
+ * Publish through the per-kind wrappers that `publishRun` calls per item
+ * — the path the CLI and admin take. (These tests used to call the old
+ * `publish-rendered.ts` functions, which nothing in production calls.)
+ */
+async function pubPage(name: string, site: Site, storage: StorageProvider, opts: PubOpts = {}): Promise<PublishOk> {
+  const result = await publishPage({
+    name,
+    locale: opts.locale,
+    site,
+    sourceRoot: createContentRoot(storage),
+    target: { name: 'test', storage, type: opts.type ?? 'esi', manifestHash: opts.manifestHash, cache: opts.cache },
+  })
+  if (!result.ok) throw new Error(`publishPage ${name}: ${result.code} ${result.reason}`)
+  return result
+}
+
+async function pubFragment(name: string, site: Site, storage: StorageProvider, opts: PubOpts = {}): Promise<PublishOk> {
+  const result = await publishFragment({
+    name,
+    locale: opts.locale,
+    site,
+    sourceRoot: createContentRoot(storage),
+    target: { name: 'test', storage, type: opts.type ?? 'esi', manifestHash: opts.manifestHash },
+  })
+  if (!result.ok) throw new Error(`publishFragment ${name}: ${result.code} ${result.reason}`)
+  return result
 }
 
 beforeEach(async () => {
@@ -217,7 +252,7 @@ describe('resolveDependencies', () => {
   })
 })
 
-describe('publishRendered', () => {
+describe('page + fragment publish to an ESI target', () => {
   const starterDir = starterTargetDir
   const templatesDir = starterTemplatesDir
   const storage = createFilesystemProvider()
@@ -235,15 +270,7 @@ describe('publishRendered', () => {
 
   it('publishes a page as HTML with ESI placeholders and hashed CSS', async () => {
     const target = createFilesystemProvider(renderTargetDir)
-    const { files } = await publishPageRendered(
-      'home',
-      createContentRoot(storage, starterDir),
-      target,
-      undefined,
-      templatesDir,
-      undefined,
-      site,
-    )
+    const { files } = await pubPage('home', site, target, { type: 'esi' })
     expect(files).toBeGreaterThanOrEqual(2) // index.html + styles.{hash}.css
 
     // Check page HTML exists with ESI tags and title from content
@@ -265,14 +292,7 @@ describe('publishRendered', () => {
   it('publishes a fragment as HTML with hashed CSS', async () => {
     const target = createFilesystemProvider(renderTargetDir)
 
-    const { files } = await publishFragmentRendered(
-      'header',
-      createContentRoot(storage, starterDir),
-      target,
-      templatesDir,
-      undefined,
-      site,
-    )
+    const { files } = await pubFragment('header', site, target)
     expect(files).toBeGreaterThanOrEqual(2) // index.html + styles.{hash}.css
 
     const html = await target.readFile('fragments/header/index.html')
@@ -290,14 +310,7 @@ describe('publishRendered', () => {
 
     // First publish
 
-    await publishFragmentRendered(
-      'header',
-      createContentRoot(storage, starterDir),
-      target,
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubFragment('header', site, target)
     const entries1 = await target.readDir('fragments/header')
     const css1 = entries1.find(e => e.name.endsWith('.css'))!.name
 
@@ -308,14 +321,7 @@ describe('publishRendered', () => {
 
     // Publish again — same content, same hash
 
-    await publishFragmentRendered(
-      'header',
-      createContentRoot(storage, starterDir),
-      target,
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubFragment('header', site, target)
     const entriesAfter = await target.readDir('fragments/header')
     const cssAfter = entriesAfter.filter(e => e.name.endsWith('.css'))
 
@@ -328,30 +334,14 @@ describe('publishRendered', () => {
     const target = createFilesystemProvider(renderTargetDir)
 
     // First publish
-    await publishPageRendered(
-      'home',
-      createContentRoot(storage, starterDir),
-      target,
-      undefined,
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('home', site, target, { type: 'esi' })
 
     // Write fake old files
     await target.writeFile('pages/home/styles.00000000.css', '.old {}')
     await target.writeFile('pages/home/script.00000000.js', '// old')
 
     // Publish again
-    await publishPageRendered(
-      'home',
-      createContentRoot(storage, starterDir),
-      target,
-      undefined,
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('home', site, target, { type: 'esi' })
     const entries = await target.readDir('pages/home')
     const oldCss = entries.filter(e => e.name === 'styles.00000000.css')
     const oldJs = entries.filter(e => e.name === 'script.00000000.js')
@@ -361,15 +351,7 @@ describe('publishRendered', () => {
 
   it('bakes cache config comment into page HTML with defaults', async () => {
     const target = createFilesystemProvider(renderTargetDir)
-    await publishPageRendered(
-      'home',
-      createContentRoot(storage, starterDir),
-      target,
-      undefined,
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('home', site, target, { type: 'esi' })
     const html = await target.readFile('pages/home/index.html')
     expect(html).toMatch(/^<!--cache:browser=0,edge=86400-->/)
     expect(html).toContain('<!DOCTYPE html>')
@@ -377,30 +359,14 @@ describe('publishRendered', () => {
 
   it('bakes target cache config into page HTML', async () => {
     const target = createFilesystemProvider(renderTargetDir)
-    await publishPageRendered(
-      'home',
-      createContentRoot(storage, starterDir),
-      target,
-      { browser: 120, edge: 3600 },
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('home', site, target, { type: 'esi', cache: { browser: 120, edge: 3600 } })
     const html = await target.readFile('pages/home/index.html')
     expect(html).toMatch(/^<!--cache:browser=120,edge=3600-->/)
   })
 
   it('cache comment is on first line before DOCTYPE', async () => {
     const target = createFilesystemProvider(renderTargetDir)
-    await publishPageRendered(
-      'home',
-      createContentRoot(storage, starterDir),
-      target,
-      undefined,
-      templatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('home', site, target, { type: 'esi' })
     const html = await target.readFile('pages/home/index.html')
     const lines = html.split('\n')
     expect(lines[0]).toMatch(/^<!--cache:/)
@@ -408,7 +374,7 @@ describe('publishRendered', () => {
   })
 })
 
-describe('publishPageStatic', () => {
+describe('page publish to a static target', () => {
   const projectRoot2 = resolve(import.meta.dirname, '../../../examples/starter')
   const starterDir = resolve(projectRoot2, 'sites/main/targets/local')
   const templatesDir = resolve(projectRoot2, 'templates')
@@ -428,7 +394,7 @@ describe('publishPageStatic', () => {
   it('publishes fully assembled HTML at URL path', async () => {
     const target = createFilesystemProvider(staticTargetDir)
 
-    await publishPageStatic('home', createContentRoot(storage, starterDir), target, templatesDir, undefined, site)
+    await pubPage('home', site, target, { type: 'static' })
     const html = await target.readFile('index.html')
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('Welcome to Gazetta')
@@ -445,7 +411,7 @@ describe('publishPageStatic', () => {
   it('publishes about page at /about/index.html', async () => {
     const target = createFilesystemProvider(staticTargetDir)
 
-    await publishPageStatic('about', createContentRoot(storage, starterDir), target, templatesDir, undefined, site)
+    await pubPage('about', site, target, { type: 'static' })
     const html = await target.readFile('about/index.html')
     expect(html).toContain('About Gazetta')
     expect(html).not.toContain('<!--esi')
@@ -454,7 +420,7 @@ describe('publishPageStatic', () => {
   it('includes inline CSS and JS', async () => {
     const target = createFilesystemProvider(staticTargetDir)
 
-    await publishPageStatic('home', createContentRoot(storage, starterDir), target, templatesDir, undefined, site)
+    await pubPage('home', site, target, { type: 'static' })
     const html = await target.readFile('index.html')
     expect(html).toContain('<style>')
     // Counter JS should be inline
@@ -464,7 +430,7 @@ describe('publishPageStatic', () => {
   it('no separate CSS/JS files', async () => {
     const target = createFilesystemProvider(staticTargetDir)
 
-    await publishPageStatic('home', createContentRoot(storage, starterDir), target, templatesDir, undefined, site)
+    await pubPage('home', site, target, { type: 'static' })
     const entries = await target.readDir('.')
     const cssOrJs = entries.filter(e => e.name.endsWith('.css') || e.name.endsWith('.js'))
     expect(cssOrJs.length).toBe(0)
@@ -480,7 +446,7 @@ describe('publishPageStatic', () => {
 // cleanup test exercises the live-publish path first, which needs a
 // real templatesDir on disk for jiti import.
 describe('archived-page publish (Cut 3)', () => {
-  it('publishPageRendered (ESI) emits ONLY the alias marker for archived pages with aliasOf', async () => {
+  it('ESI target: emits ONLY the alias marker for archived pages with aliasOf', async () => {
     const { memoryStorage } = await import('./_helpers/memory-storage.js')
     const { loadSite } = await import('../src/site-loader.js')
     const source = memoryStorage()
@@ -501,15 +467,7 @@ describe('archived-page publish (Cut 3)', () => {
       manifest: { name: '(archive-test)' },
     })
 
-    const result = await publishPageRendered(
-      'landing',
-      createContentRoot(source),
-      target,
-      undefined,
-      undefined,
-      undefined,
-      site,
-    )
+    const result = await pubPage('landing', site, target, { type: 'esi' })
 
     expect(result.files).toBe(1)
     const html = await target.readFile('pages/landing/index.html')
@@ -521,7 +479,7 @@ describe('archived-page publish (Cut 3)', () => {
     expect(cssOrJs.length).toBe(0)
   })
 
-  it('publishPageRendered emits the gone marker for pure soft-delete (no aliasOf)', async () => {
+  it('ESI target: emits the gone marker for pure soft-delete (no aliasOf)', async () => {
     const { memoryStorage } = await import('./_helpers/memory-storage.js')
     const { loadSite } = await import('../src/site-loader.js')
     const source = memoryStorage()
@@ -538,13 +496,13 @@ describe('archived-page publish (Cut 3)', () => {
       manifest: { name: '(archive-test)' },
     })
 
-    await publishPageRendered('landing', createContentRoot(source), target, undefined, undefined, undefined, site)
+    await pubPage('landing', site, target, { type: 'esi' })
 
     const html = await target.readFile('pages/landing/index.html')
     expect(html).toBe('<!-- gazetta:archived gone -->\n')
   })
 
-  it('publishPageStatic emits ONLY the alias marker at the route URL path', async () => {
+  it('static target: emits ONLY the alias marker at the route URL path', async () => {
     const { memoryStorage } = await import('./_helpers/memory-storage.js')
     const { loadSite } = await import('../src/site-loader.js')
     const source = memoryStorage()
@@ -558,14 +516,14 @@ describe('archived-page publish (Cut 3)', () => {
       manifest: { name: '(archive-test)' },
     })
 
-    await publishPageStatic('landing', createContentRoot(source), target, undefined, undefined, site)
+    await pubPage('landing', site, target, { type: 'static' })
 
     // Static publish maps page.route to disk path: /landing → landing/index.html
     const html = await target.readFile('landing/index.html')
     expect(html).toBe('<!-- gazetta:archived alias=welcome -->\n')
   })
 
-  it('publishPageStatic emits gone marker at /landing/index.html for soft-delete', async () => {
+  it('static target: emits gone marker at /landing/index.html for soft-delete', async () => {
     const { memoryStorage } = await import('./_helpers/memory-storage.js')
     const { loadSite } = await import('../src/site-loader.js')
     const source = memoryStorage()
@@ -578,7 +536,7 @@ describe('archived-page publish (Cut 3)', () => {
       manifest: { name: '(archive-test)' },
     })
 
-    await publishPageStatic('landing', createContentRoot(source), target, undefined, undefined, site)
+    await pubPage('landing', site, target, { type: 'static' })
     const html = await target.readFile('landing/index.html')
     expect(html).toBe('<!-- gazetta:archived gone -->\n')
   })
@@ -594,7 +552,7 @@ describe('archived-page publish (Cut 3)', () => {
     })
     const site = await loadSite({ contentRoot: createContentRoot(source), manifest: { name: '(archive-test)' } })
 
-    await publishPageRendered('landing', createContentRoot(source), target, undefined, undefined, 'abcd1234', site)
+    await pubPage('landing', site, target, { type: 'esi', manifestHash: 'abcd1234' })
 
     // .{hash}.hash + .pub-{ts} sidecars present in pages/landing/
     const entries = await target.readDir('pages/landing')
@@ -642,15 +600,7 @@ describe('archived-page publish — live-to-archive cleanup (Cut 3)', () => {
     const target = createFilesystemProvider(archiveTargetDir)
 
     // Live publish — emits index.html + styles.{hash}.css
-    await publishPageRendered(
-      'landing',
-      createContentRoot(createFilesystemProvider(), archiveSourceDir),
-      target,
-      undefined,
-      archiveTemplatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('landing', site, target, { type: 'esi' })
     const liveEntries = await target.readDir('pages/landing')
     expect(liveEntries.some(e => /styles\.[a-f0-9]{8}\.css$/.test(e.name))).toBe(true)
 
@@ -667,15 +617,7 @@ describe('archived-page publish — live-to-archive cleanup (Cut 3)', () => {
       templatesDir: archiveTemplatesDir,
       manifest: { name: '(archive-test)' },
     })
-    const result = await publishPageRendered(
-      'landing',
-      createContentRoot(createFilesystemProvider(), archiveSourceDir),
-      target,
-      undefined,
-      archiveTemplatesDir,
-      undefined,
-      site,
-    )
+    const result = await pubPage('landing', site, target, { type: 'esi' })
 
     const html = await target.readFile('pages/landing/index.html')
     expect(html).toBe('<!-- gazetta:archived alias=welcome -->\n')
@@ -699,15 +641,7 @@ describe('archived-page publish — live-to-archive cleanup (Cut 3)', () => {
       manifest: { name: '(archive-test)' },
     })
     const target = createFilesystemProvider(archiveTargetDir)
-    await publishPageRendered(
-      'home',
-      createContentRoot(createFilesystemProvider(), archiveSourceDir),
-      target,
-      undefined,
-      archiveTemplatesDir,
-      undefined,
-      site,
-    )
+    await pubPage('home', site, target, { type: 'esi' })
 
     const html = await target.readFile('pages/home/index.html')
     // Live page renders the full document — DOCTYPE + head + body + cache
@@ -895,7 +829,7 @@ describe('SEO publish integration', () => {
     const hash = hashManifest(page, { templateHashes })
 
     const before = Date.now()
-    await publishPageStatic('home', contentRoot, target, templatesDir, hash, site)
+    await pubPage('home', site, target, { type: 'static', manifestHash: hash })
     const after = Date.now()
 
     // The .pub-* sidecar should exist on the target under pages/home/
@@ -941,7 +875,7 @@ describe('SEO publish integration', () => {
     const page = site.pages.get('secret')!
     const hash = hashManifest(page, { templateHashes })
 
-    await publishPageStatic('secret', contentRoot, target, templatesDir, hash, site)
+    await pubPage('secret', site, target, { type: 'static', manifestHash: hash })
 
     const entries = await target.readDir('pages/secret')
     const pubFile = entries.find(e => e.name.startsWith('.pub-'))
@@ -972,7 +906,7 @@ describe('SEO publish integration', () => {
     for (const name of ['home', 'about']) {
       const page = site.pages.get(name)!
       const hash = hashManifest(page, { templateHashes })
-      await publishPageStatic(name, contentRoot, target, templatesDir, hash, site)
+      await pubPage(name, site, target, { type: 'static', manifestHash: hash })
     }
 
     // Generate sitemap from target sidecars
