@@ -43,7 +43,8 @@ async function goToFragment() {
   if (editing.hasPendingEdits) {
     const result = await unsavedGuard.guard()
     if (result === 'cancel') return
-    if (result === 'save') await editing.save()
+    // A failed save keeps the edits and stays on this page.
+    if (result === 'save' && !(await editing.save())) return
   }
   editing.clear()
   await router.push({ path: `/fragments/${fragName}/edit`, hash })

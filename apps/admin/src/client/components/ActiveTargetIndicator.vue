@@ -122,7 +122,8 @@ async function switchTo(name: string) {
   if (editing.hasPendingEdits) {
     const result = await unsavedGuard.guard()
     if (result === 'cancel') return
-    if (result === 'save') await editing.save()
+    // A failed save keeps the edits and stays on this target.
+    if (result === 'save' && !(await editing.save())) return
     editing.clear()
   }
   const prevName = activeTarget.activeTargetName

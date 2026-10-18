@@ -709,7 +709,13 @@ export function useEditorActions() {
     }
   }
 
-  async function save() {
+  /**
+   * Save every pending edit. Resolves true when everything was written,
+   * false when the save failed (the error is already shown as a toast or
+   * the validation banner). Never throws. Callers that navigate after a
+   * save must stop on false, or the unsaved edits are lost.
+   */
+  async function save(): Promise<boolean> {
     const current = ec.target && ec.content ? { target: ec.target, content: ec.content } : null
     const stashedEntries = [...stash.values()]
     const stashedKeys = [...stash.entries].map(([k]) => k)
@@ -741,13 +747,16 @@ export function useEditorActions() {
       usePreviewStore().invalidate()
       usePublishStatusStore().refresh()
       toast.show('Saved', { action: buildUndoAction() })
-    } else if (result.validationError) {
+      return true
+    }
+    if (result.validationError) {
       // 409 VALIDATION_FAILED — banner surface, not a toast. Issues are
       // pinned until the next successful save or explicit dismiss.
       validationStore.set(result.validationError.issues)
     } else {
       toast.showError(new Error(result.error), 'Failed to save')
     }
+    return false
   }
 
   // --- Post-restore refresh ---

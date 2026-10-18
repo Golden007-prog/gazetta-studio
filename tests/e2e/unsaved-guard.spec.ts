@@ -167,3 +167,67 @@ test.describe('Escape key behavior', () => {
     await expect(dialog).not.toBeVisible()
   })
 })
+
+// Choosing Save in the dialog used to clear the editor even when the save
+// failed, so the edits were lost. A failed save must keep them and stay.
+test.describe('A failed save in the dialog keeps the edits', () => {
+  async function failEverySave(page: import('@playwright/test').Page) {
+    await page.route('**/admin/api/pages/**', route =>
+      route.request().method() === 'PUT'
+        ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Disk full' }) })
+        : route.continue(),
+    )
+  }
+
+  async function dirtyHero(page: import('@playwright/test').Page) {
+    await openEditor(page, 'home')
+    await new ComponentTreePom(page).open('hero')
+    const title = page.locator('input[name="root_title"]').first()
+    await title.waitFor({ timeout: 15000 })
+    await title.fill('Edit that must survive')
+    return title
+  }
+
+  test('switching target', async ({ page }) => {
+    test.info().annotations.push({ type: 'allow-console-errors' }) // the failed PUT
+    const title = await dirtyHero(page)
+    await failEverySave(page)
+    await page.locator('[data-testid="active-target-indicator"]').click()
+    await page.locator('[data-testid="active-target-menu"]').getByRole('menuitem', { name: 'staging' }).click()
+    const dialog = page.getByRole('dialog', { name: /unsaved changes/i })
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('[data-testid="active-target-indicator"]')).toContainText('local')
+    await expect(title).toHaveValue('Edit that must survive')
+    await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
+  })
+
+  test('switching locale', async ({ page }) => {
+    test.info().annotations.push({ type: 'allow-console-errors' }) // the failed PUT
+    const title = await dirtyHero(page)
+    await failEverySave(page)
+    await page.locator('[data-testid="locale-fr"]').click()
+    const dialog = page.getByRole('dialog', { name: /unsaved changes/i })
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+
+    await expect(dialog).toBeHidden()
+    expect(new URL(page.url()).searchParams.get('locale')).toBeNull()
+    await expect(title).toHaveValue('Edit that must survive')
+    await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
+  })
+
+  test('opening a linked fragment', async ({ page }) => {
+    test.info().annotations.push({ type: 'allow-console-errors' }) // the failed PUT
+    await dirtyHero(page)
+    await failEverySave(page)
+    await new ComponentTreePom(page).open('header') // a fragment reference: shows "Edit @header"
+    await page.locator('[data-testid="fragment-go-link"]').click()
+    const dialog = page.getByRole('dialog', { name: /unsaved changes/i })
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+
+    await expect(dialog).toBeHidden()
+    expect(new URL(page.url()).pathname).toBe('/admin/pages/home/edit')
+    await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
+  })
+})

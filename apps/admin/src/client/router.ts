@@ -90,7 +90,9 @@ export function createRouter() {
         const guard = useUnsavedGuardStore()
         const result = await guard.guard()
         if (result === 'cancel') return false
-        if (result === 'save') await editing.save()
+        // A failed save keeps the edits and stays here; the save already
+        // reported why.
+        if (result === 'save' && !(await editing.save())) return false
         editing.clear()
       }
     }
