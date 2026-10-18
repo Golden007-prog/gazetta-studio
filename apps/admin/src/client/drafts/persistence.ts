@@ -18,8 +18,7 @@
  */
 import { toRaw, watch } from 'vue'
 import type { ComponentEntry } from 'gazetta/types'
-import { manifestKeyFromString } from 'gazetta/types'
-import { useEditorStructuralStore } from '../stores/editorStructural.js'
+import { structuralKeyFromString, useEditorStructuralStore } from '../stores/editorStructural.js'
 import { type PersistedEdit, usePersistedEditsStore } from '../stores/persistedEdits.js'
 import type { DraftKind, DraftScope, DraftStore } from './types.js'
 
@@ -51,7 +50,7 @@ function structuralLane(): Lane {
       for (const [k, value] of entries) {
         let key
         try {
-          key = manifestKeyFromString(k)
+          key = structuralKeyFromString(k)
         } catch {
           continue // a key shape this version doesn't know; keep the rest
         }

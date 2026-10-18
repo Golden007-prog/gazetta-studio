@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import type { ComponentEntry, InlineComponent, ManifestKey } from 'gazetta/types'
-import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
+import { structuralKeyToString, useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
 
 const homeKey: ManifestKey = { kind: 'page', name: 'home' }
 const headerKey: ManifestKey = { kind: 'fragment', name: 'header' }
@@ -166,7 +166,12 @@ describe('editorStructural', () => {
       const all = store.allEntries()
       expect(all).toHaveLength(2)
       const keys = all.map(([k]) => k).sort()
-      expect(keys).toEqual(['fragment:header', 'page:home'])
+      expect(keys).toEqual(
+        [
+          structuralKeyToString({ kind: 'fragment', name: 'header' }),
+          structuralKeyToString({ kind: 'page', name: 'home' }),
+        ].sort(),
+      )
     })
   })
 })

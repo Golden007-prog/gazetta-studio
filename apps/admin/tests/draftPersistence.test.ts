@@ -11,12 +11,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { attachDraftPersistence, type DraftPersistenceHandle, draftsLoaded } from '../src/client/drafts/persistence.js'
 import { createMemoryDraftStore } from '../src/client/drafts/memory-draft-store.js'
 import type { DraftScope, DraftStore } from '../src/client/drafts/types.js'
-import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
+import { structuralKeyToString, useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
 import { usePersistedEditsStore } from '../src/client/stores/persistedEdits.js'
 
 const local: DraftScope = { site: 'main', owner: 'none:unknown:admin', target: 'local' }
 const staging: DraftScope = { ...local, target: 'staging' }
 const home = { kind: 'page' as const, name: 'home' }
+const HOME = structuralKeyToString(home)
 const edit = (title: string) => ({ key: 'x', editedContent: { title }, updatedAt: 't' })
 
 let handles: DraftPersistenceHandle[] = []
@@ -36,13 +37,13 @@ describe('draft persistence', () => {
   it("loads the scope's drafts into both stores, keeping the discard baseline", async () => {
     const drafts = createMemoryDraftStore()
     await drafts.put(local, 'edit', 'page:home::hero', edit('Draft'))
-    await drafts.put(local, 'structural', 'page:home', { original: ['a', 'b'], pending: ['b', 'a'] })
+    await drafts.put(local, 'structural', HOME, { original: ['a', 'b'], pending: ['b', 'a'] })
 
     await attach(drafts, () => local).loaded()
 
     expect(usePersistedEditsStore().get('page:home::hero')?.editedContent).toEqual({ title: 'Draft' })
     const entry = useEditorStructuralStore().allEntries()[0]
-    expect(entry[0]).toBe('page:home')
+    expect(entry[0]).toBe(HOME)
     expect(entry[1].original).toEqual(['a', 'b'])
     expect(entry[1].pending).toEqual(['b', 'a'])
   })
@@ -59,7 +60,7 @@ describe('draft persistence', () => {
     await h.flush()
 
     expect(put.mock.calls.map(c => [c[1], c[2]])).toEqual([
-      ['structural', 'page:home'],
+      ['structural', HOME],
       ['edit', 'page:home::hero'],
     ])
     expect((await drafts.list(local, 'edit')).map(([k]) => k).sort()).toEqual(['page:about::_root', 'page:home::hero'])
@@ -148,13 +149,13 @@ describe('draft persistence', () => {
   it('skips a structural draft with a key it cannot read, keeps the rest', async () => {
     const drafts = createMemoryDraftStore()
     await drafts.put(local, 'structural', 'not-a-manifest-key', { original: [], pending: [] })
-    await drafts.put(local, 'structural', 'page:home', { original: ['a'], pending: [] })
+    await drafts.put(local, 'structural', HOME, { original: ['a'], pending: [] })
     await attach(drafts, () => local).loaded()
     expect(
       useEditorStructuralStore()
         .allEntries()
         .map(([k]) => k),
-    ).toEqual(['page:home'])
+    ).toEqual([HOME])
   })
 
   it('draftsLoaded() waits for the current load', async () => {

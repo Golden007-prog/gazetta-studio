@@ -4,7 +4,7 @@ function deepClone<T>(obj: T): T {
 
 import { computed } from 'vue'
 import type { DraftOverrides, ManifestKey } from 'gazetta/types'
-import { manifestKeyFromString } from 'gazetta/types'
+import { manifestKeyToString } from 'gazetta/types'
 import { useToastStore } from '../stores/toast.js'
 import { usePreviewStore } from '../stores/preview.js'
 import { useSelectionStore } from '../stores/selection.js'
@@ -12,7 +12,7 @@ import { usePublishStatusStore } from '../stores/publishStatus.js'
 import { useActiveTargetStore } from '../stores/activeTarget.js'
 import { useSiteStore } from '../stores/site.js'
 import { useEditorStashStore } from '../stores/editorStash.js'
-import { useEditorStructuralStore } from '../stores/editorStructural.js'
+import { type StructuralKey, structuralKeyFromString, useEditorStructuralStore } from '../stores/editorStructural.js'
 import { useEditorPersistenceStore, type StructuralWrite } from '../stores/editorPersistence.js'
 import { useEditorContentStore, type EditingTarget } from '../stores/editorContent.js'
 import { useValidationIssuesStore } from '../stores/validationIssues.js'
@@ -176,8 +176,10 @@ export function useEditorActions() {
     name: string,
     payload: Record<string, unknown>,
     pendingForConflict: Record<string, unknown>,
+    /** Which locale file to write; defaults to the locale active now. `null` = the default locale. */
+    forLocale?: string | null,
   ): Promise<void> {
-    const locale = useLocaleStore().effectiveLocale ?? undefined
+    const locale = forLocale === undefined ? (useLocaleStore().effectiveLocale ?? undefined) : (forLocale ?? undefined)
     const path = manifestPath(kind, name, locale)
     const etags = useEditorEtagsStore()
     const ifMatch = etags.get(path) ?? undefined
@@ -579,7 +581,7 @@ export function useEditorActions() {
     fromIndex: number,
     toIndex: number,
   ) {
-    structural.moveComponent(key, current, fromIndex, toIndex)
+    structural.moveComponent(inCurrentLocale(key), current, fromIndex, toIndex)
     usePreviewStore().invalidateDraft()
   }
 
@@ -589,7 +591,7 @@ export function useEditorActions() {
     component: import('gazetta/types').InlineComponent | string,
     insertIndex?: number,
   ) {
-    structural.addComponent(key, current, component, insertIndex)
+    structural.addComponent(inCurrentLocale(key), current, component, insertIndex)
     usePreviewStore().invalidateDraft()
   }
 
@@ -598,7 +600,7 @@ export function useEditorActions() {
     current: readonly import('gazetta/types').ComponentEntry[],
     atIndex: number,
   ) {
-    structural.removeComponent(key, current, atIndex)
+    structural.removeComponent(inCurrentLocale(key), current, atIndex)
     usePreviewStore().invalidateDraft()
   }
 
@@ -629,10 +631,16 @@ export function useEditorActions() {
     return { kind: sel.type, name: sel.name }
   }
 
+  /** The structural key for a manifest in the locale being edited now. */
+  function inCurrentLocale(key: ManifestKey): StructuralKey {
+    const locale = useLocaleStore().effectiveLocale ?? undefined
+    return locale ? { ...key, locale } : { ...key }
+  }
+
   function discard() {
     ec.discard()
     const key = currentManifestKey()
-    if (key) structural.discard(key)
+    if (key) structural.discard(inCurrentLocale(key))
     // Cut 8b: drop the cross-page persisted mirror for the current
     // edit. The author explicitly reverted; re-applying the dirty
     // content on reload would undo their intent.
@@ -688,14 +696,15 @@ export function useEditorActions() {
    * called by the persistence orchestrator.
    */
   function buildStructuralWrite(keyString: string, components: unknown[]): StructuralWrite {
-    const key = manifestKeyFromString(keyString)
+    // Write to the locale the edit was made in, not whichever is active now.
+    const key = structuralKeyFromString(keyString)
     return {
       label: keyString,
       write: async () => {
         // pending shape carries the structural change; if a conflict
         // surfaces, the diff view shows the components count change.
         const pending: Record<string, unknown> = { components }
-        await updateManifest(key.kind, key.name, { components: components as never }, pending)
+        await updateManifest(key.kind, key.name, { components: components as never }, pending, key.locale ?? null)
       },
     }
   }
@@ -774,8 +783,12 @@ export function useEditorActions() {
     if (ec.path && ec.content && ec.dirty) content[ec.path] = ec.content
 
     const structuralOverrides: DraftOverrides['structural'] = {}
+    // The preview renders the current locale and keys overrides by manifest.
+    const locale = useLocaleStore().effectiveLocale ?? undefined
     for (const [k, entry] of structural.allEntries()) {
-      structuralOverrides[k] = entry.pending
+      const key = structuralKeyFromString(k)
+      if (key.locale !== locale) continue
+      structuralOverrides[manifestKeyToString(key)] = entry.pending
     }
     return { content, structural: structuralOverrides }
   })

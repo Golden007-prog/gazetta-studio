@@ -143,7 +143,7 @@ Replaces Cuts 8a/8b's snapshot persistence (two coordinators writing whole snaps
 
 **Migration:** the old `pending-edits:*` cache keys are deleted once at boot; drafts saved before the upgrade are dropped (no backwards compatibility, per this doc's header).
 
-**Open:** structural keys carry no locale. Verify whether component lists can differ per locale variant before deciding.
+**Resolved (2026-10-18):** structural keys now carry the locale. Locale variants are whole files with their own component list; without the locale a French reorder restored after a reload in English was saved into `page.json`, French hero text included (reproduced). The save writes to the edit's own locale file.
 
 ### Cut 9: Save-etag plumbing (shipped)
 

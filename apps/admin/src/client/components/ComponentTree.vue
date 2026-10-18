@@ -10,6 +10,7 @@ import { useComponentFocusStore } from '../stores/componentFocus.js'
 import { useFragmentsApi } from '../composables/api.js'
 import { hashToSelection, selectionToHash, type EditorSelection } from '../composables/editorSelection.js'
 import { useUiModeStore } from '../stores/uiMode.js'
+import { useLocaleStore } from '../stores/locale.js'
 import { useEditorStructuralStore } from '../stores/editorStructural.js'
 import AddComponentDialog from './AddComponentDialog.vue'
 
@@ -67,7 +68,10 @@ const effectiveComponents = computed(() => {
   const sel = selection.selection
   const d = detail.value
   if (!sel || !d) return null
-  const pending = structural.pendingFor({ kind: sel.type, name: sel.name })
+  const locale = useLocaleStore().effectiveLocale ?? undefined
+  const pending = structural.pendingFor(
+    locale ? { kind: sel.type, name: sel.name, locale } : { kind: sel.type, name: sel.name },
+  )
   return pending ?? d.components ?? []
 })
 const componentCount = computed(() => effectiveComponents.value?.length ?? 0)
