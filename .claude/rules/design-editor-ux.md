@@ -115,19 +115,20 @@ a page or fragment manifest) and **page metadata** edits (SEO title, description
 canonical, robots). All are pending until explicit save; all contribute to the dirty-dot
 indicator and the unsaved-changes guard; all are reverted by Discard for the focused page;
 one Save writes them all. The writes are sequential, not one transaction: a failure part-way
-leaves the earlier writes on disk and keeps the rest pending (the guard stays put on a failed
-save, #977). Authors see the tree reflect a pending reorder immediately, but the disk file is
+leaves the earlier writes on disk and keeps everything pending, including what already landed;
+the next Save rewrites it (the guard stays put on a failed save, #977). Authors see the tree reflect a pending reorder immediately, but the disk file is
 unchanged until save lands. This avoids the asymmetry where a discard would revert content
 edits while structural changes silently persisted.
 
 ### Page metadata is a pending lane (locked 2026-10-18)
 
 **Why.** Page metadata was edited in `PageMetadataEditor` with its own local `dirty` flag and
-its own Save button, outside the pending-edit model. Reproduced 2026-10-18, each against an
-unsaved content edit as the control: the guard didn't fire on a target switch, a locale switch
-or leaving edit mode; reload gave no leave-page prompt; the main Save didn't save it; nothing
-kept it across a reload. From code: clicking another component unmounts the form and drops the
-edit. Research across CMSes with an explicit Save (Payload, Strapi, Directus, Storyblok,
+its own Save button, outside the pending-edit model. Reproduced 2026-10-18 against an unsaved
+content edit as the control: the guard didn't fire on a target switch or on leaving edit mode;
+reload gave no leave-page prompt; the main Save didn't save it. Also reproduced: no guard on a
+locale switch (the content control for that path is #977's e2e test). From code: the form's
+state is local, so nothing keeps it across a reload, and clicking another component unmounts
+the form and drops the edit. Research across CMSes with an explicit Save (Payload, Strapi, Directus, Storyblok,
 WordPress + Yoast) found metadata always rides the document's one Save, and the dirty-guard
 covers it only when it is ordinary form state — Yoast in the block editor, whose fields sit
 outside the editor state, has exactly this gap ([`docs/audits/cms-seo-metadata-save.md`](../../docs/audits/cms-seo-metadata-save.md)).
@@ -142,15 +143,27 @@ outside the editor state, has exactly this gap ([`docs/audits/cms-seo-metadata-s
   and the form changes only its own fields. Unknown keys survive, and the noindex checkbox adds or
   removes only the `noindex` token of `robots` (`nofollow` survives). Before this lock the save
   rebuilt metadata from the form and dropped both.
+- **An emptied field removes its key**, as today, so files stay clean. (Rendering doesn't depend
+  on it: the renderer treats `""` like a missing field — `||` fallbacks, `robots` only when set.)
 - **Save:** the one Save (toolbar, Ctrl/Cmd+S, the dialog's Save) writes each entry as its own
   `PUT { metadata }` to **the entry's locale**, with `If-Match` from the save-version store, after
-  the other lanes. Writes in sequence chain their save versions (verified: a metadata save then a
-  content save produced no false conflict).
+  the other lanes. Each write stores the version it gets back (`updateManifest`), so writes in
+  sequence chain. Verified against the server: a content write, then a metadata write carrying
+  the new version, both succeed; the metadata write with the old version is rejected as `STALE`.
+- **Ctrl/Cmd+S saves when any edit is pending** (`hasPendingEdits`), not only when the open editor
+  is dirty. This also changes the shortcut for reorders and stashed edits, which it ignored; on a
+  clean form it stays a no-op.
 - **Discard** for the focused page reverts its entry; the dialog's Don't Save drops it; `clear()`
   drops the entries it discards, like the other lanes.
 - **Guard and leave-page prompt:** `hasPendingEdits` counts entries.
-- **Dirty dot:** the same dot as content edits, on the page root.
-- **Kept across reload:** a `metadata` lane in the draft store (`design-offline.md`).
+- **Dirty dot:** the same dot as content edits, on the page root. The root row's revert button
+  shares the dot's condition, so it reverts pending metadata too.
+- **Kept across reload:** a `metadata` lane in the draft store (`design-offline.md`). A restored
+  entry **becomes active only when its page is opened in that locale**, like content drafts:
+  until then it is stored but doesn't count for the guard, and no Save writes it. Opening the
+  page activates it, so the root dot shows straight away. Why not active at once, as structural
+  drafts are: reproduced 2026-10-18 — a reorder on `home`, reloaded onto an untouched `about`,
+  enabled Save there, and leaving showed "You have unsaved changes on about".
 - **One Save:** `PageMetadataEditor` loses its own Save button and reads/writes the lane. It keeps
   the Archive button, the SERP preview (showing pending values, as today), the counters and its
   test ids, and still renders only on the page root.
@@ -178,14 +191,24 @@ written per locale. Auth: the same `edit:pages` route. Audit, review (`invalidat
 counts metadata) and hooks (`beforeSave` already sees `payload.metadata`): one event per write, as
 today. Validation: save-delta validators don't read metadata. Offline: the draft-store lane.
 
+**Tests that pin the decisions** (each checked by breaking the code it covers):
+- Save order: content and metadata pending on one page → one Save writes both, metadata last with the new version; no conflict. With a stale version stored → `STALE` and the conflict banner.
+- Locale: metadata pending on `fr` → written to `page.fr.json`, even when saved from another locale.
+- Restore: a metadata draft for page A doesn't enable Save or the dialog on page B; opening A activates it and shows the root dot.
+- Guard and prompt: with only metadata pending, the dialog appears on target / locale switch and on leaving edit mode, and reload prompts.
+- Ctrl/Cmd+S with only metadata pending saves it; on a clean form it does nothing.
+- Root revert with only metadata pending clears the dot and the entry.
+- Component click and back: the metadata edit survives.
+- Editing keeps unknown keys and `nofollow`; an emptied field removes its key.
+
 **Cut sequence.**
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Metadata lane store: key with locale, `{ original, pending }`, dirty by comparison, edits that keep unknown keys and other robots tokens | — | unit-first | Low |
-| 2 | Editor wiring: pending count, Save writes to the entry's locale with `If-Match`, Discard / Don't Save / `clear()`, dirty dot | 1 | unit + integration | Medium |
+| 2 | Editor wiring: pending count, Save writes to the entry's locale with `If-Match` after the other lanes, Discard / Don't Save / `clear()`, dirty dot and root revert, Ctrl/Cmd+S on any pending edit | 1 | unit + integration | Medium |
 | 3 | `PageMetadataEditor` reads/writes the lane; its Save button goes | 2 | component + e2e | Medium |
-| 4 | Draft-store `metadata` lane: kept across reload per site, owner and target | 1, 2 | unit + e2e | Medium |
+| 4 | Draft-store `metadata` lane: kept across reload per site, owner and target; active only once its page is opened in that locale | 1, 2 | unit + e2e | Medium |
 | 5 | Docs: `docs/offline.md`, SEO docs, the `CONTEXT.md` pending-edits entry | 3, 4 | docs | Low |
 
 ## Undo and rollback
