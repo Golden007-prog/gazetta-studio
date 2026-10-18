@@ -858,7 +858,7 @@ function GzArrayFieldTemplate(props: ArrayFieldTemplateProps) {
   }
 
   return (
-    <div className="gz-array">
+    <div className="gz-array" data-testid={`array-${fieldPath}`}>
       <div className="gz-array-header">
         {props.title && <span className="gz-array-title">{props.title}</span>}
         <span className="gz-array-count">{props.items.length}</span>
@@ -892,11 +892,17 @@ function GzArrayFieldItemTemplate(props: ArrayFieldItemTemplateProps) {
       {(provided, snapshot) => (
         <div
           className={`gz-array-item${snapshot.isDragging ? ' dragging' : ''}`}
+          data-testid="array-item"
           ref={provided.innerRef}
           {...provided.draggableProps}
         >
           <div className="gz-array-item-header" onClick={() => setOpen(!open)}>
-            <span className="gz-array-item-handle" {...provided.dragHandleProps} onClick={e => e.stopPropagation()}>
+            <span
+              className="gz-array-item-handle"
+              data-testid="array-item-handle"
+              {...provided.dragHandleProps}
+              onClick={e => e.stopPropagation()}
+            >
               &#x2801;&#x2801;
             </span>
             <span className={`gz-array-item-chevron${open ? ' open' : ''}`}>&#x25B6;</span>
@@ -919,17 +925,35 @@ function GzArrayFieldItemButtonsTemplate(props: ArrayFieldItemButtonsTemplatePro
   return (
     <>
       {props.hasMoveUp && (
-        <button type="button" className="gz-btn-icon" onClick={props.onMoveUpItem} title="Move up">
+        <button
+          type="button"
+          className="gz-btn-icon"
+          onClick={props.onMoveUpItem}
+          title="Move up"
+          data-testid="array-item-move-up"
+        >
           &#x2191;
         </button>
       )}
       {props.hasMoveDown && (
-        <button type="button" className="gz-btn-icon" onClick={props.onMoveDownItem} title="Move down">
+        <button
+          type="button"
+          className="gz-btn-icon"
+          onClick={props.onMoveDownItem}
+          title="Move down"
+          data-testid="array-item-move-down"
+        >
           &#x2193;
         </button>
       )}
       {props.hasRemove && (
-        <button type="button" className="gz-btn-icon gz-btn-remove" onClick={props.onRemoveItem} title="Remove">
+        <button
+          type="button"
+          className="gz-btn-icon gz-btn-remove"
+          onClick={props.onRemoveItem}
+          title="Remove"
+          data-testid="array-item-remove"
+        >
           &times;
         </button>
       )}
