@@ -78,11 +78,12 @@ useEditorMount(
   fieldsBaseUrlRef,
 )
 
-// Ctrl+S / Cmd+S to save
+// Ctrl+S / Cmd+S saves whatever is pending, like the toolbar's Save, not
+// only the open editor.
 onKeyStroke('s', e => {
   if (e.metaKey || e.ctrlKey) {
     e.preventDefault()
-    if (editing.dirty) editing.save()
+    if (editing.hasPendingEdits && !editing.saving) editing.save()
   }
 })
 

@@ -2,7 +2,7 @@ function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
 }
 
-import { computed } from 'vue'
+import { computed, toRaw } from 'vue'
 import type { DraftOverrides, ManifestKey } from 'gazetta/types'
 import { manifestKeyToString } from 'gazetta/types'
 import { useToastStore } from '../stores/toast.js'
@@ -13,8 +13,9 @@ import { useActiveTargetStore } from '../stores/activeTarget.js'
 import { useSiteStore } from '../stores/site.js'
 import { useEditorStashStore } from '../stores/editorStash.js'
 import { useEditorStructuralStore } from '../stores/editorStructural.js'
+import { type MetadataKey, type MetadataValue, useEditorMetadataStore } from '../stores/editorMetadata.js'
 import { type ManifestFileKey, manifestFileKeyFromString } from '../utils/manifestFileKey.js'
-import { useEditorPersistenceStore, type StructuralWrite } from '../stores/editorPersistence.js'
+import { useEditorPersistenceStore, type ManifestWrite } from '../stores/editorPersistence.js'
 import { useEditorContentStore, type EditingTarget } from '../stores/editorContent.js'
 import { useValidationIssuesStore } from '../stores/validationIssues.js'
 import { type EditorSelection, selectionToStashKey, selectionToErrorLabel } from './editorSelection.js'
@@ -42,6 +43,7 @@ export function useEditorActions() {
   const structural = useEditorStructuralStore()
   const persistence = useEditorPersistenceStore()
   const ec = useEditorContentStore()
+  const metadata = useEditorMetadataStore()
 
   // --- Navigation state ---
 
@@ -574,6 +576,27 @@ export function useEditorActions() {
     usePreviewStore().invalidateDraft()
   }
 
+  /**
+   * A row's revert button: undo what that row's dot marks, whether the row
+   * is open or stashed. The page row also reverts the page's metadata, whose
+   * form is part of the page row's editor. Pending moves and other rows'
+   * edits stay.
+   */
+  function revertComponent(path: string) {
+    if (ec.path === path) {
+      ec.discard()
+      const k = persistedKeyForCurrent()
+      if (k) usePersistedEditsStore().clear(k)
+    } else {
+      revertStashed(path)
+    }
+    if (path === '_root') {
+      const key = currentMetadataKey()
+      if (key) metadata.discard(key)
+    }
+    usePreviewStore().invalidateDraft()
+  }
+
   // --- Structural operations (with preview side effects) ---
 
   function moveComponentStructural(
@@ -632,16 +655,30 @@ export function useEditorActions() {
     return { kind: sel.type, name: sel.name }
   }
 
+  /** The selected page's metadata key, in the locale its detail was loaded for. Null for fragments. */
+  function currentMetadataKey(): MetadataKey | null {
+    const sel = useSelectionStore().selection
+    if (!sel || sel.type !== 'page') return null
+    return sel.locale ? { kind: 'page', name: sel.name, locale: sel.locale } : { kind: 'page', name: sel.name }
+  }
+
   /** The structural key for a manifest in the locale being edited now. */
   function inCurrentLocale(key: ManifestKey): ManifestFileKey {
     const locale = useLocaleStore().effectiveLocale ?? undefined
     return locale ? { ...key, locale } : { ...key }
   }
 
+  /**
+   * Page-level discard, for the conflict banner's "Discard my changes": the
+   * open editor, the page's structural edits and its metadata. Stashed
+   * component edits stay (#980).
+   */
   function discard() {
     ec.discard()
     const key = currentManifestKey()
     if (key) structural.discard(inCurrentLocale(key))
+    const metadataKey = currentMetadataKey()
+    if (metadataKey) metadata.discard(metadataKey)
     // Cut 8b: drop the cross-page persisted mirror for the current
     // edit. The author explicitly reverted; re-applying the dirty
     // content on reload would undo their intent.
@@ -670,6 +707,7 @@ export function useEditorActions() {
     persistence.lastSaveError = null
     stash.clearAll()
     structural.clearAll()
+    metadata.clearAll()
   }
 
   // --- Save ---
@@ -692,11 +730,11 @@ export function useEditorActions() {
   }
 
   /**
-   * Build a StructuralWrite closure for one pending entry. The closure POSTs
-   * the new components array via api.updatePage / api.updateFragment when
-   * called by the persistence orchestrator.
+   * Build a ManifestWrite closure for one pending structural entry. The
+   * closure POSTs the new components array via api.updatePage /
+   * api.updateFragment when called by the persistence orchestrator.
    */
-  function buildStructuralWrite(keyString: string, components: unknown[]): StructuralWrite {
+  function buildStructuralWrite(keyString: string, components: unknown[]): ManifestWrite {
     // Write to the locale the edit was made in, not whichever is active now.
     const key = manifestFileKeyFromString(keyString)
     return {
@@ -710,6 +748,30 @@ export function useEditorActions() {
     }
   }
 
+  /** One page's pending metadata, written to the locale it was edited in. */
+  function buildMetadataWrite(keyString: string, pending: MetadataValue): ManifestWrite {
+    const key = manifestFileKeyFromString(keyString)
+    const value = toRaw(pending)
+    return {
+      label: keyString,
+      write: () =>
+        updateManifest('page', key.name, { metadata: value }, metadataConflictPending(key, value), key.locale ?? null),
+    }
+  }
+
+  /**
+   * The page as the author would have it after a metadata write: the
+   * conflict view's "yours". The view lists every key of both sides, so
+   * metadata alone would show the rest of the page as removed. Built from
+   * the open page when the entry is its own; metadata only otherwise.
+   */
+  function metadataConflictPending(key: ManifestFileKey, value: MetadataValue): Record<string, unknown> {
+    const sel = useSelectionStore().selection
+    if (!sel || sel.type !== 'page' || sel.name !== key.name || sel.locale !== key.locale) return { metadata: value }
+    const d = sel.detail
+    return { template: d.template, content: d.content, components: d.components, route: d.route, metadata: value }
+  }
+
   /**
    * Save every pending edit. Resolves true when everything was written,
    * false when the save failed (the error is already shown as a toast or
@@ -721,9 +783,13 @@ export function useEditorActions() {
     const stashedEntries = [...stash.values()]
     const stashedKeys = [...stash.entries].map(([k]) => k)
     const structuralEntries = structural.allEntries()
-    const structuralWrites = structuralEntries.map(([k, entry]) => buildStructuralWrite(k, entry.pending))
+    const metadataEntries = metadata.allEntries()
+    const manifestWrites = [
+      ...structuralEntries.map(([k, entry]) => buildStructuralWrite(k, entry.pending)),
+      ...metadataEntries.map(([k, entry]) => buildMetadataWrite(k, entry.pending)),
+    ]
     const validationStore = useValidationIssuesStore()
-    const result = await persistence.save(current, stashedEntries, structuralWrites)
+    const result = await persistence.save(current, stashedEntries, manifestWrites)
     if (result.success) {
       ec.markSaved()
       // Cut 8b: clear cross-page persisted entries for everything
@@ -739,10 +805,12 @@ export function useEditorActions() {
       }
       for (const key of stashedKeys) stash.revert(key)
       structural.clearAll()
+      metadata.markWritten(metadataEntries)
       validationStore.clear()
       // Reload the affected manifests so selection.detail reflects the saved
-      // structural changes — preview will repaint from disk on the next fetch.
-      if (structuralEntries.length > 0) {
+      // structural and metadata changes — preview will repaint from disk on
+      // the next fetch.
+      if (structuralEntries.length > 0 || metadataEntries.length > 0) {
         await useSelectionStore().reload()
       }
       usePreviewStore().invalidate()
@@ -780,8 +848,13 @@ export function useEditorActions() {
 
   // --- Derived state ---
 
-  const pendingCount = computed(() => stash.size + (ec.dirty ? 1 : 0) + structural.pendingCount)
+  const pendingCount = computed(() => stash.size + (ec.dirty ? 1 : 0) + structural.pendingCount + metadata.pendingCount)
   const hasPendingEdits = computed(() => pendingCount.value > 0)
+  /** The selected page has unsaved metadata: part of the page row's dot. */
+  const hasPendingMetadata = computed(() => {
+    const key = currentMetadataKey()
+    return !!key && metadata.hasPendingFor(key)
+  })
   /**
    * Aggregated draft overrides for the preview server. Both lanes always
    * present; consumers send the whole shape over the wire (server contract is
@@ -825,6 +898,7 @@ export function useEditorActions() {
     // Other actions
     markDirty,
     revertStashed,
+    revertComponent,
     moveComponentStructural,
     addComponentStructural,
     removeComponentStructural,
@@ -836,6 +910,7 @@ export function useEditorActions() {
     // Derived state
     pendingCount,
     hasPendingEdits,
+    hasPendingMetadata,
     hasPendingEdit: (path: string) => stash.has(path),
     allOverrides,
   }

@@ -330,12 +330,15 @@ function nodeStyle(depth: number): Record<string, string> | undefined {
 // --- Editing helpers — delegated to editing store ---
 
 function revertComponent(componentPath: string) {
-  if (editing.path === componentPath) {
-    editing.discard()
-  } else {
-    editing.revertStashed(componentPath)
-  }
+  editing.revertComponent(componentPath)
 }
+
+// The page row's dot: edits in the page row's own editor, whose path is
+// '_root' (the row's node path is the page directory), and the page's
+// metadata, whose form is part of that editor.
+const rootDirty = computed(
+  () => editing.hasPendingEdit('_root') || (editing.dirty && editing.path === '_root') || editing.hasPendingMetadata,
+)
 
 // --- Hover highlight ---
 
@@ -702,11 +705,11 @@ function nextDuplicateName(
       @mouseenter="onHover(rootNode)"
       @mouseleave="onHoverEnd()">
       <i :class="nodeIcon(rootNode, -1)" class="node-icon" />
-      <span v-if="rootNode.data?.path && (editing.hasPendingEdit(rootNode.data.path) || (editing.dirty && editing.path === rootNode.data.path))" class="node-dirty-dot" />
+      <span v-if="rootDirty" class="node-dirty-dot" />
       <span class="node-label">{{ rootNode.label }}</span>
-      <Button v-if="rootNode.data?.path && (editing.hasPendingEdit(rootNode.data.path) || (editing.dirty && editing.path === rootNode.data.path))"
+      <Button v-if="rootDirty"
         icon="pi pi-undo" text rounded size="small" class="node-revert"
-        title="Discard changes" @click.stop="revertComponent(rootNode.data.path!)" />
+        title="Discard changes" @click.stop="revertComponent('_root')" />
     </div>
 
     <!-- Draggable list of top-level components. Each block contains the

@@ -27,7 +27,8 @@ import { useSelectionStore } from '../src/client/stores/selection.js'
 import { useEditingStore } from '../src/client/stores/editing.js'
 import { useEditorStashStore } from '../src/client/stores/editorStash.js'
 import { useEditorContentStore } from '../src/client/stores/editorContent.js'
-import type { PageDetail, FragmentDetail } from '../src/client/api/client.js'
+import { useEditorMetadataStore } from '../src/client/stores/editorMetadata.js'
+import { api, type PageDetail, type FragmentDetail } from '../src/client/api/client.js'
 
 /** Minimal FragmentsApi fake — each method throws unless the test provides an impl. */
 function fakeFragmentsApi(partial: Partial<FragmentsApi> = {}): FragmentsApi {
@@ -192,6 +193,58 @@ describe('ComponentTree', () => {
     await flushMicrotasks()
     const hero = w.find('[data-testid="component-hero"]')
     expect(hero.find('.node-dirty-dot').exists()).toBe(true)
+  })
+
+  it("shows the page row's dot for an edit in the page row's own editor", async () => {
+    // The row's node path is the page directory; the editor's is '_root'.
+    // Comparing the two, the row never showed a dot.
+    setPageSelection({ name: 'home', route: '/', template: 'page-default', dir: 'pages/home', components: [] })
+    useEditorStashStore().stash(
+      '_root',
+      { path: '_root', template: 'page-default', content: {}, schema: {}, save: async () => {} },
+      { title: 'Updated' },
+    )
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    expect(w.find('[data-testid="component-home"]').find('.node-dirty-dot').exists()).toBe(true)
+  })
+
+  it("shows the page row's dot for its stashed edit while a component is open", async () => {
+    const schema = vi.spyOn(api, 'getTemplateSchema').mockResolvedValue({ properties: {} } as never)
+    await testRouter.push('/pages/home/edit#hero')
+    try {
+      setPageSelection({
+        name: 'home',
+        route: '/',
+        template: 'page-default',
+        dir: 'pages/home',
+        components: [{ name: 'hero', template: 'hero', content: {} }],
+      })
+      useEditorStashStore().stash(
+        '_root',
+        { path: '_root', template: 'page-default', content: {}, schema: {}, save: async () => {} },
+        { title: 'Updated' },
+      )
+      const w = mountTree(fakeFragmentsApi())
+      await flushMicrotasks()
+      await vi.waitFor(() => expect(useEditorContentStore().path).toBe('hero'))
+      expect(w.find('[data-testid="component-home"]').find('.node-dirty-dot').exists()).toBe(true)
+    } finally {
+      schema.mockRestore()
+      await testRouter.push('/')
+    }
+  })
+
+  it("shows the page row's dot when only the page's metadata is pending, and its revert drops it", async () => {
+    setPageSelection({ name: 'home', route: '/', template: 'page-default', dir: 'pages/home', components: [] })
+    useEditorMetadataStore().setField({ kind: 'page', name: 'home' }, { title: 'Home' }, 'title', 'New')
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const root = w.find('[data-testid="component-home"]')
+    expect(root.find('.node-dirty-dot').exists()).toBe(true)
+    await root.find('.node-revert').trigger('click')
+    expect(useEditorMetadataStore().hasPendingEdits).toBe(false)
+    expect(w.find('[data-testid="component-home"]').find('.node-dirty-dot').exists()).toBe(false)
   })
 
   it('renders a fragment selection as its own root', async () => {

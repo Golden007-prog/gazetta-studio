@@ -153,11 +153,17 @@ outside the editor state, has exactly this gap ([`docs/audits/cms-seo-metadata-s
 - **Ctrl/Cmd+S saves when any edit is pending** (`hasPendingEdits`), not only when the open editor
   is dirty. This also changes the shortcut for reorders and stashed edits, which it ignored; on a
   clean form it stays a no-op.
-- **Discard** for the focused page reverts its entry; the dialog's Don't Save drops it; `clear()`
-  drops the entries it discards, like the other lanes.
+- **Discard** for the focused page (the conflict banner's "Discard my changes") reverts its entry;
+  the dialog's Don't Save drops it; `clear()` drops the entries it discards, like the other lanes.
 - **Guard and leave-page prompt:** `hasPendingEdits` counts entries.
 - **Dirty dot:** the same dot as content edits, on the page root. The root row's revert button
   shares the dot's condition, so it reverts pending metadata too.
+- **A row's revert undoes only what that row's dot marks** (decided 2026-10-18, while building).
+  The page row reverts its own editor's edits and the page's metadata; a component row reverts its
+  content, open or stashed. Pending moves and other rows' edits stay. Before, reverting the open
+  component ran the page-level Discard, which also dropped pending moves, and would now have
+  dropped an SEO edit that isn't on screen. Page-wide discards stay where they say so: the
+  conflict banner's "Discard my changes" and the dialog's Don't Save.
 - **Kept across reload:** a `metadata` lane in the draft store (`design-offline.md`). A restored
   entry **becomes active only when its page is opened in that locale**, like content drafts:
   until then it is stored but doesn't count for the guard, and no Save writes it. Opening the
@@ -180,6 +186,7 @@ outside the editor state, has exactly this gap ([`docs/audits/cms-seo-metadata-s
 | Metadata in a modal with its own Save/Cancel (Webflow's page settings) | A second save model; Webflow documents no guard for it |
 | Keep the separate metadata Save button as well | Two affordances for one action ("replace, not augment" — component-ordering Q3) |
 | Show pending metadata in the preview `<head>` | Invisible to authors in the iframe; would add a third lane to the preview wire format |
+| Keep the open row's revert page-wide | Drops work the author can't see: the SEO form shows only on the page row, and pending moves have no dot in either tree |
 
 **Known limits.** Toast Undo restores only the last write; a Save that wrote content and metadata
 undoes only the metadata (an existing multi-write limit, not new). Publishing doesn't yet see
@@ -198,6 +205,7 @@ today. Validation: save-delta validators don't read metadata. Offline: the draft
 - Guard and prompt: with only metadata pending, the dialog appears on target / locale switch and on leaving edit mode, and reload prompts.
 - Ctrl/Cmd+S with only metadata pending saves it; on a clean form it does nothing.
 - Root revert with only metadata pending clears the dot and the entry.
+- A component row's revert, with that component open, keeps the page's pending metadata and moves.
 - Component click and back: the metadata edit survives.
 - Editing keeps unknown keys and `nofollow`; an emptied field removes its key.
 

@@ -37,6 +37,7 @@ export const useEditingStore = defineStore('editing', () => {
     // Derived state from useEditorActions
     pendingCount: actions.pendingCount,
     hasPendingEdits: actions.hasPendingEdits,
+    hasPendingMetadata: actions.hasPendingMetadata,
     allOverrides: actions.allOverrides,
     hasPendingEdit: actions.hasPendingEdit,
     // Actions from useEditorActions
@@ -49,6 +50,7 @@ export const useEditingStore = defineStore('editing', () => {
     markDirty: actions.markDirty,
     discard: actions.discard,
     revertStashed: actions.revertStashed,
+    revertComponent: actions.revertComponent,
     moveComponentStructural: actions.moveComponentStructural,
     addComponentStructural: actions.addComponentStructural,
     removeComponentStructural: actions.removeComponentStructural,
