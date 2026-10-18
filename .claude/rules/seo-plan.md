@@ -57,6 +57,7 @@ complaint without adding admin UI complexity.
 | Admin metadata editor (title, desc, ogImage, canonical fields) | #186 | ✓ |
 | Character counters (title 60, description 160) with color | #186 | ✓ |
 | SERP preview (always light-themed Google snippet) | #186 | ✓ |
+| Metadata is a pending edit: the page's one Save writes it, the unsaved-changes guard covers it, kept across reload ([design-editor-ux.md](design-editor-ux.md), "Page metadata is a pending lane") | — | ✓ |
 
 ---
 

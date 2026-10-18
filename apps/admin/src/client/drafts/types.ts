@@ -7,8 +7,8 @@
  * made on. See design-offline.md, "Unsaved drafts live in their own store".
  */
 
-/** The two pending-edit lanes: field content and component structure. */
-export type DraftKind = 'edit' | 'structural'
+/** The pending-edit lanes: field content, component structure and page metadata. */
+export type DraftKind = 'edit' | 'structural' | 'metadata'
 
 /** Which site and which user a set of drafts belongs to. */
 export interface DraftIdentity {

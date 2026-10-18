@@ -17,6 +17,7 @@ import { useLocaleStore } from '../src/client/stores/locale.js'
 import { useSaveConflictsStore } from '../src/client/stores/saveConflicts.js'
 import { useSelectionStore } from '../src/client/stores/selection.js'
 import { useSiteStore } from '../src/client/stores/site.js'
+import { manifestFileKeyToString } from '../src/client/utils/manifestFileKey.js'
 
 const home: MetadataKey = { kind: 'page', name: 'home' }
 const loaded = { title: 'Home', robots: 'nofollow' }
@@ -177,5 +178,33 @@ describe("a row's revert undoes only what that row's dot marks", () => {
     expect(useEditorContentStore().dirty).toBe(false)
     expect(useEditorMetadataStore().hasPendingFor(home)).toBe(true)
     expect(useEditorStructuralStore().hasPendingEdits).toBe(true)
+  })
+})
+
+describe('restored drafts', () => {
+  it("one for another page doesn't count and isn't saved; opening its page makes it pending", async () => {
+    useEditorMetadataStore()._hydrate([
+      [
+        manifestFileKeyToString({ kind: 'page', name: 'about' }),
+        { original: { title: 'About' }, pending: { title: 'Draft' } },
+      ],
+    ])
+    const actions = useEditorActions()
+    await actions.openPageRoot()
+    expect(actions.hasPendingEdits.value).toBe(false)
+    const updatePage = vi.spyOn(api, 'updatePage').mockResolvedValue({ ok: true, etag: 'v2' } as never)
+    expect(await actions.save()).toBe(true)
+    expect(updatePage.mock.calls.map(([name]) => name)).not.toContain('about')
+
+    useSelectionStore().$patch({
+      selection: {
+        type: 'page',
+        name: 'about',
+        detail: { ...structuredClone(detail), name: 'about', metadata: { title: 'About' } },
+      } as never,
+    })
+    await actions.openPageRoot()
+    expect(actions.hasPendingMetadata.value).toBe(true)
+    expect(actions.metadataValue.value).toStrictEqual({ title: 'Draft' })
   })
 })

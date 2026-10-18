@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, toRaw } from 'vue'
 import type { PageMetadata } from '../api/client.js'
-import { type ManifestFileKey, manifestFileKeyToString } from '../utils/manifestFileKey.js'
+import { type ManifestFileKey, manifestFileKeyFromString, manifestFileKeyToString } from '../utils/manifestFileKey.js'
 
 /** Page metadata as stored: the fields the form shows, plus any keys it doesn't. */
 export type MetadataValue = NonNullable<PageMetadata> & Record<string, unknown>
@@ -56,9 +56,15 @@ function canonical(value: unknown): string {
  * Editing keeps what the form doesn't show: `pending` starts as a copy of
  * the loaded metadata and each edit changes only its own field, so unknown
  * keys and other robots tokens survive. An emptied text field removes its key.
+ *
+ * Drafts restored from the draft store wait in `restored` until their page
+ * is opened in that locale (`activate`): until then they don't count as
+ * pending and no Save writes them. Restored at once, a draft would act on
+ * whichever page is open (#979 shows this for reorders).
  */
 export const useEditorMetadataStore = defineStore('editorMetadata', () => {
   const entries = reactive<Map<string, MetadataEntry>>(new Map())
+  const restored = reactive<Map<string, MetadataEntry>>(new Map())
 
   function update(
     key: MetadataKey,
@@ -119,11 +125,52 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
 
   /** Drop a page's unsaved metadata. */
   function discard(key: MetadataKey) {
-    entries.delete(manifestFileKeyToString(key))
+    const k = manifestFileKeyToString(key)
+    entries.delete(k)
+    restored.delete(k)
   }
 
-  function clearAll() {
+  /** Drop every pending entry. Restored drafts of pages not opened yet stay. */
+  function clearActive() {
     entries.clear()
+  }
+
+  /** The page is open in this locale: its restored draft becomes pending. */
+  function activate(key: MetadataKey) {
+    const k = manifestFileKeyToString(key)
+    const draft = restored.get(k)
+    if (!draft) return
+    restored.delete(k)
+    if (!entries.has(k)) entries.set(k, draft)
+  }
+
+  /**
+   * Replace everything with drafts loaded from the draft store; they wait in
+   * `restored`. Records this version can't read are skipped.
+   */
+  function _hydrate(drafts: Array<[string, unknown]>) {
+    entries.clear()
+    restored.clear()
+    for (const [k, value] of drafts) {
+      let key
+      try {
+        key = manifestFileKeyFromString(k)
+      } catch {
+        continue
+      }
+      const v = value as Partial<MetadataEntry> | null
+      const isObject = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x)
+      if (key.kind !== 'page' || !v || !isObject(v.original) || !isObject(v.pending)) continue
+      restored.set(k, { original: copy(v.original), pending: copy(v.pending) })
+    }
+  }
+
+  /** What the draft store keeps: pending and restored entries, raw. */
+  function _keptEntries(): Map<string, MetadataEntry> {
+    const kept = new Map<string, MetadataEntry>()
+    for (const [k, entry] of restored) kept.set(k, toRaw(entry))
+    for (const [k, entry] of entries) kept.set(k, toRaw(entry))
+    return kept
   }
 
   /**
@@ -155,15 +202,19 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
 
   return {
     entries,
+    restored,
     setField,
     setNoindex,
     pendingFor,
     hasPendingFor,
     discard,
-    clearAll,
+    clearActive,
+    activate,
     markWritten,
     allEntries,
     pendingCount,
     hasPendingEdits,
+    _hydrate,
+    _keptEntries,
   }
 })

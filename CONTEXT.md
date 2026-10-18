@@ -275,7 +275,7 @@ _Avoid_: @-mention (decorative; the structured form is the truth), Tag (too gene
 ### Editor state
 
 **Pending edits**:
-Form-state changes the Author has made but not yet committed via explicit Save click. Stored per-item in Pinia stores (`editorContent`, `editorStash`, `editorStructural`); persisted to IndexedDB so they survive browser reload, navigation between pages, and offline sessions. The Author can navigate freely between items with multiple pending edits accumulated; each item's pending state is independent. Pending edits never silently apply; saving is always an explicit Author action. Distinct from Save queue.
+Form-state changes the Author has made but not yet committed via explicit Save click. Stored per-item in Pinia stores (`editorContent`, `editorStash`, `editorStructural`, `editorMetadata`); persisted to IndexedDB so they survive browser reload, navigation between pages, and offline sessions. The Author can navigate freely between items with multiple pending edits accumulated; each item's pending state is independent. Pending edits never silently apply; saving is always an explicit Author action. Distinct from Save queue.
 _Avoid_: Draft (overloaded with review-state's `draft` value), Working copy (rejected term per `design-decisions.md` #14), Dirty state (UI-only; doesn't capture the persistence semantics), Unsaved changes (acceptable in plain-language UI; less precise as domain noun).
 
 **Save queue**:

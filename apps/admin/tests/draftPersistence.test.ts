@@ -14,6 +14,7 @@ import type { DraftScope, DraftStore } from '../src/client/drafts/types.js'
 import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
 import { manifestFileKeyToString } from '../src/client/utils/manifestFileKey.js'
 import { usePersistedEditsStore } from '../src/client/stores/persistedEdits.js'
+import { useEditorMetadataStore } from '../src/client/stores/editorMetadata.js'
 
 const local: DraftScope = { site: 'main', owner: 'none:unknown:admin', target: 'local' }
 const staging: DraftScope = { ...local, target: 'staging' }
@@ -165,5 +166,61 @@ describe('draft persistence', () => {
     attach(drafts, () => local)
     await draftsLoaded()
     expect(usePersistedEditsStore().has('page:home::hero')).toBe(true)
+  })
+})
+
+describe('the metadata lane', () => {
+  const homeMeta = { kind: 'page' as const, name: 'home' }
+  const HOME_META = manifestFileKeyToString(homeMeta)
+  const stored = (title: string) => ({ original: { title: 'Home' }, pending: { title } })
+
+  it('stores a page edit as its own record, and a second edit rewrites it', async () => {
+    const drafts = createMemoryDraftStore()
+    const h = attach(drafts, () => local)
+    await h.loaded()
+    const store = useEditorMetadataStore()
+    store.setField(homeMeta, { title: 'Home' }, 'title', 'A')
+    await h.flush()
+    store.setField(homeMeta, { title: 'Home' }, 'title', 'AB')
+    await h.flush()
+    expect(await drafts.list(local, 'metadata')).toEqual([[HOME_META, stored('AB')]])
+  })
+
+  it('writes a page edit after the debounce, without a flush', async () => {
+    const drafts = createMemoryDraftStore()
+    await attach(drafts, () => local).loaded()
+    useEditorMetadataStore().setField(homeMeta, { title: 'Home' }, 'title', 'A')
+    await vi.waitFor(async () => expect(await drafts.list(local, 'metadata')).toEqual([[HOME_META, stored('A')]]))
+  })
+
+  it('restores drafts inactive: kept, but not pending until their page is opened', async () => {
+    const drafts = createMemoryDraftStore()
+    await drafts.put(local, 'metadata', HOME_META, stored('Draft'))
+    await attach(drafts, () => local).loaded()
+    const store = useEditorMetadataStore()
+    expect(store.hasPendingEdits).toBe(false)
+    store.activate(homeMeta)
+    expect(store.pendingFor(homeMeta)).toStrictEqual({ title: 'Draft' })
+  })
+
+  it("Don't Save of the opened page deletes its record", async () => {
+    const drafts = createMemoryDraftStore()
+    await drafts.put(local, 'metadata', HOME_META, stored('Draft'))
+    const h = attach(drafts, () => local)
+    await h.loaded()
+    useEditorMetadataStore().activate(homeMeta)
+    useEditorMetadataStore().clearActive()
+    await h.flush()
+    expect(await drafts.list(local, 'metadata')).toEqual([])
+  })
+
+  it('skips records it cannot read and loads the rest', async () => {
+    const drafts = createMemoryDraftStore()
+    await drafts.put(local, 'metadata', 'not a key', stored('x'))
+    await drafts.put(local, 'metadata', manifestFileKeyToString({ kind: 'fragment', name: 'header' }), stored('x'))
+    await drafts.put(local, 'metadata', manifestFileKeyToString({ kind: 'page', name: 'about' }), { pending: 'x' })
+    await drafts.put(local, 'metadata', HOME_META, stored('Draft'))
+    await attach(drafts, () => local).loaded()
+    expect([...useEditorMetadataStore()._keptEntries().keys()]).toEqual([HOME_META])
   })
 })

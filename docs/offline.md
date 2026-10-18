@@ -72,7 +72,7 @@ from accidentally clobbering each other's work.
 
 ### Pending edits across tabs and reload
 
-Two kinds of edits both survive reload:
+Three kinds of edits survive reload:
 
 - **Structural** — component reorders / adds / removes. Reorder
   components on `/home`, close the tab, reopen — tree comes back
@@ -81,8 +81,13 @@ Two kinds of edits both survive reload:
   into the editor form. Edit a heading on `/home`, close the tab,
   reopen `/home` — the heading you typed is back, dirty, waiting
   to save.
+- **SEO settings** — a page's title, description, OG image, canonical
+  URL and "Hide from search engines". Change `/home`'s SEO title,
+  close the tab, reopen `/home` — the new title is back, waiting to
+  save. It comes back on its own page, in the language you edited it
+  in; other pages have nothing to save.
 
-Both work across multiple pages. If you have unsaved edits on
+All three work across multiple pages. If you have unsaved edits on
 `/home/_root` AND on `/about/_root`, both come back when you
 navigate to those pages after reload. The saved baseline is
 fetched fresh from the server; your dirty edits overlay on top.

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
 import { type MetadataKey, useEditorMetadataStore } from '../src/client/stores/editorMetadata.js'
+import { manifestFileKeyToString } from '../src/client/utils/manifestFileKey.js'
 
 const home: MetadataKey = { kind: 'page', name: 'home' }
 const homeFr: MetadataKey = { kind: 'page', name: 'home', locale: 'fr' }
@@ -108,5 +109,34 @@ describe('the noindex checkbox', () => {
     expect(store.hasPendingFor(home)).toBe(true)
     store.setNoindex(home, loaded, startsOn)
     expect(store.hasPendingFor(home)).toBe(false)
+  })
+})
+
+describe('restored drafts', () => {
+  const about: MetadataKey = { kind: 'page', name: 'about' }
+  const draft = (title: string) => ({ original: { title: 'Loaded' }, pending: { title } })
+
+  it('count only once their page is opened in that locale', () => {
+    const store = useEditorMetadataStore()
+    store._hydrate([[manifestFileKeyToString(home), draft('Draft')]])
+    expect(store.pendingCount).toBe(0)
+    expect(store.pendingFor(home)).toBeNull()
+    store.activate(homeFr)
+    expect(store.pendingCount).toBe(0)
+    store.activate(home)
+    expect(store.pendingFor(home)).toStrictEqual({ title: 'Draft' })
+  })
+
+  it("Don't Save drops the opened page's draft and keeps the others; discard drops a page's", () => {
+    const store = useEditorMetadataStore()
+    store._hydrate([
+      [manifestFileKeyToString(home), draft('Home draft')],
+      [manifestFileKeyToString(about), draft('About draft')],
+    ])
+    store.activate(home)
+    store.clearActive()
+    expect([...store._keptEntries().keys()]).toEqual([manifestFileKeyToString(about)])
+    store.discard(about)
+    expect(store._keptEntries().size).toBe(0)
   })
 })

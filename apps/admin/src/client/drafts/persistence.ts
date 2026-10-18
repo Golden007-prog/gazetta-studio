@@ -1,12 +1,13 @@
 /**
- * Keeps the two pending-edit stores in the draft store, so unsaved work
+ * Keeps the pending-edit stores in the draft store, so unsaved work
  * survives a reload — for the right site, user and target only.
  *
  *   editorStructural  → kind 'structural'  (component reorder / add / remove)
  *   persistedEdits    → kind 'edit'        (field content, cross-page keys)
+ *   editorMetadata    → kind 'metadata'    (page metadata, per page and locale)
  *
  * Writes are per record: after a debounce, only entries whose value
- * changed are put and only entries that went away are deleted. Both
+ * changed are put and only entries that went away are deleted. The
  * stores make a new entry object on every change, so comparing raw
  * references finds the changes. Nothing writes whole snapshots, so two
  * tabs don't delete each other's drafts.
@@ -21,6 +22,7 @@ import type { ComponentEntry } from 'gazetta/types'
 import { useEditorStructuralStore } from '../stores/editorStructural.js'
 import { manifestFileKeyFromString } from '../utils/manifestFileKey.js'
 import { type PersistedEdit, usePersistedEditsStore } from '../stores/persistedEdits.js'
+import { type MetadataEntry, useEditorMetadataStore } from '../stores/editorMetadata.js'
 import type { DraftKind, DraftScope, DraftStore } from './types.js'
 
 const DEFAULT_DEBOUNCE_MS = 300
@@ -84,6 +86,19 @@ function editLane(): Lane {
   }
 }
 
+function metadataLane(): Lane {
+  const store = useEditorMetadataStore()
+  return {
+    kind: 'metadata',
+    read: () => store._keptEntries(),
+    replace: entries => store._hydrate(entries),
+    serialize: entry => {
+      const e = entry as MetadataEntry
+      return { original: e.original, pending: e.pending }
+    },
+  }
+}
+
 export interface DraftPersistenceOptions {
   /** Delay between a store change and the write. Tests pass 0. */
   debounceMs?: number
@@ -112,7 +127,7 @@ export function attachDraftPersistence(
   opts: DraftPersistenceOptions = {},
 ): DraftPersistenceHandle {
   const debounceMs = opts.debounceMs ?? DEFAULT_DEBOUNCE_MS
-  const lanes = [structuralLane(), editLane()]
+  const lanes = [structuralLane(), editLane(), metadataLane()]
   /** Per lane: the raw entry last written (or loaded) for each key, in `current`. */
   const written = new Map<DraftKind, Map<string, unknown>>(lanes.map(l => [l.kind, new Map()]))
   let current: DraftScope | null = null
@@ -178,9 +193,14 @@ export function attachDraftPersistence(
     { immediate: true },
   )
 
+  const metadata = useEditorMetadataStore()
   const stores = [useEditorStructuralStore(), usePersistedEditsStore()]
   const stopStores = watch(
-    () => stores.map(s => [...s.entries.entries()]),
+    () => [
+      ...stores.map(s => [...s.entries.entries()]),
+      [...metadata.entries.entries()],
+      [...metadata.restored.entries()],
+    ],
     () => {
       if (loading) return
       if (timer !== null) clearTimeout(timer)

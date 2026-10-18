@@ -27,8 +27,25 @@ export function storedDraftTitles(page: Page): Promise<string[]> {
   })
 }
 
-/** Keys of the drafts of one kind ('edit' | 'structural') held in the draft store. */
-export function storedDraftKeys(page: Page, kind: 'edit' | 'structural'): Promise<string[]> {
+/** Pending titles of the unsaved page-metadata drafts held in the draft store. */
+export function storedMetadataTitles(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((res, rej) => {
+      const req = indexedDB.open('gazetta-drafts')
+      req.onsuccess = () => res(req.result)
+      req.onerror = () => rej(req.error)
+    })
+    if (!db.objectStoreNames.contains('drafts')) return []
+    const rows = await new Promise<Array<{ id: string[]; value?: { pending?: { title?: string } } }>>(res => {
+      const req = db.transaction('drafts').objectStore('drafts').getAll()
+      req.onsuccess = () => res(req.result)
+    })
+    return rows.filter(r => r.id[3] === 'metadata').map(r => r.value?.pending?.title ?? '')
+  })
+}
+
+/** Keys of the drafts of one kind held in the draft store. */
+export function storedDraftKeys(page: Page, kind: 'edit' | 'structural' | 'metadata'): Promise<string[]> {
   return page.evaluate(async kind => {
     const db: IDBDatabase = await new Promise((res, rej) => {
       const req = indexedDB.open('gazetta-drafts')
