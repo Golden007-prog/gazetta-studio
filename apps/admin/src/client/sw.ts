@@ -40,7 +40,8 @@
  *     plumbing stays.
  */
 
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { clientsClaim } from 'workbox-core'
 
 declare const self: ServiceWorkerGlobalScope
@@ -57,6 +58,27 @@ precacheAndRoute(self.__WB_MANIFEST ?? [])
 // manifest and removes any cache entry that's not in the current
 // build.
 cleanupOutdatedCaches()
+
+// Deep links offline. Any admin navigation (/admin/pages/home/edit, ...)
+// tries the network first — `gazetta build` rewrites index.html with the
+// custom-editor import map, so online the server's copy must win — and
+// falls back to the precached shell when the network fails. Paths the
+// server answers itself (API, preview iframe, ping, theme) are left alone.
+const scope = new URL(self.registration.scope).pathname
+const escaped = scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const appShell = createHandlerBoundToURL('index.html')
+registerRoute(
+  new NavigationRoute(
+    async options => {
+      try {
+        return await fetch(options.request)
+      } catch {
+        return appShell(options)
+      }
+    },
+    { denylist: [new RegExp(`^${escaped}(api|preview|ping)(/|$)`), new RegExp(`^${escaped}theme\\.css$`)] },
+  ),
+)
 
 // Take control of any open tabs immediately on activation. Without
 // this, the new SW would only control tabs opened AFTER it activated
