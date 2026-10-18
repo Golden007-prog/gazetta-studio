@@ -4,6 +4,7 @@ import Form from '@rjsf/core'
 import validator from '@rjsf/validator-ajv8'
 import { AssetEmbeddedWidget } from './AssetEmbeddedWidget.js'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
+import { reorderAtPath } from './reorder-at-path.js'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -21,7 +22,8 @@ import type {
 
 /** Form context passed to all templates and widgets */
 interface GzFormContext {
-  reorderArray: (fieldPath: string, fromIndex: number, toIndex: number) => void
+  /** Move an item of the array at `path` (rjsf's `fieldPathId.path`). */
+  reorderArray: (path: readonly (string | number)[], fromIndex: number, toIndex: number) => void
   /** Base URL for loading custom field modules (e.g. /admin/@fs/path/to/fields) */
   fieldsBaseUrl?: string
   /** Current theme — passed to custom field widgets */
@@ -833,7 +835,7 @@ function GzArrayFieldTemplate(props: ArrayFieldTemplateProps) {
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || result.source.index === result.destination.index) return
-    ctx?.reorderArray(fieldPath, result.source.index, result.destination.index)
+    ctx?.reorderArray(props.fieldPathId?.path ?? [], result.source.index, result.destination.index)
   }
 
   if (props.items.length === 0) {
@@ -1195,17 +1197,13 @@ export function DefaultEditorForm({
   }, [])
 
   const reorderArray = React.useCallback(
-    (fieldPath: string, fromIndex: number, toIndex: number) => {
+    (path: readonly (string | number)[], fromIndex: number, toIndex: number) => {
       setFormData((prev: Record<string, unknown>) => {
+        // By path, not by parsing the field id: `root_nav_links` and
+        // `root_groups_0_tags` don't split back into their keys.
+        const updated = reorderAtPath(prev, path, fromIndex, toIndex)
+        if (!updated) return prev
         pushHistory(prev)
-        const parts = fieldPath.replace(/^root_/, '').split('_')
-        const key = parts[0]
-        const arr = prev[key]
-        if (!Array.isArray(arr)) return prev
-        const next = [...arr]
-        const [moved] = next.splice(fromIndex, 1)
-        next.splice(toIndex, 0, moved)
-        const updated = { ...prev, [key]: next }
         onChange(updated)
         return updated
       })
