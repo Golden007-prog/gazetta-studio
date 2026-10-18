@@ -9,16 +9,18 @@
  * STORYBOOK.md for the convention.
  */
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import Button from 'primevue/button'
+import Button, { type ButtonProps } from 'primevue/button'
 
-const meta: Meta<typeof Button> = {
+// Typed by props and rendered from a template: PrimeVue declares Button
+// with its own DefineComponent helper, which `Meta<typeof Button>` rejects.
+const meta: Meta<ButtonProps> = {
   title: 'Smoke/PrimeVue Button',
-  component: Button,
+  render: args => ({ components: { Button }, setup: () => ({ args }), template: '<Button v-bind="args" />' }),
 }
 
 export default meta
 
-type Story = StoryObj<typeof Button>
+type Story = StoryObj<ButtonProps>
 
 export const Primary: Story = {
   args: { label: 'Primary', severity: 'primary' },

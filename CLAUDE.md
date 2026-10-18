@@ -97,6 +97,7 @@ cd packages/gazetta && npx vitest tests/some-file.test.ts
 
 ```bash
 cd packages/gazetta && npx tsc --noEmit
+npm run typecheck -w apps/admin          # vue-tsc: also checks .vue files; CI runs it (needs packages/gazetta built)
 ```
 
 ⚠️ **`tsc --noEmit` is not a full build verification.** It catches the dominant class of type errors but can suppress real errors that surface under emit (e.g., narrow-enum + `as const` mismatches that the build catches but `--noEmit` lets through). After non-trivial type-shape changes, run `npm run build` from the repo root before commit.

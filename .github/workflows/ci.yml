@@ -83,6 +83,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w packages/gazetta
+      # vue-tsc, not tsc: it also checks .vue files. Needs the gazetta
+      # build above (the admin imports its types from dist).
+      - name: Type-check
+        run: npm run typecheck -w apps/admin
       # Pre-pull the testcontainers images BEFORE the tests run.
       # tests/docker.test.ts brings up MinIO + Azurite via testcontainers,
       # whose default pull policy is pull-if-absent — so once these images
