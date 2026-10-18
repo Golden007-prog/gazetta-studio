@@ -29,7 +29,7 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 | 7 | Health endpoint `GET /api/health` | ✓ | Low | Server-side support |
 | 8a | Pending-edits store migration — `editorStructural` only (pure-data subset) | ✓ | Medium | Structural edits survive reload |
 | 8b | usePersistedEditsStore (cross-page key) + auto-mirror on markDirty/stashCurrent + navigate seam rebuilds target via buildTarget + clear-on-save | ✓ | Medium | Content edits survive reload |
-| 8c | Principal-scoped persistence: `GET /api/me`, owner record + boot check before hydration, owner tag on every snapshot, target in pending-edit keys (design-offline.md "Persisted data has one owner"; #962) | ☐ | Medium | No draft crosses users or targets |
+| 8c | Draft store + principal scoping: own IndexedDB store keyed `[site, owner, target, …]`, `GET /api/me`, boot classification + purge before hydration (design-offline.md "Unsaved drafts live in their own store"; #962) | ☐ | Medium-high | No draft crosses users, targets, sites or tabs |
 | 9 | Save-etag plumbing: server `ETag` + `If-Match` + 409 STALE + client `StaleSaveError` + `getPageWithEtag` / `updatePage(..., ifMatch)` | ✓ | High | Conflict-detection contract |
 | 9b | useEditorEtags Pinia store + useEditorActions integration (selection.ts If-Match plumbing, updateManifest helper, EditorPanel ConflictBanner wiring) | ✓ | High | End-to-end save-conflict flow |
 | 10 | Conflict UX: useSaveConflictsStore + ConflictBanner.vue + ConflictDiffView.vue (Show / Discard actions; no overwrite per Krug lock) | ✓ | High | Conflict resolution UX |
@@ -116,19 +116,22 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 
 **Tests:** browser reload preserves stashed edits across pages; current-page dirty state restored on reload via navigate flow; stash restore picks up persisted dirty content during multi-page-edit scenario.
 
-### Cut 8c: Principal-scoped persistence (pending, #962)
+### Cut 8c: Draft store + principal scoping (pending, #962)
 
-Closes the gap Cuts 8a/8b left against the RBAC invariant: drafts were persisted under global keys and restored into whichever user opened the page next.
+Replaces Cuts 8a/8b's snapshot persistence (two coordinators writing whole snapshots into `AdminCache`) with a dedicated draft store. Closes, all reproduced 2026-10-18: drafts crossing users on a shared profile; tabs overwriting each other's drafts. Also closes drafts crossing targets and sites, and eviction of drafts.
 
 **Tests first:**
-- `packages/gazetta/tests/admin-api-me.test.ts` — `/api/me` returns the principal for `none` and a proxy trust mode; response matches the schema
-- `apps/admin/tests/persistenceOwner.test.ts` — owner mismatch deletes all three keys before hydration; match keeps them; offline (fetch fails) uses the record; a snapshot tagged with another owner is not hydrated
-- `apps/admin/tests/persistedEdits.test.ts` — keys include the target; a draft on one target is not restored on another
-- e2e, proxy trust mode with two principal headers: user A's unsaved draft does not appear for user B
+- `packages/gazetta/tests/admin-api-me.test.ts` — `/api/me` for `none` and `forwarded-user`; response matches the schema
+- `apps/admin/tests/draftStore.test.ts` (`fake-indexeddb`) — put/delete one record; load by `[site, owner, target]`; owner purge deletes only other owners of this site in one transaction; two store instances (two tabs) don't delete each other's records; memory fallback has the same contract
+- `apps/admin/tests/draftOwner.test.ts` — classification: schema-valid JSON → known; network error/timeout → offline, uses record; non-OK or HTML → unknown, loads nothing and deletes nothing; known-but-different → purge before load
+- `apps/admin/tests/persistedEditsIntegration.test.ts` — a draft on one target is not restored on another
+- e2e (`forwarded-user` + `allowAnyOrigin`, own dev server): A's unsaved draft does not appear for B; B's next online boot deletes A's records
 
-**Files:** `admin-api/routes/me.ts` + `schemas/me.ts`; `apps/admin/src/client/stores/_persistenceOwner.ts` (new: resolve owner, purge, record); `_pendingEditsPersistence.ts` (owner tag, snapshot version 2); `persistedEdits.ts` + `editorStructural.ts` keys; `main.ts` boot order; `docs/offline.md`.
+**Files:** `admin-api/routes/me.ts` + `schemas/me.ts`; `apps/admin/src/client/drafts/` (new: store, IndexedDB + memory implementations, owner classification); `stores/_pendingEditsPersistence.ts` (rewritten onto the draft store — each store mutation maps to put / delete / delete-in-scope); `persistedEdits.ts` + `editorStructural.ts` (keys carry target); `main.ts` boot order; `docs/offline.md`.
 
-**Open:** structural keys carry no locale either. Verify whether component lists can differ per locale variant before deciding.
+**Migration:** the old `pending-edits:*` cache keys are deleted once at boot; drafts saved before the upgrade are dropped (no backwards compatibility, per this doc's header).
+
+**Open:** structural keys carry no locale. Verify whether component lists can differ per locale variant before deciding.
 
 ### Cut 9: Save-etag plumbing (shipped)
 
