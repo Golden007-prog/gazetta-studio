@@ -52,6 +52,10 @@ export default defineConfig({
         // warnings. Each chunk ships independently; this is the per-file
         // cap, not total.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // Default is js/css/html only. woff2 adds the bundled primeicons
+        // font so icons render on an offline cold load; browsers that read
+        // woff2 never fetch the other font formats.
+        globPatterns: ['**/*.{js,css,html,woff2}'],
       },
       // Don't enable in dev — Vite HMR + SW caching fight each other.
       // SW only runs in production builds.

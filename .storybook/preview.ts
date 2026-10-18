@@ -7,6 +7,7 @@ import PrimeVue from 'primevue/config'
 // App-level CSS tokens (--color-*). Defined in apps/admin/src/client/assets/
 // tokens.css; layered on top of PrimeVue Aura semantic tokens. See
 // .claude/rules/css-theming.md for the token model.
+import 'primeicons/primeicons.css'
 import '../apps/admin/src/client/assets/tokens.css'
 import '../apps/admin/src/client/assets/base.css'
 import { adminPreset } from '../apps/admin/src/client/assets/preset'
