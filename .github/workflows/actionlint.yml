@@ -1,0 +1,30 @@
+name: actionlint
+
+# Lints every workflow file. Kept out of ci.yml on purpose: a broken
+# ci.yml produces no run and no check at all, so the linter must live in a
+# separate workflow to report it. If this file itself breaks, its required
+# check never reports and branch protection blocks the merge.
+#
+# No paths filter: it is a required check, and a path-filtered required
+# check stays pending forever on PRs that don't touch workflows.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: actionlint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash scripts/actionlint.sh -color

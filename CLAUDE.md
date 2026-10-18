@@ -110,6 +110,12 @@ npm run format                           # write
 npm run format:check                     # CI gate
 ```
 
+**Workflow lint** — actionlint (pinned in `scripts/actionlint.sh`; same check as the `actionlint` CI job). Run after editing anything in `.github/workflows/`:
+
+```bash
+npm run lint:actions
+```
+
 **E2e** — Playwright; no wrapping npm script:
 
 ```bash

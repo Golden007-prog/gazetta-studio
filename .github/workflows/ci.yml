@@ -243,5 +243,5 @@ jobs:
         shell: bash
         run: |
           # Find the downloaded tarball
-          TARBALL="$(ls packages/gazetta/gazetta-*.tgz | head -1)"
+          TARBALL="$(find packages/gazetta -maxdepth 1 -name 'gazetta-*.tgz' | head -1)"
           GAZETTA_TARBALL="$(pwd)/$TARBALL" npm run smoke
