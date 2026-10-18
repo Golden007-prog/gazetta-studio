@@ -44,7 +44,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createContentRoot } from '../src/content-root.js'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
-import { publishPageRendered } from '../src/publish-rendered.js'
+import { publishPageRendered } from '../src/publish-compat.js'
 import { loadSite } from '../src/site-loader.js'
 import { tempDir } from './_helpers/temp.js'
 

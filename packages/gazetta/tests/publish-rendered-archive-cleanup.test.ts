@@ -16,7 +16,7 @@
  * short-circuits before the renderer runs.
  */
 import { describe, expect, it } from 'vitest'
-import { publishPageRendered } from '../src/publish-rendered.js'
+import { publishPageRendered } from '../src/publish-compat.js'
 import { createContentRoot } from '../src/content-root.js'
 import { loadSite } from '../src/site-loader.js'
 import { memoryStorage } from './_helpers/memory-storage.js'

@@ -196,13 +196,8 @@ export type { ServeOptions } from './serve.js'
 
 // Publish
 export { publishItems, resolveDependencies } from './publish.js'
-export {
-  publishPageRendered,
-  publishPageStatic,
-  publishFragmentRendered,
-  publishSiteManifest,
-  publishDepIndices,
-} from './publish-rendered.js'
+export { publishPageRendered, publishPageStatic, publishFragmentRendered } from './publish-compat.js'
+export { publishSiteManifest, publishDepIndices } from './publish-rendered.js'
 
 // Format helpers
 export { format } from './formats.js'

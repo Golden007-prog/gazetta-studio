@@ -65,7 +65,7 @@ async function seedPages(dir: string, count: number): Promise<void> {
 
 export default defineSite({
   name: 'Bench Site',
-  baseUrl: 'https://bench.example.com',
+  siteUrl: 'https://bench.example.com',
   locale: 'en',
   systemPages: [],
   targets: {
@@ -162,7 +162,11 @@ async function main() {
       const { createFilesystemProvider } = await import('../packages/gazetta/src/providers/filesystem.js')
       const sourceStorage = createFilesystemProvider(projectDir)
       const contentRoot = createContentRoot(sourceStorage)
-      const site = await loadSite({ contentRoot, templatesDir: join(projectDir, 'templates') })
+      const site = await loadSite({
+        contentRoot,
+        templatesDir: join(projectDir, 'templates'),
+        manifest: { name: '(bench)' },
+      })
       log('Load site', tLoad(), `${site.pages.size} pages`)
 
       // 4. Template scan
@@ -181,13 +185,14 @@ async function main() {
         templatesDir: join(projectDir, 'templates'),
         projectRoot: projectDir,
         type: 'static',
+        manifest: { name: '(bench)' },
         scanTemplates: async () => templateInfos,
       })
       log('Compare', tCompare(), `${cmp.added.length} added, ${cmp.unchanged.length} unchanged`)
 
       // 6. Render + upload
       const tPublish = timer()
-      const { publishPageStatic } = await import('../packages/gazetta/src/publish-rendered.js')
+      const { publishPageStatic } = await import('../packages/gazetta/src/publish-compat.js')
       const { hashManifest } = await import('../packages/gazetta/src/hash.js')
       let published = 0
       // Batch to avoid memory pressure
@@ -213,7 +218,7 @@ async function main() {
       const { generateSitemap } = await import('../packages/gazetta/src/sitemap.js')
       const targetSidecars = await listSidecars(targetStorage, 'pages')
       const sitemapXml = generateSitemap({
-        baseUrl: 'https://bench.example.com',
+        siteUrl: 'https://bench.example.com',
         pages: targetSidecars,
         systemPages: [],
       })
@@ -229,7 +234,7 @@ async function main() {
       // 8. Robots
       const tRobots = timer()
       const { generateRobotsTxt } = await import('../packages/gazetta/src/robots.js')
-      await targetStorage.writeFile('robots.txt', generateRobotsTxt({ baseUrl: 'https://bench.example.com' }))
+      await targetStorage.writeFile('robots.txt', generateRobotsTxt({ siteUrl: 'https://bench.example.com' }))
       log('robots.txt', tRobots())
 
       // 9. Total
@@ -245,13 +250,14 @@ async function main() {
         templatesDir: join(projectDir, 'templates'),
         projectRoot: projectDir,
         type: 'static',
+        manifest: { name: '(bench)' },
         scanTemplates: async () => templateInfos,
       })
       log('Compare', tIncCompare(), `${cmp2.added.length} added, ${cmp2.unchanged.length} unchanged`)
 
       const tIncSitemap = timer()
       const sidecars2 = await listSidecars(targetStorage, 'pages')
-      generateSitemap({ baseUrl: 'https://bench.example.com', pages: sidecars2 })
+      generateSitemap({ siteUrl: 'https://bench.example.com', pages: sidecars2 })
       log('Sitemap', tIncSitemap(), `${sidecars2.size} entries`)
 
       console.log()
