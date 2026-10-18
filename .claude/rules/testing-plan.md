@@ -96,6 +96,18 @@ original, delete the code, or, if it stays for a reason tests can't see
 at a case no test checked, and got a test; #984 deleted a `markWritten` branch
 that gave the same answer as the comparison after it.
 
+Tests written to kill mutants read like any other test, because their reader
+wants to know what the code guarantees, not which run found the gap. Add them
+to the code's existing test file, or name a new file for the code it covers
+(`publish-renderers-esi.test.ts`), never for an issue or the tool
+(`-mutation-935`). Test names say what the code does, and comments state the
+rule an assertion pins ("a component with no CSS adds no line"), not the
+mutant it kills. Stryker line numbers and mutator names go in the PR
+description: they're wrong after the first edit above them. The exception is a
+mutant no test can catch; say beside the code, or in the test file, why the
+code stays. `publish-mutation-914` and `publish-rendered-mutation-649/726/811`
+predate this; rename them when they're next touched (#957 review).
+
 **Admin-API route track (parallel to the internal-module list above).** Tautological
 tests slip most easily where assertions match observed response shapes ("expect what
 the route returned"). Rule 31's failure mode lives most often at this tier; mutation
