@@ -11,13 +11,14 @@ import { createPinia, setActivePinia } from 'pinia'
 import { attachDraftPersistence, type DraftPersistenceHandle, draftsLoaded } from '../src/client/drafts/persistence.js'
 import { createMemoryDraftStore } from '../src/client/drafts/memory-draft-store.js'
 import type { DraftScope, DraftStore } from '../src/client/drafts/types.js'
-import { structuralKeyToString, useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
+import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
+import { manifestFileKeyToString } from '../src/client/utils/manifestFileKey.js'
 import { usePersistedEditsStore } from '../src/client/stores/persistedEdits.js'
 
 const local: DraftScope = { site: 'main', owner: 'none:unknown:admin', target: 'local' }
 const staging: DraftScope = { ...local, target: 'staging' }
 const home = { kind: 'page' as const, name: 'home' }
-const HOME = structuralKeyToString(home)
+const HOME = manifestFileKeyToString(home)
 const edit = (title: string) => ({ key: 'x', editedContent: { title }, updatedAt: 't' })
 
 let handles: DraftPersistenceHandle[] = []

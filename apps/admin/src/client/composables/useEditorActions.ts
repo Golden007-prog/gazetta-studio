@@ -12,7 +12,8 @@ import { usePublishStatusStore } from '../stores/publishStatus.js'
 import { useActiveTargetStore } from '../stores/activeTarget.js'
 import { useSiteStore } from '../stores/site.js'
 import { useEditorStashStore } from '../stores/editorStash.js'
-import { type StructuralKey, structuralKeyFromString, useEditorStructuralStore } from '../stores/editorStructural.js'
+import { useEditorStructuralStore } from '../stores/editorStructural.js'
+import { type ManifestFileKey, manifestFileKeyFromString } from '../utils/manifestFileKey.js'
 import { useEditorPersistenceStore, type StructuralWrite } from '../stores/editorPersistence.js'
 import { useEditorContentStore, type EditingTarget } from '../stores/editorContent.js'
 import { useValidationIssuesStore } from '../stores/validationIssues.js'
@@ -632,7 +633,7 @@ export function useEditorActions() {
   }
 
   /** The structural key for a manifest in the locale being edited now. */
-  function inCurrentLocale(key: ManifestKey): StructuralKey {
+  function inCurrentLocale(key: ManifestKey): ManifestFileKey {
     const locale = useLocaleStore().effectiveLocale ?? undefined
     return locale ? { ...key, locale } : { ...key }
   }
@@ -697,7 +698,7 @@ export function useEditorActions() {
    */
   function buildStructuralWrite(keyString: string, components: unknown[]): StructuralWrite {
     // Write to the locale the edit was made in, not whichever is active now.
-    const key = structuralKeyFromString(keyString)
+    const key = manifestFileKeyFromString(keyString)
     return {
       label: keyString,
       write: async () => {
@@ -795,7 +796,7 @@ export function useEditorActions() {
     // The preview renders the current locale and keys overrides by manifest.
     const locale = useLocaleStore().effectiveLocale ?? undefined
     for (const [k, entry] of structural.allEntries()) {
-      const key = structuralKeyFromString(k)
+      const key = manifestFileKeyFromString(k)
       if (key.locale !== locale) continue
       structuralOverrides[manifestKeyToString(key)] = entry.pending
     }

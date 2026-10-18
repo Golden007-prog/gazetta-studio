@@ -1,33 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
-import type { ComponentEntry, InlineComponent, ManifestKey } from 'gazetta/types'
-
-/**
- * Which manifest file a structural edit belongs to. Locale variants are
- * whole files with their own component list (page.fr.json), so a reorder
- * made on `fr` belongs to `fr` only. Without the locale, a French reorder
- * restored after a reload was saved into page.json — French content and
- * all (reproduced 2026-10-18).
- */
-export type StructuralKey = ManifestKey & {
-  /** Undefined for the default locale. */
-  locale?: string
-}
-
-/** Unambiguous for any name: a JSON array. */
-export function structuralKeyToString(key: StructuralKey): string {
-  return JSON.stringify([key.kind, key.name, key.locale ?? ''])
-}
-
-export function structuralKeyFromString(s: string): StructuralKey {
-  const parsed: unknown = JSON.parse(s)
-  if (!Array.isArray(parsed) || parsed.length !== 3) throw new Error(`Invalid structural key: ${s}`)
-  const [kind, name, locale] = parsed
-  if ((kind !== 'page' && kind !== 'fragment') || typeof name !== 'string' || typeof locale !== 'string') {
-    throw new Error(`Invalid structural key: ${s}`)
-  }
-  return locale ? { kind, name, locale } : { kind, name }
-}
+import type { ComponentEntry, InlineComponent } from 'gazetta/types'
+import { type ManifestFileKey, manifestFileKeyToString } from '../utils/manifestFileKey.js'
 
 /**
  * One pending structural edit — both the original (for discard) and the
@@ -45,7 +19,7 @@ export interface StructuralEntry {
  * content edits. Both lanes are flushed atomically by the editor save pipeline.
  *
  * Single-page focus: in v1 the UX limits structural pending to the
- * currently-focused page/fragment. The store's Map is keyed by `StructuralKey`
+ * currently-focused page/fragment. The store's Map is keyed by `ManifestFileKey`
  * for forward-compat — multi-page support is a UX call away, not a state
  * rewrite.
  *
@@ -63,8 +37,8 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
    * tree-build watch. Splicing the existing array would silently fail to
    * trigger a re-render because the Map.get() still returns the same reference.
    */
-  function setPending(key: StructuralKey, original: readonly ComponentEntry[], next: ComponentEntry[]) {
-    const k = structuralKeyToString(key)
+  function setPending(key: ManifestFileKey, original: readonly ComponentEntry[], next: ComponentEntry[]) {
+    const k = manifestFileKeyToString(key)
     const existing = entries.get(k)
     entries.set(k, {
       original: existing?.original ?? original.slice(),
@@ -72,7 +46,7 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
     })
   }
 
-  function moveComponent(key: StructuralKey, current: readonly ComponentEntry[], fromIndex: number, toIndex: number) {
+  function moveComponent(key: ManifestFileKey, current: readonly ComponentEntry[], fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return
     if (fromIndex < 0 || fromIndex >= current.length) return
     if (toIndex < 0 || toIndex >= current.length) return
@@ -83,7 +57,7 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
   }
 
   function addComponent(
-    key: StructuralKey,
+    key: ManifestFileKey,
     current: readonly ComponentEntry[],
     component: InlineComponent | string,
     insertIndex?: number,
@@ -94,7 +68,7 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
     setPending(key, current, next)
   }
 
-  function removeComponent(key: StructuralKey, current: readonly ComponentEntry[], atIndex: number) {
+  function removeComponent(key: ManifestFileKey, current: readonly ComponentEntry[], atIndex: number) {
     if (atIndex < 0 || atIndex >= current.length) return
     const next = current.slice()
     next.splice(atIndex, 1)
@@ -105,8 +79,8 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
    * Drop the pending entry for a key, reverting to disk-loaded order on next read.
    * No-op when no entry exists for the key.
    */
-  function discard(key: StructuralKey) {
-    entries.delete(structuralKeyToString(key))
+  function discard(key: ManifestFileKey) {
+    entries.delete(manifestFileKeyToString(key))
   }
 
   function clearAll() {
@@ -114,8 +88,8 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
   }
 
   /** Current pending components for a key, or null if no entry exists. */
-  function pendingFor(key: StructuralKey): ComponentEntry[] | null {
-    return entries.get(structuralKeyToString(key))?.pending ?? null
+  function pendingFor(key: ManifestFileKey): ComponentEntry[] | null {
+    return entries.get(manifestFileKeyToString(key))?.pending ?? null
   }
 
   /**
@@ -127,15 +101,15 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
    * "original captured once" invariant. This bypasses that invariant
    * because the persisted snapshot IS the prior captured original.
    */
-  function _hydrateFromSnapshot(key: StructuralKey, entry: StructuralEntry): void {
-    entries.set(structuralKeyToString(key), {
+  function _hydrateFromSnapshot(key: ManifestFileKey, entry: StructuralEntry): void {
+    entries.set(manifestFileKeyToString(key), {
       original: entry.original,
       pending: entry.pending,
     })
   }
 
-  function hasPendingFor(key: StructuralKey): boolean {
-    return entries.has(structuralKeyToString(key))
+  function hasPendingFor(key: ManifestFileKey): boolean {
+    return entries.has(manifestFileKeyToString(key))
   }
 
   /** All pending entries — consumers iterate to build the save payload + preview overrides. */

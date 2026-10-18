@@ -9,11 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { api } from '../src/client/api/client.js'
 import { useEditorActions } from '../src/client/composables/useEditorActions.js'
-import {
-  structuralKeyFromString,
-  structuralKeyToString,
-  useEditorStructuralStore,
-} from '../src/client/stores/editorStructural.js'
+import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
+import { manifestFileKeyFromString, manifestFileKeyToString } from '../src/client/utils/manifestFileKey.js'
 import { useLocaleStore } from '../src/client/stores/locale.js'
 import { useSiteStore } from '../src/client/stores/site.js'
 
@@ -32,11 +29,11 @@ describe('structural keys carry the locale', () => {
     { ...home, locale: 'fr' },
     { kind: 'fragment' as const, name: 'a:b/c' },
   ])('round-trips %o', key => {
-    expect(structuralKeyFromString(structuralKeyToString(key))).toEqual(key)
+    expect(manifestFileKeyFromString(manifestFileKeyToString(key))).toEqual(key)
   })
 
   it.each(['page:home', '["page"]', '["blog","x",""]', '["page",1,""]'])('rejects %s', bad => {
-    expect(() => structuralKeyFromString(bad)).toThrow()
+    expect(() => manifestFileKeyFromString(bad)).toThrow()
   })
 
   it('a reorder on fr is not pending on en', () => {
