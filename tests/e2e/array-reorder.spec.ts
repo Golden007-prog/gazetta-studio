@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { test, expect } from './fixtures'
@@ -41,6 +41,16 @@ async function save(page: Page): Promise<void> {
 }
 
 test.describe('Array field reorder', () => {
+  // Each test saves a new order into the worker's site copy, which the next
+  // test in the same worker would start from. Put the original back.
+  let original = ''
+  test.beforeAll(({ testSite }) => {
+    original = readFileSync(fragmentJson(testSite.projectDir), 'utf8')
+  })
+  test.afterEach(({ testSite }) => {
+    writeFileSync(fragmentJson(testSite.projectDir), original)
+  })
+
   test('keyboard drag and move buttons reorder items, saved in order', async ({ page, testSite }) => {
     const { items, labels } = await openNavLinks(page)
     expect(await labels()).toEqual(['Home', 'About', 'Blog'])
@@ -66,6 +76,7 @@ test.describe('Array field reorder', () => {
 
   test('mouse drag reorders items, saved in order', async ({ page, testSite }) => {
     const { items, labels } = await openNavLinks(page)
+    expect(await labels()).toEqual(['Home', 'About', 'Blog'])
 
     // Drag Blog's handle above Home. Small steps: the library only starts a
     // drag after the pointer moves past a threshold.
