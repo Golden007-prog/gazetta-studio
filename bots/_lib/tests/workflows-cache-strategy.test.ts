@@ -38,7 +38,7 @@ describe('memoryful bots — reviewer-log cache strategy', () => {
       it('uses actions/cache/restore (not combined actions/cache) for the reviewer-log', () => {
         // The combined `actions/cache@vN` step skips save on cache-hit.
         // Issue #581 — using the split restore/save pair is the fix.
-        const restoresLog = /uses:\s*actions\/cache\/restore@v\d+[\s\S]{0,200}reviewer-log\.jsonl/.test(yaml)
+        const restoresLog = /uses:\s*actions\/cache\/restore@\S+[\s\S]{0,200}reviewer-log\.jsonl/.test(yaml)
         expect(restoresLog, `${bot.name}.yml must restore the reviewer-log via actions/cache/restore@vN`).toBe(true)
       })
 
@@ -48,8 +48,7 @@ describe('memoryful bots — reviewer-log cache strategy', () => {
         // would silently lose Agent B verdicts that informed the
         // failure path.
         const savesLog =
-          /uses:\s*actions\/cache\/save@v\d+[\s\S]{0,400}reviewer-log\.jsonl/.test(yaml) &&
-          /if:\s*always\(\)/.test(yaml)
+          /uses:\s*actions\/cache\/save@\S+[\s\S]{0,400}reviewer-log\.jsonl/.test(yaml) && /if:\s*always\(\)/.test(yaml)
         expect(savesLog, `${bot.name}.yml must save the reviewer-log via actions/cache/save@vN with if: always()`).toBe(
           true,
         )
@@ -61,7 +60,7 @@ describe('memoryful bots — reviewer-log cache strategy', () => {
         // prefix match. Without a per-run suffix, the same cache-hit-
         // skip-save trap returns.
         const savesWithPerRunKey =
-          /uses:\s*actions\/cache\/save@v\d+[\s\S]{0,400}key:\s*[^\n]*\$\{\{\s*github\.run_id\s*\}\}/.test(yaml)
+          /uses:\s*actions\/cache\/save@\S+[\s\S]{0,400}key:\s*[^\n]*\$\{\{\s*github\.run_id\s*\}\}/.test(yaml)
         expect(
           savesWithPerRunKey,
           `${bot.name}.yml save step must use a per-run key (e.g. {bot}-reviewer-log-v1-\${{ github.run_id }})`,
@@ -93,7 +92,7 @@ describe('memoryful bots — reviewer-log cache strategy', () => {
         // Verified live: 06-14, 06-21, 06-28 mutation-area-picker
         // runs all restored 467-byte 1-entry blob from the old key.
         const restoreKeyIsPerRun =
-          /uses:\s*actions\/cache\/restore@v\d+[\s\S]{0,400}key:\s*[^\n]*\$\{\{\s*github\.run_id\s*\}\}/.test(yaml)
+          /uses:\s*actions\/cache\/restore@\S+[\s\S]{0,400}key:\s*[^\n]*\$\{\{\s*github\.run_id\s*\}\}/.test(yaml)
         expect(
           restoreKeyIsPerRun,
           `${bot.name}.yml restore step's primary key must be per-run (contains \${{ github.run_id }}) so it always falls through to restore-keys`,
@@ -124,7 +123,7 @@ describe('memoryful bots — reviewer-log cache strategy', () => {
         // is the broken pattern. Even if restore+save are also
         // declared, leaving the combined step would still hit the
         // cache-hit-skip-save trap on its own save invocation.
-        const combinedShape = new RegExp(`uses:\\s*actions/cache@v\\d+[\\s\\S]{0,200}reviewer-log\\.jsonl`)
+        const combinedShape = new RegExp(`uses:\\s*actions/cache@\\S+[\\s\\S]{0,200}reviewer-log\\.jsonl`)
         expect(combinedShape.test(yaml), `${bot.name}.yml must not use combined actions/cache@vN`).toBe(false)
       })
     })
