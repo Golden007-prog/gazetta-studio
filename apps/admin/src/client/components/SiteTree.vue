@@ -310,7 +310,10 @@ async function handleDelete(node: SiteNode, e: Event) {
 .node-issue-info { background: var(--p-blue-500); }
 .node-delete { opacity: 0; transition: opacity 0.1s; flex-shrink: 0; }
 .node-item:hover .node-delete { opacity: 1; }
-.new-btns { display: flex; gap: 0.5rem; margin-top: 8px; padding: 0 6px; }
+.new-btns { display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; margin-top: 8px; padding: 0 6px; }
+/* Wrap whole buttons onto the next row instead of shrinking them, which
+   broke labels mid-word and squashed the icons in a narrow sidebar. */
+.new-btns .p-button { flex-shrink: 0; white-space: nowrap; }
 .node-locales { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
 .locale-badge { font-size: 0.5rem; font-weight: 700; letter-spacing: 0.05em; color: var(--color-muted); border: 1px solid var(--color-border); border-radius: 2px; padding: 0 3px; line-height: 1.4; }
 
