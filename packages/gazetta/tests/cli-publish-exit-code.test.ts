@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { spawn } from 'node:child_process'
-import { cp, rm, readFile, writeFile, mkdir } from 'node:fs/promises'
+import { cp, rm, readFile, writeFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tempDir } from './_helpers/temp.js'
@@ -40,7 +40,6 @@ describe('gazetta publish exit code', { timeout: 120000 }, () => {
 
   beforeEach(async () => {
     projectDir = tempDir(`cli-publish-exit-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    await mkdir(projectDir, { recursive: true })
     await cp(starterDir, projectDir, {
       recursive: true,
       filter: src => !src.includes('/node_modules') && !src.includes('/dist'),
