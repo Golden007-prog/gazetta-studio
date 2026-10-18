@@ -8,6 +8,7 @@ import { renderFragment, renderPage } from '../../renderer.js'
 import { defaultLocaleFor } from '../../locale.js'
 import type { SourceContext, SourceContextResolver } from '../source-context.js'
 import { requireCapability } from '../middleware/capability.js'
+import { isArchived } from '../../archive-helpers.js'
 
 const EMPTY_OVERRIDES: DraftOverrides = { content: {}, structural: {} }
 
@@ -89,6 +90,9 @@ async function renderPreview(c: Context, source: SourceContext, overrides: Draft
   for (const { name: pageName, page, locale: pageLocale } of allPageEntries(site)) {
     const params = matchRoute(page.route, requestPath)
     if (params) {
+      // Archived pages have no template to render (or must not render it):
+      // show what visitors get instead — a 301 to the alias, or 410 Gone.
+      if (isArchived(page)) return c.html(archivePlaceholder(site, page.aliasOf))
       try {
         const previewSite = withStructuralOverride(site, { kind: 'page', name: pageName }, overrides)
         const resolved = await resolvePage(pageName, previewSite, pageLocale)
@@ -117,6 +121,30 @@ async function renderPreview(c: Context, source: SourceContext, overrides: Draft
     }
   }
   return c.html('<p>Page not found</p>', 404)
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function archivePlaceholder(site: Site, aliasOf: string | undefined): string {
+  const open = '<!doctype html><html><body style="font-family:system-ui;padding:2rem;color:#525252">'
+  const close = '</body></html>'
+  if (!aliasOf) {
+    return (
+      open +
+      '<h2 style="margin:0 0 0.5rem">410 Gone</h2>' +
+      '<p style="margin:0;font-size:0.875rem">This page is archived. Visitors get a "Gone" response.</p>' +
+      close
+    )
+  }
+  const route = escapeHtml(site.pages.get(aliasOf)?.route ?? `/${aliasOf}`)
+  return (
+    open +
+    `<h2 style="margin:0 0 0.5rem">301 → ${route}</h2>` +
+    `<p style="margin:0;font-size:0.875rem">Visitors are redirected to <a href="${route}">${route}</a>.</p>` +
+    close
+  )
 }
 
 function applyContentOverrides(node: ResolvedComponent, content: DraftOverrides['content']) {

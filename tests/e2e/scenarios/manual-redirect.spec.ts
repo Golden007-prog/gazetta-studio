@@ -123,9 +123,6 @@ test.describe('Scenario — create a manual redirect, see it greyed in tree', ()
   test('opening a redirect shows the archive banner and no editor (#965)', async ({ page, request, baseURL }) => {
     // A redirect has no template. The editor used to request the schema of
     // template "undefined" and show "Failed to load" under the banner.
-    // The preview iframe still answers 500 for a redirect (#971); remove
-    // this allowance when that's fixed.
-    test.info().annotations.push({ type: 'allow-console-errors' })
     const res = await request.post(`${baseURL}/admin/api/page-redirects`, { data: { from: 'old-about', to: 'about' } })
     expect(res.status()).toBe(201)
     const schemaRequests: string[] = []
