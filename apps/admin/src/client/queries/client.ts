@@ -28,8 +28,8 @@
  * persister only persists what's currently in the cache, so a
  * default gcTime would mean "queries the user hasn't viewed in 5
  * minutes can't survive reload." For an offline-friendly admin we
- * push gcTime to 24h so the persisted snapshot covers a full
- * editing session even if specific pages aren't actively viewed.
+ * push gcTime to 7 days, matching the persisted cache's maxAge, so an
+ * offline cold load after a weekend still finds the site tree.
  *
  * `staleTime` stays at 0 — we WANT background refetches when the
  * user views something. Persisted data unblocks the UI; refetch
@@ -39,9 +39,9 @@ import { QueryClient } from '@tanstack/vue-query'
 import { persistQueryClient } from '@tanstack/query-persist-client-core'
 import type { Persister } from '@tanstack/query-persist-client-core'
 
-/** 24 hours in ms — long enough to survive a full editing session,
- *  short enough that genuinely stale entries eventually GC. */
-const OFFLINE_GC_TIME_MS = 24 * 60 * 60 * 1000
+/** 7 days: an offline cold load after a weekend still has the site tree.
+ *  Also the persisted cache's maxAge — TanStack requires gcTime ≥ maxAge. */
+const OFFLINE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
  * Build the admin's `QueryClient` with offline-friendly defaults.
@@ -52,7 +52,7 @@ export function createAdminQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        gcTime: OFFLINE_GC_TIME_MS,
+        gcTime: OFFLINE_RETENTION_MS,
         // staleTime: 0 — Vue Query default; queries refetch on mount
         // / focus / reconnect. Persisted data unblocks initial render
         // while the refetch lands fresh data underneath.
@@ -62,7 +62,7 @@ export function createAdminQueryClient(): QueryClient {
       },
       mutations: {
         // gcTime same shape — keeps offline-queued mutations alive.
-        gcTime: OFFLINE_GC_TIME_MS,
+        gcTime: OFFLINE_RETENTION_MS,
       },
     },
   })
@@ -83,5 +83,15 @@ export function createGazettaClientPersister(
   persister: Persister,
   buster?: string,
 ): (client: QueryClient) => [() => void, Promise<void>] {
-  return (client: QueryClient) => persistQueryClient({ queryClient: client, persister, buster })
+  return (client: QueryClient) =>
+    persistQueryClient({
+      queryClient: client,
+      persister,
+      buster,
+      maxAge: OFFLINE_RETENTION_MS,
+      // Persist every query that has an answer. The default keeps only
+      // `success` ones, so the first failed refresh offline (status
+      // `error`, last answer still held) erased it from the stored cache.
+      dehydrateOptions: { shouldDehydrateQuery: query => query.state.data !== undefined },
+    })
 }

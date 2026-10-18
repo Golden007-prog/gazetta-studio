@@ -54,8 +54,8 @@ describe('createAdminQueryClient + clientPersister wiring', () => {
     const mutationDefaults = client.getDefaultOptions().mutations
     // 24h. Verifies the offline default and pins it in case a future
     // refactor accidentally resets to Vue Query's 5-minute default.
-    expect(queryDefaults?.gcTime).toBe(24 * 60 * 60 * 1000)
-    expect(mutationDefaults?.gcTime).toBe(24 * 60 * 60 * 1000)
+    expect(queryDefaults?.gcTime).toBe(7 * 24 * 60 * 60 * 1000)
+    expect(mutationDefaults?.gcTime).toBe(7 * 24 * 60 * 60 * 1000)
   })
 
   it('clientPersister returns the [unsubscribe, restored] tuple Vue Query expects', async () => {
@@ -96,6 +96,60 @@ describe('createAdminQueryClient + clientPersister wiring', () => {
     await restored2
     expect(session2.getQueryData(['pages'])).toEqual([{ name: 'home' }])
     unsubscribe2()
+  })
+
+  it.each([
+    ['2 days', 2, true],
+    ['8 days', 8, false],
+  ])('a cache persisted %s ago is restored: %s (7-day retention)', async (_, days, kept) => {
+    const cache = fakeAdminCache()
+    const persister = createGazettaPersister(cache, { throttleTime: 0 })
+    const clientPersister = createGazettaClientPersister(persister)
+    const session1 = createAdminQueryClient()
+    const [unsub1, restored1] = clientPersister(session1)
+    await restored1
+    session1.setQueryData(['pages'], [{ name: 'home' }])
+    await new Promise(resolve => setTimeout(resolve, 10))
+    unsub1()
+
+    // Age the persisted client instead of waiting.
+    const raw = await cache.get<string>('gazetta-vue-query')
+    const saved = typeof raw === 'string' ? JSON.parse(raw) : raw
+    saved.timestamp -= days * 24 * 60 * 60 * 1000
+    await cache.set('gazetta-vue-query', typeof raw === 'string' ? JSON.stringify(saved) : saved)
+
+    const session2 = createAdminQueryClient()
+    const [unsub2, restored2] = clientPersister(session2)
+    await restored2
+    expect(session2.getQueryData(['pages']) !== undefined).toBe(kept)
+    unsub2()
+  })
+
+  it('keeps the last answer of a query whose refresh failed (offline)', async () => {
+    const cache = fakeAdminCache()
+    const persister = createGazettaPersister(cache, { throttleTime: 0 })
+    const clientPersister = createGazettaClientPersister(persister)
+    const session1 = createAdminQueryClient()
+    const [unsub1, restored1] = clientPersister(session1)
+    await restored1
+    session1.setQueryData(['pages'], [{ name: 'home' }])
+    await session1
+      .fetchQuery({
+        queryKey: ['pages'],
+        queryFn: () => Promise.reject(new Error('Failed to fetch')),
+        retry: false,
+        staleTime: 0,
+      })
+      .catch(() => {})
+    expect(session1.getQueryState(['pages'])?.status).toBe('error')
+    await new Promise(resolve => setTimeout(resolve, 10))
+    unsub1()
+
+    const session2 = createAdminQueryClient()
+    const [unsub2, restored2] = clientPersister(session2)
+    await restored2
+    expect(session2.getQueryData(['pages'])).toEqual([{ name: 'home' }])
+    unsub2()
   })
 
   it('buster mismatch on restore discards persisted data', async () => {

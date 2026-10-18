@@ -12,6 +12,7 @@ import { attachDraftPersistence } from './drafts/persistence.js'
 import { selectDraftStore } from './drafts/select.js'
 import { askIdentity, resolveDraftIdentity } from './drafts/identity.js'
 import { useActiveTargetStore } from './stores/activeTarget.js'
+import { configureReadThrough } from './queries/read-through.js'
 import { useServiceWorkerUpdate } from './composables/useServiceWorkerUpdate.js'
 import 'primeicons/primeicons.css'
 import './assets/tokens.css'
@@ -33,8 +34,19 @@ async function bootstrap(): Promise<void> {
   void provider.cache.invalidate('pending-edits:dirty')
   const queryClient = createAdminQueryClient()
   const persister = createGazettaPersister(provider.cache)
-  // A different user never sees the previous user's query cache.
-  const clientPersister = createGazettaClientPersister(persister, identity?.owner ?? 'anonymous')
+  // A different admin version, site or user never reads the persisted query cache.
+  const buster = [import.meta.env.GAZETTA_VERSION ?? 'dev', identity?.site ?? '', identity?.owner ?? 'anonymous'].join(
+    ':',
+  )
+  const persist = createGazettaClientPersister(persister, buster)
+  // Keep the restore promise so reads wait for the persisted cache (it never rejects).
+  let markRestored!: () => void
+  const restored = new Promise<void>(resolve => (markRestored = resolve))
+  const clientPersister: typeof persist = client => {
+    const result = persist(client)
+    result[1].then(markRestored, markRestored)
+    return result
+  }
 
   const app = createApp(App)
   app.use(createPinia())
@@ -54,7 +66,8 @@ async function bootstrap(): Promise<void> {
   // `navigator.onLine` listeners and starts probing /api/health
   // when degraded. Must run after Pinia install + before mount so
   // the first render sees a populated state.
-  useConnectionState()
+  const connection = useConnectionState()
+  configureReadThrough({ client: queryClient, restored, isOffline: () => connection.isOffline })
 
   // Wire pending-edits persistence on top of the L6 cache. Both
   // coordinators run in parallel — independent stores, independent

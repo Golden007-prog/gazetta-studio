@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { defineConfig } from 'vite'
@@ -17,8 +18,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 // `packages/gazetta/admin-dist/`.
 const configDir = dirname(fileURLToPath(import.meta.url))
 const swSrcDir = resolve(configDir, 'src/client')
+// Gazetta version, part of the persisted query cache's reset key: a new
+// admin build must not read query results cached by an older one.
+const gazettaVersion = JSON.parse(
+  readFileSync(resolve(configDir, '../../packages/gazetta/package.json'), 'utf8'),
+).version
 
 export default defineConfig({
+  define: { 'import.meta.env.GAZETTA_VERSION': JSON.stringify(gazettaVersion) },
   plugins: [
     vue(),
     // Service worker for app-shell precache per design-offline.md Cut 11.
