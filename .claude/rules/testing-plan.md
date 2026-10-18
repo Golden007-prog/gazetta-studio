@@ -128,6 +128,14 @@ in 1 file. Targets where round-trip / fallback chain semantics matter:
 
 Each is a 30-line addition. Land one per relevant feature cut, not as a batch.
 
+**Persistence and shared-site e2e tests** (from the #962 retrospective — each line is a failure that happened):
+
+- **Wait for the stored write, in both directions.** Poll storage (`storedDraftTitles` / `storedDraftKeys` in `tests/e2e/helpers.ts`) before a reload, and again after a discard; never sleep and reload. The Don't Save test first passed *without* the fix because it reloaded before the debounced write (#964).
+- **Check what's stored in the failure case, not only after success.** Offline cold load erased the persisted query cache — 4 queries stored before going offline, 0 after — and only the offline e2e test showed it (#970).
+- **The worker's site copy is shared across files.** With `fullyParallel: true` one worker runs tests from different files in any order on one copy. Use unique names, clean up in `afterEach`, and read the state a test depends on at its start; never assume the starter's content (#972: two tests created the same redirect → 409; #973: a scenario had reset English `home`).
+- **Before pushing a new e2e spec, run it with `--repeat-each=3 --workers=1`.** That catches a test leaking into its own next run. It can't put another file in between — files run in path order and repeats stay together — so independence from other files has to come from the test itself (previous line).
+- **Compare files by meaning, not bytes.** A save that reorders JSON keys looked like metadata loss.
+
 ## Cross-foundation integration test punch list
 
 Foundational dimensions shipped in cuts (hooks, audit, validation, soft-delete,

@@ -12,6 +12,8 @@ Five phases: Discovery → UX-grilling → Implementation-grilling → Design �
 
 Understand the problem. Read existing design docs, audit competitor approaches, talk to users, read the relevant issues. Identify what's actually being asked and what's tangential.
 
+When the design is motivated by a suspected bug, **reproduce the bug before locking the design.** A design locked on a read-only diagnosis is a hypothesis: #963 locked owner-tagged cache snapshots from reading code; a two-tab reproduction the same day showed snapshots overwrite each other, and #966 replaced the design with a draft store.
+
 For features with significant UX surface, Discovery includes UX-specific research per [team-preferences rule 27](team-preferences.md) (assertion provenance):
 - Inspect 3-5 competitor implementations of the same UX (with screenshots — fact-check claims per rule 20)
 - Identify which actor types the feature affects (Content Author / Template Developer / Operator / CMS Developer per [`CONTEXT.md`](../../CONTEXT.md))

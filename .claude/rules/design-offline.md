@@ -156,6 +156,8 @@ A tab still open from user A after B signs in keeps writing records owned by A. 
 
 **Two tabs editing the same draft** are last-write-wins on that one record. Acceptable for unsaved edits; no cross-tab merge.
 
+**New saved user state is a lane of the draft store** (`apps/admin/src/client/drafts/persistence.ts`), never a new snapshot key in `AdminCache`. The store's scope type carries site, user and target; each lane's own key must carry locale, kind and name, and its writes go to the locale the data was loaded from, not the one active at save time (#973 structural edits, #974 page metadata). A one-run check on 2026-10-18 showed `review-architecture` already flags a planted snapshot-in-`AdminCache` lane as CRITICAL against this section, so no separate review rule is needed.
+
 **Rejected:**
 
 | Option | Why rejected |
