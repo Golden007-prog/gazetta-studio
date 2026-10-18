@@ -47,6 +47,30 @@ jobs:
       - run: npm run build -w packages/gazetta
       - run: npm test -w packages/gazetta
 
+  # Render gazetta.studio in every PR, so a template or core change that
+  # breaks the real site fails here instead of in the production deploy.
+  # Publishes only to the site's filesystem `local` target. No secrets are
+  # referenced: the R2 values are placeholders (the site config builds the
+  # R2 client at load and needs non-empty strings), so even a mistaken
+  # `publish production` here could not authenticate. CLOUDFLARE_API_TOKEN
+  # stays unset, so no deploy adapter is built. Production publishes only
+  # from deploy-site.yml on main.
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/gazetta
+      - name: Publish gazetta.studio to its local target
+        run: npx tsx packages/gazetta/src/cli/index.ts publish local sites/gazetta.studio --force
+        env:
+          R2_ACCESS_KEY_ID: ci-placeholder
+          R2_SECRET_ACCESS_KEY: ci-placeholder
+
   admin:
     # Vue Test Utils + jsdom tests for apps/admin. The trophy/honeycomb
     # tier per testing-plan.md and the load-bearing gate for Vue

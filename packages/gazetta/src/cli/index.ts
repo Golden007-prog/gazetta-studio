@@ -733,10 +733,13 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
   const { publishRun } = await import('../publish-run.js')
   const { createContentRoot: _createContentRoot } = await import('../content-root.js')
 
+  let failedItems = 0
+  const failedTargets: string[] = []
   for (const name of targetNames) {
     const targetStorage = targets.get(name)
     if (!targetStorage) {
       console.error(`  ${name}: SKIPPED (failed to initialize)`)
+      failedTargets.push(name)
       continue
     }
 
@@ -844,6 +847,7 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
           } else {
             const label = ev.result.kind === 'fragment' ? `@${ev.result.name}` : ev.result.name
             console.error(`    ${c.red('✗')} ${label}: ${ev.result.code}`)
+            failedItems++
           }
         }
       },
@@ -856,6 +860,7 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
       totalRemoved += tr.filesRemoved
       if (tr.failed) {
         console.error(`    ${c.red('✗')} target failed: ${tr.failureReason ?? 'all items failed'}`)
+        failedTargets.push(name)
       }
     }
 
@@ -1036,6 +1041,17 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
         console.warn(`  ${name}: cache purge failed: ${(err as Error).message}`)
       }
     }
+  }
+
+  // Non-zero exit when anything failed, so CI publish steps go red
+  // (cli.md "Exit Codes"). exitCode, not exit(): let pending output flush.
+  if (failedItems > 0 || failedTargets.length > 0) {
+    const parts: string[] = []
+    if (failedItems > 0) parts.push(`${failedItems} failed`)
+    if (failedTargets.length > 0) parts.push(`target(s) failed: ${failedTargets.join(', ')}`)
+    console.error(`  ${c.red('Publish incomplete')} — ${parts.join('; ')}\n`)
+    process.exitCode = 1
+    return
   }
 
   console.log(`  Done!\n`)

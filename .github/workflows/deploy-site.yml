@@ -19,6 +19,9 @@ permissions:
 
 jobs:
   deploy:
+    # Production publishes from main only. Without this, a manual
+    # workflow_dispatch on any branch would publish that branch to R2.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
