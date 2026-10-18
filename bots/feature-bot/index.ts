@@ -215,7 +215,7 @@ async function main(): Promise<void> {
     if (elapsed > PER_RUN_BUDGET_MS) {
       const remaining = candidates.length - processed
       printWarning(
-        `Per-run budget exhausted (${Math.round(elapsed / 1000)}s > ${Math.round(PER_RUN_BUDGET_MS / 1000)}s). Stopping with ${remaining} unprocessed; tomorrow's run picks them up.`,
+        `Per-run budget exhausted (${Math.round(elapsed / 1000)}s > ${Math.round(PER_RUN_BUDGET_MS / 1000)}s). Stopping with ${remaining} unprocessed; the next scheduled run picks them up.`,
       )
       for (const skipped of candidates.slice(processed)) {
         console.log(`     ⏭  #${skipped.number} "${skipped.title}"`)
@@ -242,11 +242,11 @@ async function main(): Promise<void> {
     // every subsequent candidate's `claude -p` invocation crashes in 4s
     // against the rejected bucket. Continuing the loop creates spurious
     // `ready-for-human` escalations + skip-list PRs (see 2026-06-14
-    // #587-#590). Stop processing; tomorrow's cron resumes the queue.
+    // #587-#590). Stop processing; the next scheduled run resumes the queue.
     if (cutResult.rateLimited) {
       const remaining = candidates.length - processed
       printWarning(
-        `Stopping the candidate queue due to Anthropic session-rate-limit. ${remaining} candidate(s) remain; tomorrow's cron resumes after the bucket resets.`,
+        `Stopping the candidate queue due to Anthropic session-rate-limit. ${remaining} candidate(s) remain; the next scheduled run resumes after the bucket resets.`,
       )
       for (const skipped of candidates.slice(processed)) {
         console.log(`     ⏭  #${skipped.number} "${skipped.title}"`)
@@ -508,11 +508,11 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
     // would create spurious skip-list PRs (see 2026-06-14 #587-#590);
     // the cut is fine, the bucket isn't. Leave the cut on the queue,
     // signal the outer loop to STOP processing more candidates, and
-    // skip the `feature-bot-attempted` label so tomorrow's cron
+    // skip the `feature-bot-attempted` label so the next scheduled run
     // re-picks this cut at the front.
     if (!aResult.success && detectRateLimit(agentATranscript)) {
       printWarning(
-        `Anthropic session-rate-limit hit on attempt ${attempt}; stopping the queue (this cut + remaining candidates will be retried by tomorrow's cron after the bucket resets).`,
+        `Anthropic session-rate-limit hit on attempt ${attempt}; stopping the queue (this cut + remaining candidates will be retried by the next scheduled run after the bucket resets).`,
       )
       resetToMain(branchName, { cwd: REPO_ROOT })
       return { rateLimited: true }

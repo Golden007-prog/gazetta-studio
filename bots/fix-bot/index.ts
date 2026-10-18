@@ -185,7 +185,7 @@ async function main(): Promise<void> {
     if (elapsed > PER_RUN_BUDGET_MS) {
       const remaining = candidates.length - processed
       printWarning(
-        `Per-run budget exhausted (${Math.round(elapsed / 1000)}s > ${Math.round(PER_RUN_BUDGET_MS / 1000)}s). Stopping with ${remaining} unfixed; tomorrow's run picks them up.`,
+        `Per-run budget exhausted (${Math.round(elapsed / 1000)}s > ${Math.round(PER_RUN_BUDGET_MS / 1000)}s). Stopping with ${remaining} unfixed; the next scheduled run picks them up.`,
       )
       for (const skipped of candidates.slice(processed)) {
         console.log(`     ⏭  #${skipped.number} "${skipped.title}"`)
@@ -220,11 +220,11 @@ async function main(): Promise<void> {
     // every subsequent candidate's `claude -p` invocation crashes in 4s
     // against the rejected bucket. Continuing the loop creates spurious
     // `ready-for-human` escalations + skip-list PRs (see 2026-06-14
-    // #587-#590 in feature-bot). Stop the queue; tomorrow's cron resumes.
+    // #587-#590 in feature-bot). Stop the queue; the next scheduled run resumes.
     if (issueResult.rateLimited) {
       const remaining = candidates.length - processed
       printWarning(
-        `Stopping the candidate queue due to Anthropic session-rate-limit. ${remaining} candidate(s) remain; tomorrow's cron resumes after the bucket resets.`,
+        `Stopping the candidate queue due to Anthropic session-rate-limit. ${remaining} candidate(s) remain; the next scheduled run resumes after the bucket resets.`,
       )
       for (const skipped of candidates.slice(processed)) {
         console.log(`     ⏭  #${skipped.number} "${skipped.title}"`)
@@ -566,7 +566,7 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
 
     if (decision.kind === 'stop-queue-rate-limited') {
       printWarning(
-        `Anthropic session-rate-limit hit on attempt ${attempt}; stopping the queue (this issue + remaining candidates will be retried by tomorrow's cron after the bucket resets).`,
+        `Anthropic session-rate-limit hit on attempt ${attempt}; stopping the queue (this issue + remaining candidates will be retried by the next scheduled run after the bucket resets).`,
       )
       resetToMain(branchName, { cwd: REPO_ROOT })
       return { rateLimited: true }

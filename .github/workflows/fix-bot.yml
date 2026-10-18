@@ -42,7 +42,12 @@ jobs:
   fix:
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 60
+    # The 50-min BUDGET_MS is checked only between issues, never during a
+    # Claude call, so one issue started near the end of the budget runs to
+    # completion. Flake fixes prove durability with 5-10x e2e repeats
+    # (team-preferences rule 35): an Agent A call on #886 ran past 55 min
+    # and the 60-min limit killed it (2026-10-11). 50 + ~55 + setup ~= 110.
+    timeout-minutes: 120
     permissions:
       # Read+write contents (push fix branches), read+write issues
       # (post comments + apply ready-for-human), read+write PRs (open

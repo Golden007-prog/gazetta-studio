@@ -12,7 +12,7 @@
  * This test pins the structural contract: when Agent A's invocation
  * was rate-limited, the outer loop breaks and does NOT escalate the
  * candidate to ready-for-human. The cut stays on the queue (no
- * skip-list write, no escalateToHuman call) so tomorrow's cron picks
+ * skip-list write, no escalateToHuman call) so the next scheduled run picks
  * it up after the bucket resets.
  *
  * Static check against the index.ts source — running the actual bot
