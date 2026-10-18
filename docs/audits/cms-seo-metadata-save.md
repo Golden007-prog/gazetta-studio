@@ -1,0 +1,44 @@
+# How CMSes save page SEO metadata
+
+**Question:** is page-level SEO metadata (meta title, description, OG image, canonical, robots) saved with the page's content or through a separate save, and do unsaved-changes protections cover it?
+
+**Why asked:** Gazetta's page metadata had its own Save button and its own `dirty` flag outside the editor's pending-edit model, so the unsaved-changes guard, the leave-page prompt and the main Save all missed it. This research informed the decision in [`design-editor-ux.md`](../../.claude/rules/design-editor-ux.md), "Page metadata is a pending lane".
+
+**Provenance:** compiled on 2026-10-18 by a research sub-agent, from official documentation, official plugin docs and official repositories read at pinned commits. Statuses are as the agent reported them; they were not re-checked independently. "VERIFIED (source)" means the behaviour was read from source code, not run.
+
+## Findings
+
+| CMS | Where SEO metadata lives | Saved by the same action as content? | Separate save button? | Unsaved-changes guard covers it? | Status |
+|---|---|---|---|---|---|
+| WordPress block editor + Yoast | Same post (post meta, `_yoast_wpseo_` prefix) | Yes: meta-box forms are posted after each Save/Update | No | **No**, for Yoast-only edits: the leave warning reads only core-data dirtiness and Yoast doesn't route its fields through it. Gutenberg keeps Update always enabled when meta boxes exist | VERIFIED (source) |
+| WordPress + Yoast in Elementor | Same post meta | Yes (posted after Elementor's save) | No | Yoast sets Elementor's "modified" flag on SEO edits; whether Elementor's leave prompt reads it was not checked | Yoast side VERIFIED (source); Elementor side UNVERIFIED |
+| Sanity Studio | Same document (an `seo` object field) | Yes; edits sync continuously into the draft | No save button | No leave guard; a syncing status line instead | VERIFIED |
+| Contentful | Fields on the page entry, or a separate referenced SEO entry | On the entry: yes (autosave, one Publish). Separate entry: its own publish state | No (autosave) | No documented guard found | Storage and saving VERIFIED; guard not found |
+| Storyblok (SEO app) | Same story (a plugin field) | Yes, the story's Save | No | Probably: a 2019 changelog says the editor blocks navigating away with unsaved changes (archived page) | VERIFIED (archived); coverage of the SEO field inferred |
+| Payload (official SEO plugin) | Same document (`meta` group, or an SEO tab) | Yes | No | **Yes**: `LeaveWithoutSaving` triggers on any modified form state | VERIFIED (docs + source) |
+| Strapi (SEO plugin) | Same entry (`seo` component) | Yes | No | **Yes**: the edit view blocks navigation and adds a `beforeunload` warning when the form is modified | VERIFIED (source) |
+| Directus (Directus Labs SEO plugin) | Same item (a `json` field) | Yes | No | **Yes**: any field edit sets `hasEdits`, which drives the unsaved-changes dialog and `beforeunload` | VERIFIED (source) |
+| Webflow | Page settings panel (separate from the canvas) | **No**: page settings have their own Save; canvas edits autosave | **Yes** | No documented guard found | Saving VERIFIED; guard not found |
+| Shopify | Product/page: the resource's "Search engine listing" section. Homepage: Online Store > Preferences | Product/page: yes. Homepage: separate page and Save | Product/page: no | The admin design system says the save bar saves all changes on the page; leave-blocking not confirmed | Saving VERIFIED; guard UNVERIFIED |
+| Ghost | Same post (post settings) | **No**: settings fields save on blur; body edits wait for Update | No (saves on blur) | Mostly moot; if a meta-title save is refused the editor stays guarded | VERIFIED (source tests) |
+
+## Synthesis
+
+- **Dominant pattern:** SEO metadata is more fields on the same document, saved by the same Save. Where the editor has a form-dirty guard (Payload, Strapi, Directus, Storyblok), SEO fields are covered automatically because they are ordinary form state.
+- **Counter-examples** use a separate save surface (Webflow page settings, Shopify homepage SEO, Contentful's separate SEO entry, Ghost's save-on-blur) and mostly avoid the unsaved-changes problem by saving immediately. Webflow's separate Save has no documented guard.
+- **The Yoast-in-Gutenberg gap** is the shape Gazetta had: one save, but the metadata lives outside the editor's state, so the leave warning misses it. A plugin is covered only if it tells the host editor it has changes.
+
+**For Gazetta**, which has an explicit Save and no auto-save (team rule 1), this points to the dominant pattern: metadata as ordinary pending edits, saved by the one Save and covered by the guard.
+
+## Sources
+
+- WordPress / Yoast: [Yoast meta prefix](https://github.com/Yoast/wordpress-seo/blob/f20fa7a6a590988623813963bf9abc6e1cb3f909/inc/class-wpseo-meta.php#L45), [`update_post_meta`](https://github.com/Yoast/wordpress-seo/blob/f20fa7a6a590988623813963bf9abc6e1cb3f909/inc/class-wpseo-meta.php#L721-L729), [`save_postdata`](https://github.com/Yoast/wordpress-seo/blob/f20fa7a6a590988623813963bf9abc6e1cb3f909/admin/metabox/class-metabox.php#L78), [Gutenberg saves meta boxes after save](https://github.com/WordPress/gutenberg/blob/f4eccd9492a48fd74d985e6764b788fa6c13ef33/packages/edit-post/src/store/actions.js#L475-L483), [Gutenberg unsaved-changes warning](https://github.com/WordPress/gutenberg/blob/f4eccd9492a48fd74d985e6764b788fa6c13ef33/packages/editor/src/components/unsaved-changes-warning/index.js#L28-L34), [Update forced on with meta boxes](https://github.com/WordPress/gutenberg/blob/f4eccd9492a48fd74d985e6764b788fa6c13ef33/packages/edit-post/src/components/layout/index.jsx#L583), [Yoast Elementor integration](https://github.com/Yoast/wordpress-seo/blob/f20fa7a6a590988623813963bf9abc6e1cb3f909/packages/js/src/elementor/initializers/editor-integration.js#L15-L87)
+- Sanity: [SEO schema course](https://www.sanity.io/learn/course/seo-optimization/seo-schema-types-and-metadata), [real-time patches](https://www.sanity.io/docs/studio/from-input-components-to-real-time-safe-patches), [drafts and versions](https://www.sanity.io/docs/content-lake/drafts-and-versions), [only `beforeunload` in the Studio](https://github.com/sanity-io/sanity/blob/4af482af1fec62034ff3abd90a2439f10adfe44f/packages/sanity/src/core/store/presence/presence-store.ts#L302)
+- Contentful: [SEO content modeling](https://www.contentful.com/seo-guide/content-modeling-seo/), [content and entries](https://www.contentful.com/help/content-and-entries/), [publishing references](https://www.contentful.com/help/references/publish-references/)
+- Storyblok: [SEO app](https://www.storyblok.com/docs/apps/seo), [field plugins](https://www.storyblok.com/docs/plugins/field-plugins), [archived changelog: preventing loss of unsaved changes](https://web.archive.org/web/20260308101831/https://www.storyblok.com/cl/prevent-losing-unsaved-changes)
+- Payload: [SEO plugin](https://payloadcms.com/docs/v3/plugins/seo), [`LeaveWithoutSaving`](https://github.com/payloadcms/payload/blob/d5b01b40d81cd32621aa883cc8a3cc78ce13bf2d/packages/ui/src/elements/LeaveWithoutSaving/index.tsx#L35)
+- Strapi: [SEO plugin](https://github.com/notum-cz/strapi-plugin-seo), [form blocker](https://github.com/strapi/strapi/blob/223530078e805974a41e729efe18f1c3fae2a1ff/packages/core/admin/admin/src/components/Form.tsx#L861-L916)
+- Directus: [SEO plugin](https://github.com/directus-labs/extensions/blob/39ade0de8dfd1d307ed3b11e74d0f7c0e9159ca0/packages/seo-plugin/readme.md), [`hasEdits`](https://github.com/directus/directus/blob/8e140f94250834cea0a0fb6eb822cac39ed9faec/app/src/composables/use-item/index.ts#L76), [navigation guard](https://github.com/directus/directus/blob/8e140f94250834cea0a0fb6eb822cac39ed9faec/app/src/composables/use-navigation-guard.ts#L5-L12)
+- Webflow: [SEO title and description](https://help.webflow.com/hc/en-us/articles/33961237278611-Add-SEO-title-and-meta-description), [Open Graph](https://help.webflow.com/hc/en-us/articles/33961370297107-Control-the-look-of-social-shares-with-Open-Graph), [real-time collaboration](https://help.webflow.com/hc/en-us/articles/43232037920275-Real-time-collaboration)
+- Shopify: [products](https://help.shopify.com/en/manual/products/add-update-products), [SEO keywords](https://help.shopify.com/en/manual/promoting-marketing/seo/adding-keywords), [Product `seo` field](https://shopify.dev/docs/api/admin-graphql/latest/objects/Product), [contextual save bar](https://github.com/Shopify/polaris/blob/ba463d079114bf2d880731e6f5aa19ff6f1049c2/polaris.shopify.com/content/components/internal-only/contextual-save-bar.mdx#L32-L53)
+- Ghost: [post settings](https://ghost.org/help/post-settings/), [metadata acceptance tests](https://github.com/TryGhost/Ghost/blob/v6.71.0/apps/admin/src/editor/editor-settings-meta-data.acceptance.test.tsx#L290-L324)

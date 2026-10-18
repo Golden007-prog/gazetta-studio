@@ -130,7 +130,7 @@ async function selectBrowserCacheProvider(): Promise<AdminCache> {
 
 Pending edits — unsaved drafts and structural edits — are the author's only copy of their work. They do **not** live in `AdminCache`: that is a cache, allowed to fail open and to evict (`design-cache.md` Universal Provider Requirement #5; the browser provider evicts past 10,000 entries). They live in a dedicated **draft store**: its own IndexedDB database, one record per draft, no eviction, no TTL. Private browsing falls back to an in-memory draft store with the same contract (lost on reload, as today's banner says).
 
-**Record key:** `[site, owner, target, kind, name, locale, path]` (structural edits omit `path`).
+**Record key:** `[site, owner, target, kind, name, locale, path]` (structural edits omit `path`). Kinds: `edit`, `structural`, and `metadata` (page metadata, keyed like structural edits; [`design-editor-ux.md`](design-editor-ux.md) "Page metadata is a pending lane").
 
 - **site** — the site's name from `/api/site`. Browser IndexedDB is per origin, so two sites served from one origin over time (e.g. `gazetta dev` on port 3000) must not share drafts. Two sites with the *same* name on one origin are not separated; accepted.
 - **owner** — `{trustMode}:{id}:{role}` of the principal that wrote the draft. Role is part of it, so a role change counts as a different owner (the RBAC invariant above).
