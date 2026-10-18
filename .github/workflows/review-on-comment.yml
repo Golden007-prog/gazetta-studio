@@ -32,8 +32,13 @@ jobs:
     # mention @claude review or @claude audit. The GitHub expression engine
     # handles both at if-time so we don't waste a runner on irrelevant
     # comments.
+    #
+    # Commenter must have write access to the repo. The repo is public, so
+    # without this anyone could comment `@claude review` on any PR and run
+    # Claude on our token against a diff they wrote.
     if: >
       github.event.issue.pull_request != null &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       (contains(github.event.comment.body, '@claude review') ||
        contains(github.event.comment.body, '@claude audit'))
     runs-on: ubuntu-latest
