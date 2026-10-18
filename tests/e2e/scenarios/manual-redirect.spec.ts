@@ -38,6 +38,15 @@ test.describe('Scenario — create a manual redirect, see it greyed in tree', ()
     await resetScenarioState(testSite.projectDir)
   })
 
+  // Both tests create the old-about redirect; resetScenarioState doesn't
+  // remove created pages, so the next test in this worker would hit a 409
+  // (or see the archived toggle it asserts is absent). Purge through the
+  // app so its alias sidecar goes too. 404 = nothing was created.
+  test.afterEach(async ({ request, baseURL }) => {
+    const res = await request.delete(`${baseURL}/admin/api/pages/old-about/purge`)
+    expect([200, 204, 404]).toContain(res.status())
+  })
+
   test('happy path: + New redirect → fill /old-about → about → tree shows archived row', async ({ page, testSite }) => {
     // --- Open admin (browse mode) ---
     // SiteTree only renders in browse mode; /admin lands here by default.
