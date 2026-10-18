@@ -44,7 +44,11 @@ describe('draft persistence', () => {
     await attach(drafts, () => local).loaded()
 
     expect(usePersistedEditsStore().get('page:home::hero')?.editedContent).toEqual({ title: 'Draft' })
-    const entry = useEditorStructuralStore().allEntries()[0]
+    // Restored drafts wait for their page (#979).
+    const structural = useEditorStructuralStore()
+    expect(structural.hasPendingEdits).toBe(false)
+    structural.activate(home)
+    const entry = structural.allEntries()[0]
     expect(entry[0]).toBe(HOME)
     expect(entry[1].original).toEqual(['a', 'b'])
     expect(entry[1].pending).toEqual(['b', 'a'])
@@ -153,11 +157,7 @@ describe('draft persistence', () => {
     await drafts.put(local, 'structural', 'not-a-manifest-key', { original: [], pending: [] })
     await drafts.put(local, 'structural', HOME, { original: ['a'], pending: [] })
     await attach(drafts, () => local).loaded()
-    expect(
-      useEditorStructuralStore()
-        .allEntries()
-        .map(([k]) => k),
-    ).toEqual([HOME])
+    expect([...useEditorStructuralStore()._keptEntries().keys()]).toEqual([HOME])
   })
 
   it('draftsLoaded() waits for the current load', async () => {

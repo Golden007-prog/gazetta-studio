@@ -20,7 +20,7 @@
 import { toRaw, watch } from 'vue'
 import type { ComponentEntry } from 'gazetta/types'
 import { useEditorStructuralStore } from '../stores/editorStructural.js'
-import { manifestFileKeyFromString } from '../utils/manifestFileKey.js'
+import { type ManifestFileKey, manifestFileKeyFromString } from '../utils/manifestFileKey.js'
 import { type PersistedEdit, usePersistedEditsStore } from '../stores/persistedEdits.js'
 import { type MetadataEntry, useEditorMetadataStore } from '../stores/editorMetadata.js'
 import type { DraftKind, DraftScope, DraftStore } from './types.js'
@@ -47,20 +47,17 @@ function structuralLane(): Lane {
   const store = useEditorStructuralStore()
   return {
     kind: 'structural',
-    read: () => new Map([...store.entries].map(([k, v]) => [k, toRaw(v)])),
+    read: () => store._keptEntries(),
     replace(entries) {
-      store.clearAll()
+      const drafts: Array<[ManifestFileKey, StructuralValue]> = []
       for (const [k, value] of entries) {
-        let key
         try {
-          key = manifestFileKeyFromString(k)
+          drafts.push([manifestFileKeyFromString(k), value as StructuralValue])
         } catch {
-          continue // a key shape this version doesn't know; keep the rest
+          // a key shape this version doesn't know; keep the rest
         }
-        const v = value as StructuralValue
-        // The hydration primitive keeps `original` (the discard baseline) as stored.
-        store._hydrateFromSnapshot(key, { original: v.original, pending: v.pending })
       }
+      store._hydrate(drafts)
     },
     serialize: entry => {
       const e = entry as StructuralValue
@@ -194,10 +191,13 @@ export function attachDraftPersistence(
   )
 
   const metadata = useEditorMetadataStore()
-  const stores = [useEditorStructuralStore(), usePersistedEditsStore()]
+  const structural = useEditorStructuralStore()
+  const edits = usePersistedEditsStore()
   const stopStores = watch(
     () => [
-      ...stores.map(s => [...s.entries.entries()]),
+      [...structural.entries.entries()],
+      [...structural.restored.entries()],
+      [...edits.entries.entries()],
       [...metadata.entries.entries()],
       [...metadata.restored.entries()],
     ],

@@ -4,7 +4,7 @@
  * Verifies:
  *  - pendingCount aggregates content (stash + current dirty) AND structural
  *  - allOverrides returns the typed DraftOverrides shape with both lanes
- *  - structural.clearAll fires on save success
+ *  - structural edits clear on save success
  *  - discard reverts content + structural (single-page focus)
  */
 import { describe, it, expect, beforeEach } from 'vitest'

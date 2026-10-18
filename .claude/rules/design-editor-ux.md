@@ -116,7 +116,9 @@ canonical, robots). All are pending until explicit save; all contribute to the d
 indicator and the unsaved-changes guard; all are reverted by Discard for the focused page;
 one Save writes them all. The writes are sequential, not one transaction: a failure part-way
 leaves the earlier writes on disk and keeps everything pending, including what already landed;
-the next Save rewrites it (the guard stays put on a failed save, #977). Edits made while a save
+the next Save rewrites it (the guard stays put on a failed save, #977). Structural and metadata drafts
+restored after a reload wait for their page: they become pending when it is opened in that
+locale (#979). Edits made while a save
 runs stay pending: what the save wrote becomes each lane's baseline, so text typed or a component
 moved meanwhile is neither marked saved nor dropped. Authors see the tree reflect a pending reorder immediately, but the disk file is
 unchanged until save lands. This avoids the asymmetry where a discard would revert content
@@ -169,9 +171,10 @@ outside the editor state, has exactly this gap ([`docs/audits/cms-seo-metadata-s
 - **Kept across reload:** a `metadata` lane in the draft store (`design-offline.md`). A restored
   entry **becomes active only when its page is opened in that locale**, like content drafts:
   until then it is stored but doesn't count for the guard, and no Save writes it. Opening the
-  page activates it, so the root dot shows straight away. Why not active at once, as structural
-  drafts are: reproduced 2026-10-18 — a reorder on `home`, reloaded onto an untouched `about`,
-  enabled Save there, and leaving showed "You have unsaved changes on about".
+  page activates it, so the root dot shows straight away. Restored structural drafts follow the
+  same rule (#979), and Don't Save on another page keeps them stored. Why not active at once:
+  reproduced 2026-10-18 — a reorder on `home`, reloaded onto an untouched `about`, enabled Save
+  there, and leaving showed "You have unsaved changes on about".
 - **One Save:** `PageMetadataEditor` loses its own Save button and reads/writes the lane. It keeps
   the Archive button, the SERP preview (showing pending values, as today), the counters and its
   test ids, and still renders only on the page root.

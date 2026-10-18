@@ -26,9 +26,15 @@ export interface StructuralEntry {
  * Pure state — no side effects, no other-store dependencies. Mutations are
  * intent-named (move / add / remove) so callers express intent and the store
  * enforces array shape.
+ *
+ * Drafts restored from the draft store wait in `restored` until their page
+ * is opened in that locale (`activate`): until then they don't count as
+ * pending and no Save writes them. Restored at once, a reorder acted on
+ * whichever page was open (#979).
  */
 export const useEditorStructuralStore = defineStore('editorStructural', () => {
   const entries = reactive<Map<string, StructuralEntry>>(new Map())
+  const restored = reactive<Map<string, StructuralEntry>>(new Map())
 
   /**
    * Replace an entry's `pending` with a new array reference. Vue's reactivity on
@@ -80,11 +86,23 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
    * No-op when no entry exists for the key.
    */
   function discard(key: ManifestFileKey) {
-    entries.delete(manifestFileKeyToString(key))
+    const k = manifestFileKeyToString(key)
+    entries.delete(k)
+    restored.delete(k)
   }
 
-  function clearAll() {
+  /** Drop every pending entry. Restored drafts of pages not opened yet stay. */
+  function clearActive() {
     entries.clear()
+  }
+
+  /** The page is open in this locale: its restored draft becomes pending. */
+  function activate(key: ManifestFileKey) {
+    const k = manifestFileKeyToString(key)
+    const draft = restored.get(k)
+    if (!draft) return
+    restored.delete(k)
+    if (!entries.has(k)) entries.set(k, draft)
   }
 
   /**
@@ -108,19 +126,23 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
   }
 
   /**
-   * Hydration primitive — restore a previously-persisted entry with
-   * both `original` and `pending` arrays as-is. Used by the pending-
-   * edits persistence module at admin boot. Leading underscore flags
-   * the method as internal: app code MUST use the intent-named
-   * mutators (move / add / remove / discard) which preserve the
-   * "original captured once" invariant. This bypasses that invariant
-   * because the persisted snapshot IS the prior captured original.
+   * Replace everything with drafts loaded from the draft store; they wait in
+   * `restored`. `original` (the discard baseline) is kept as stored.
    */
-  function _hydrateFromSnapshot(key: ManifestFileKey, entry: StructuralEntry): void {
-    entries.set(manifestFileKeyToString(key), {
-      original: entry.original,
-      pending: entry.pending,
-    })
+  function _hydrate(drafts: Array<[ManifestFileKey, StructuralEntry]>) {
+    entries.clear()
+    restored.clear()
+    for (const [key, entry] of drafts) {
+      restored.set(manifestFileKeyToString(key), { original: entry.original, pending: entry.pending })
+    }
+  }
+
+  /** What the draft store keeps: pending and restored entries, raw. */
+  function _keptEntries(): Map<string, StructuralEntry> {
+    const kept = new Map<string, StructuralEntry>()
+    for (const [k, entry] of restored) kept.set(k, toRaw(entry))
+    for (const [k, entry] of entries) kept.set(k, toRaw(entry))
+    return kept
   }
 
   function hasPendingFor(key: ManifestFileKey): boolean {
@@ -137,17 +159,20 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
 
   return {
     entries,
+    restored,
     moveComponent,
     addComponent,
     removeComponent,
     discard,
-    clearAll,
+    clearActive,
+    activate,
     markWritten,
     pendingFor,
     hasPendingFor,
     allEntries,
     pendingCount,
     hasPendingEdits,
-    _hydrateFromSnapshot,
+    _hydrate,
+    _keptEntries,
   }
 })

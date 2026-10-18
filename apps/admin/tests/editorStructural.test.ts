@@ -123,14 +123,16 @@ describe('editorStructural', () => {
     })
   })
 
-  describe('clearAll', () => {
-    it('removes all entries', () => {
+  describe('clearActive', () => {
+    it('removes all pending entries; restored drafts of pages not opened yet stay', () => {
       const store = useEditorStructuralStore()
+      store._hydrate([[headerKey, { original: baseComponents, pending: baseComponents.slice().reverse() }]])
       store.moveComponent(homeKey, baseComponents, 1, 2)
-      store.moveComponent(headerKey, baseComponents, 1, 2)
-      store.clearAll()
+      store.clearActive()
       expect(store.pendingCount).toBe(0)
       expect(store.hasPendingEdits).toBe(false)
+      store.activate(headerKey)
+      expect(store.hasPendingFor(headerKey)).toBe(true)
     })
   })
 

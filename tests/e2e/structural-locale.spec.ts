@@ -8,9 +8,13 @@ import { ComponentTreePom } from './pages/ComponentTree'
  * A reorder belongs to the locale file it was made in. Before the fix, a
  * French reorder restored after reloading in English was saved into
  * page.json — the French component list, French hero text included
- * (reproduced 2026-10-18).
+ * (reproduced 2026-10-18). Restored after a reload, it waits until the
+ * page is opened in French (#979).
  */
-test('a reorder on fr is saved to page.fr.json, even from the English page', async ({ page, testSite }) => {
+test('a reorder on fr waits for the French page after a reload and is saved to page.fr.json', async ({
+  page,
+  testSite,
+}) => {
   test.setTimeout(90_000)
   const dir = join(testSite.projectDir, 'sites/main/targets/local/pages/home')
   const enFile = join(dir, 'page.json')
@@ -48,17 +52,23 @@ test('a reorder on fr is saved to page.fr.json, even from the English page', asy
     // Wait for the debounced write so the reload can't happen first.
     await expect.poll(() => storedDraftKeys(page, 'structural')).toContain(JSON.stringify(['page', 'home', 'fr']))
 
-    // Reload in English: English shows its own order, not the French reorder.
+    const frReordered = await order()
+
+    // Reload in English: English shows its own order, and the French reorder
+    // isn't pending here.
     await page.goto('/admin/pages/home/edit')
     await tree.row('hero').waitFor({ timeout: 20000 })
     expect(await order()).toBe(enTree)
-
-    // Save from the English page writes the pending French reorder to the French file.
     const saveBtn = page.locator('[data-testid="save-btn"]')
+    await expect(saveBtn).toBeDisabled()
+
+    // Back on French: the reorder is pending again; Save writes it to the French file.
+    await page.goto('/admin/pages/home/edit?locale=fr')
+    await tree.row('hero').waitFor({ timeout: 20000 })
+    await expect.poll(order).toBe(frReordered)
     await saveBtn.click()
     await expect(saveBtn).toBeDisabled({ timeout: 10000 })
-    // English keeps its order and its English text. (Save also rewrites the
-    // open English page, unchanged in meaning — so compare meaning, not bytes.)
+    // English keeps its order and its English text. (Compare meaning, not bytes.)
     expect(names(enFile)).toEqual(enOrder)
     expect(heroTitle(enFile)).toBe(enHero)
     const fr = names(frFile)
