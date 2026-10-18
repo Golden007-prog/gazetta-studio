@@ -1,15 +1,16 @@
 /**
  * Page metadata is per locale file (page.fr.json has its own). The
- * editor loads the active locale's metadata, so its save must write that
- * same file. Reproduced 2026-10-18: editing the French page's title and
- * saving wrote it into page.json.
+ * editor loads the active locale's metadata, so an edit belongs to that
+ * locale and is saved there (the save itself: metadataLane.test.ts).
+ * Reproduced 2026-10-18: editing the French page's title and saving
+ * wrote it into page.json.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PageMetadataEditor from '../src/client/components/PageMetadataEditor.vue'
 import { api } from '../src/client/api/client.js'
-import { PAGES_API, type PagesApi } from '../src/client/composables/api.js'
+import { useEditorMetadataStore } from '../src/client/stores/editorMetadata.js'
 import { useLocaleStore } from '../src/client/stores/locale.js'
 import { useSelectionStore } from '../src/client/stores/selection.js'
 import { useSiteStore } from '../src/client/stores/site.js'
@@ -42,36 +43,17 @@ describe('the selection records the locale its page was loaded for', () => {
   })
 })
 
-describe('PageMetadataEditor saves to the locale it loaded', () => {
-  async function editAndSave(locale: string | undefined) {
-    const updatePage = vi.fn(async () => ({ ok: true }))
-    const selection = useSelectionStore()
-    selection.$patch({
+describe('PageMetadataEditor edits the locale it loaded', () => {
+  it.each([
+    ['fr', { kind: 'page', name: 'home', locale: 'fr' }, { kind: 'page', name: 'home' }],
+    [undefined, { kind: 'page', name: 'home' }, { kind: 'page', name: 'home', locale: 'fr' }],
+  ] as const)('loaded for %s: the edit is pending for that locale only', async (locale, key, other) => {
+    useSelectionStore().$patch({
       selection: { type: 'page', name: 'home', detail: detail('Gazetta — CMS Composable'), locale } as never,
     })
-    vi.spyOn(selection, 'reload').mockResolvedValue(undefined as never)
-    const wrapper = mount(PageMetadataEditor, {
-      global: { provide: { [PAGES_API as symbol]: { updatePage } as unknown as PagesApi } },
-    })
+    const wrapper = mount(PageMetadataEditor)
     await wrapper.find('[data-testid="meta-title"]').setValue('Titre modifié')
-    await wrapper.find('[data-testid="metadata-save"]').trigger('click')
-    await flushPromises()
-    return updatePage
-  }
-
-  it('French page → writes page.fr.json', async () => {
-    const updatePage = await editAndSave('fr')
-    expect(updatePage).toHaveBeenCalledWith('home', { metadata: { title: 'Titre modifié' } }, { locale: 'fr' })
-  })
-
-  it('default locale → writes page.json (no locale)', async () => {
-    const updatePage = await editAndSave(undefined)
-    const [name, payload, opts] = updatePage.mock.calls[0] as unknown as [
-      string,
-      unknown,
-      { locale?: string } | undefined,
-    ]
-    expect([name, payload]).toEqual(['home', { metadata: { title: 'Titre modifié' } }])
-    expect(opts?.locale).toBeUndefined()
+    expect(useEditorMetadataStore().pendingFor(key)).toStrictEqual({ title: 'Titre modifié' })
+    expect(useEditorMetadataStore().pendingFor(other)).toBeNull()
   })
 })

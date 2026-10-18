@@ -13,13 +13,18 @@ import { useActiveTargetStore } from '../stores/activeTarget.js'
 import { useSiteStore } from '../stores/site.js'
 import { useEditorStashStore } from '../stores/editorStash.js'
 import { useEditorStructuralStore } from '../stores/editorStructural.js'
-import { type MetadataKey, type MetadataValue, useEditorMetadataStore } from '../stores/editorMetadata.js'
+import {
+  type MetadataKey,
+  type MetadataTextField,
+  type MetadataValue,
+  useEditorMetadataStore,
+} from '../stores/editorMetadata.js'
 import { type ManifestFileKey, manifestFileKeyFromString } from '../utils/manifestFileKey.js'
 import { useEditorPersistenceStore, type ManifestWrite } from '../stores/editorPersistence.js'
 import { useEditorContentStore, type EditingTarget } from '../stores/editorContent.js'
 import { useValidationIssuesStore } from '../stores/validationIssues.js'
 import { type EditorSelection, selectionToStashKey, selectionToErrorLabel } from './editorSelection.js'
-import { api, StaleSaveError, ValidationFailedError } from '../api/client.js'
+import { api, type PageMetadata, StaleSaveError, ValidationFailedError } from '../api/client.js'
 import { useLocaleStore } from '../stores/locale.js'
 import { useEditorEtagsStore, manifestPath } from '../stores/editorEtags.js'
 import { useSaveConflictsStore } from '../stores/saveConflicts.js'
@@ -597,6 +602,30 @@ export function useEditorActions() {
     usePreviewStore().invalidateDraft()
   }
 
+  // --- Page metadata ---
+
+  /** The selected page's metadata as loaded, in the locale it was loaded for. */
+  function loadedMetadata(): PageMetadata | null {
+    const sel = useSelectionStore().selection
+    return sel?.type === 'page' ? (sel.detail.metadata ?? null) : null
+  }
+
+  /** The selected page's metadata as the form shows it: pending if any, otherwise as loaded. */
+  const metadataValue = computed<MetadataValue>(() => {
+    const key = currentMetadataKey()
+    return (key && metadata.pendingFor(key)) || loadedMetadata() || {}
+  })
+
+  function editMetadata(field: MetadataTextField, value: string) {
+    const key = currentMetadataKey()
+    if (key) metadata.setField(key, loadedMetadata(), field, value)
+  }
+
+  function setMetadataNoindex(on: boolean) {
+    const key = currentMetadataKey()
+    if (key) metadata.setNoindex(key, loadedMetadata(), on)
+  }
+
   // --- Structural operations (with preview side effects) ---
 
   function moveComponentStructural(
@@ -899,6 +928,8 @@ export function useEditorActions() {
     markDirty,
     revertStashed,
     revertComponent,
+    editMetadata,
+    setMetadataNoindex,
     moveComponentStructural,
     addComponentStructural,
     removeComponentStructural,
@@ -911,6 +942,7 @@ export function useEditorActions() {
     pendingCount,
     hasPendingEdits,
     hasPendingMetadata,
+    metadataValue,
     hasPendingEdit: (path: string) => stash.has(path),
     allOverrides,
   }

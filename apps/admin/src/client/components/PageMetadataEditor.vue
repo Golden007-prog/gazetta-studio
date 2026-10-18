@@ -1,75 +1,38 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { computed } from 'vue'
 import { useSelectionStore } from '../stores/selection.js'
 import { useSiteStore } from '../stores/site.js'
-import { useToastStore } from '../stores/toast.js'
-import { usePagesApi } from '../composables/api.js'
-import type { PageMetadata } from '../api/client.js'
+import { useEditingStore } from '../stores/editing.js'
+import { hasNoindex, type MetadataTextField } from '../stores/editorMetadata.js'
 import { useArchiveStore } from '../stores/archive.js'
 
 const selection = useSelectionStore()
 const site = useSiteStore()
-const toast = useToastStore()
-const pagesApi = usePagesApi()
+const editing = useEditingStore()
 const archive = useArchiveStore()
-
-const title = ref('')
-const description = ref('')
-const ogImage = ref('')
-const canonical = ref('')
-const noindex = ref(false)
-const saving = ref(false)
-const dirty = ref(false)
 
 const TITLE_MAX = 60
 const DESC_MAX = 160
 
-function load(meta: PageMetadata | undefined) {
-  title.value = meta?.title ?? ''
-  description.value = meta?.description ?? ''
-  ogImage.value = meta?.ogImage ?? ''
-  canonical.value = meta?.canonical ?? ''
-  noindex.value = meta?.robots?.includes('noindex') ?? false
-  dirty.value = false
+// The fields read and write the editor's pending metadata, so the
+// editor's one Save writes them and the unsaved-changes guard sees them.
+function field(name: MetadataTextField) {
+  return computed({
+    get: () => {
+      const value = editing.metadataValue[name]
+      return typeof value === 'string' ? value : ''
+    },
+    set: (value: string) => editing.editMetadata(name, value),
+  })
 }
-
-watch(
-  () => selection.detail,
-  d => {
-    if (d && 'metadata' in d) load(d.metadata as PageMetadata | undefined)
-    else load(undefined)
-  },
-  { immediate: true },
-)
-
-function markDirty() {
-  dirty.value = true
-}
-
-async function save() {
-  if (!selection.name || selection.type !== 'page') return
-  saving.value = true
-  try {
-    const metadata: PageMetadata = {}
-    if (title.value) metadata.title = title.value
-    if (description.value) metadata.description = description.value
-    if (ogImage.value) metadata.ogImage = ogImage.value
-    if (canonical.value) metadata.canonical = canonical.value
-    if (noindex.value) metadata.robots = 'noindex'
-    // Save to the locale the form was loaded from: metadata is per locale
-    // file (page.fr.json has its own). Without it, editing the French
-    // page's title wrote it into page.json (reproduced 2026-10-18).
-    const locale = selection.selection?.locale
-    await pagesApi.updatePage(selection.name, { metadata }, locale ? { locale } : undefined)
-    dirty.value = false
-    await selection.reload()
-    toast.show('Metadata saved')
-  } catch (err) {
-    toast.showError(err, 'Failed to save metadata')
-  } finally {
-    saving.value = false
-  }
-}
+const title = field('title')
+const description = field('description')
+const ogImage = field('ogImage')
+const canonical = field('canonical')
+const noindex = computed({
+  get: () => hasNoindex(editing.metadataValue.robots),
+  set: (on: boolean) => editing.setMetadataNoindex(on),
+})
 
 function charClass(current: number, max: number): string {
   if (current === 0) return 'ok'
@@ -131,16 +94,13 @@ function onArchive() {
           title="Archive this page (soft-delete)">
           <i class="pi pi-archive" /> Archive
         </button>
-        <button v-if="dirty" class="meta-save-btn" :disabled="saving" @click="save" data-testid="metadata-save">
-          {{ saving ? 'Saving…' : 'Save' }}
-        </button>
       </div>
     </div>
 
     <div class="meta-fields">
         <div class="field">
           <label for="meta-title">Title</label>
-          <input id="meta-title" v-model="title" @input="markDirty"
+          <input id="meta-title" v-model="title"
             :placeholder="fallbackTitle ? `${fallbackTitle} (auto)` : 'Page title for search engines'"
             data-testid="meta-title" />
           <span v-if="title" :class="['char-count', charClass(title.length, TITLE_MAX)]">{{ title.length }}/{{ TITLE_MAX }}</span>
@@ -148,7 +108,7 @@ function onArchive() {
 
         <div class="field">
           <label for="meta-description">Description</label>
-          <textarea id="meta-description" v-model="description" @input="markDirty"
+          <textarea id="meta-description" v-model="description"
             :placeholder="fallbackDescription ? `${fallbackDescription} (auto)` : 'Brief description for search results'"
             rows="2" data-testid="meta-description" />
           <span v-if="description" :class="['char-count', charClass(description.length, DESC_MAX)]">{{ description.length }}/{{ DESC_MAX }}</span>
@@ -156,20 +116,20 @@ function onArchive() {
 
         <div class="field">
           <label for="meta-og-image">OG Image URL</label>
-          <input id="meta-og-image" v-model="ogImage" @input="markDirty" placeholder="https://example.com/image.jpg"
+          <input id="meta-og-image" v-model="ogImage" placeholder="https://example.com/image.jpg"
             data-testid="meta-og-image" />
         </div>
 
         <div class="field">
           <label for="meta-canonical">Canonical URL</label>
-          <input id="meta-canonical" v-model="canonical" @input="markDirty"
+          <input id="meta-canonical" v-model="canonical"
             :placeholder="`Leave empty — auto-generated from route (${fallbackCanonical})`"
             data-testid="meta-canonical" />
         </div>
 
         <div class="field field-checkbox">
           <label class="checkbox-label">
-            <input type="checkbox" v-model="noindex" @change="markDirty" data-testid="meta-noindex" />
+            <input type="checkbox" v-model="noindex" data-testid="meta-noindex" />
             <span>Hide from search engines</span>
           </label>
           <span class="checkbox-hint">Adds <code>noindex</code> robots directive. Page won't appear in sitemap.</span>
@@ -229,17 +189,6 @@ function onArchive() {
   color: var(--color-warning-fg);
   border-color: var(--color-warning-fg);
 }
-.meta-save-btn {
-  font-size: 0.6875rem;
-  padding: 0.1875rem 0.5rem;
-  border: 1px solid var(--p-primary-color);
-  border-radius: var(--p-border-radius-sm);
-  background: var(--p-primary-color);
-  color: #fff;
-  cursor: pointer;
-  font-family: inherit;
-}
-.meta-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .meta-fields { display: flex; flex-direction: column; gap: 0.625rem; }
 .field { display: flex; flex-direction: column; gap: 0.25rem; position: relative; }
 .field label {

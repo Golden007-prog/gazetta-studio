@@ -23,9 +23,9 @@ test("editing the French page's metadata writes page.fr.json, not page.json", as
     await title.waitFor({ timeout: 20000 })
     await expect(title).toHaveValue(String(metadata(frFile).title))
     await title.fill('Titre modifié (FR)')
-    const save = page.locator('[data-testid="metadata-save"]')
+    const save = page.locator('[data-testid="save-btn"]')
     await save.click()
-    await expect(save).toBeHidden({ timeout: 10000 }) // shown only while dirty
+    await expect(save).toBeDisabled({ timeout: 10000 })
 
     expect(metadata(frFile).title).toBe('Titre modifié (FR)')
     expect(metadata(enFile)).toEqual(enMetadata)
@@ -37,8 +37,8 @@ test("editing the French page's metadata writes page.fr.json, not page.json", as
 
 test('after a French save the editor stays French', async ({ page, testSite }) => {
   // selection.reload() used to reload the default locale: after a French
-  // metadata save the form and the components showed English under
-  // ?locale=fr, and the next content save landed in neither file.
+  // save the form and the components showed English under ?locale=fr, and
+  // the next content save landed in neither file.
   test.setTimeout(90_000)
   const dir = join(testSite.projectDir, 'sites/main/targets/local/pages/home')
   const enFile = join(dir, 'page.json')
@@ -57,9 +57,9 @@ test('after a French save the editor stays French', async ({ page, testSite }) =
     const meta = page.locator('[data-testid="meta-title"]')
     await meta.waitFor({ timeout: 20000 })
     await meta.fill('Titre FR modifié')
-    const metaSave = page.locator('[data-testid="metadata-save"]')
-    await metaSave.click()
-    await expect(metaSave).toBeHidden({ timeout: 10000 })
+    const save = page.locator('[data-testid="save-btn"]')
+    await save.click()
+    await expect(save).toBeDisabled({ timeout: 10000 })
     await expect(meta).toHaveValue('Titre FR modifié')
 
     await new ComponentTreePom(page).open('hero')
@@ -67,7 +67,6 @@ test('after a French save the editor stays French', async ({ page, testSite }) =
     await hero.waitFor({ timeout: 20000 })
     await expect(hero).toHaveValue(String(frHero))
     await hero.fill(`${frHero} — modifié`)
-    const save = page.locator('[data-testid="save-btn"]')
     await save.click()
     await expect(save).toBeDisabled({ timeout: 10000 })
 
