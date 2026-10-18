@@ -1,18 +1,28 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { rm } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createFilesystemProvider, createSourceContext, loadSiteConfig, siteConfigToManifest } from 'gazetta'
 import { createAdminApp } from '../src/server/index.js'
 
 const projectSiteDir = resolve(import.meta.dirname, '../../../examples/starter/sites/main')
-// Content lives under the local target; tests mutate it in-place.
-const contentDir = resolve(projectSiteDir, 'targets/local')
+const starterContentDir = resolve(projectSiteDir, 'targets/local')
 const templatesDir = resolve(import.meta.dirname, '../../../examples/starter/templates')
-const storage = createFilesystemProvider(contentDir)
+// The write/archive/purge tests mutate content, so each run works on its own
+// copy of the starter target: a crashed or concurrent run can't leave the
+// repo fixture dirty or collide on the fixed `.test-*` names (rule 26).
+let contentDir: string
 let app: Hono
 
 beforeAll(async () => {
+  contentDir = await mkdtemp(join(tmpdir(), 'gazetta-admin-api-'))
+  // `.gazetta/` holds derived state (history, audit, sidecars) from other runs.
+  await cp(starterContentDir, contentDir, {
+    recursive: true,
+    filter: src => !src.slice(starterContentDir.length).split(/[\\/]/).includes('.gazetta'),
+  })
+  const storage = createFilesystemProvider(contentDir)
   // Load project-level manifest from the TS config so target storage doesn't need site.config.ts.
   const loaded = await loadSiteConfig(projectSiteDir)
   if (!loaded) throw new Error(`No site.config.ts at ${projectSiteDir}`)
@@ -22,20 +32,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  const dirs = [
-    'pages/.test-put-page',
-    'pages/.test-put-comp',
-    'pages/.test-page',
-    'pages/.test-nested',
-    'pages/.test-comp-parent',
-    'pages/test-to-archive',
-    'pages/test-to-purge',
-    'fragments/.test-put-frag',
-    'fragments/.test-frag',
-    'fragments/test-to-archive',
-    'fragments/test-to-purge',
-  ]
-  await Promise.all(dirs.map(d => rm(resolve(contentDir, d), { recursive: true, force: true })))
+  if (contentDir) await rm(contentDir, { recursive: true, force: true })
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -318,12 +315,6 @@ describe('POST /api/pages (create)', () => {
 })
 
 describe('DELETE /api/pages/:name', () => {
-  // Clean any leftover dirs from prior runs so the POST returns 200 (not 409).
-  beforeAll(async () => {
-    await rm(resolve(contentDir, 'pages/test-to-archive'), { recursive: true, force: true })
-    await rm(resolve(contentDir, 'pages/test-to-purge'), { recursive: true, force: true })
-  })
-
   it('archives a page (soft-delete is the default per Cut 7 cutover)', async () => {
     // Create first
     await app.request('/api/pages', {
@@ -395,11 +386,6 @@ describe('POST /api/fragments (create)', () => {
 })
 
 describe('DELETE /api/fragments/:name', () => {
-  beforeAll(async () => {
-    await rm(resolve(contentDir, 'fragments/test-to-archive'), { recursive: true, force: true })
-    await rm(resolve(contentDir, 'fragments/test-to-purge'), { recursive: true, force: true })
-  })
-
   it('archives a fragment (soft-delete is the default per Cut 7 cutover)', async () => {
     await app.request('/api/fragments', {
       method: 'POST',
