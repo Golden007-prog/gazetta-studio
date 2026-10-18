@@ -85,7 +85,7 @@ jobs:
         run: npm ci
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@stable
 
       # Restore the decision-log from cache (design-cut-planner.md Q7a).
       # Raw per-action signal; the monthly compactor distills it into

@@ -57,7 +57,7 @@ jobs:
         run: npm run build -w packages/gazetta
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@stable
 
       - name: Run triage bot
         env:

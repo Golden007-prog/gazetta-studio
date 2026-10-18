@@ -83,7 +83,7 @@ jobs:
         run: npm run build -w packages/gazetta
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@stable
 
       # Restore the reviewer-log from cache. The bot appends Agent B
       # verdicts on every loop iteration; the cache keeps the file

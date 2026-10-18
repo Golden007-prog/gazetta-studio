@@ -53,7 +53,7 @@ jobs:
         run: npm ci
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@stable
 
       - name: Run flake watcher
         env:

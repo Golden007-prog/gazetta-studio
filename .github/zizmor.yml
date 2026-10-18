@@ -1,8 +1,11 @@
 # zizmor config. Run with `npm run lint:actions:security`; CI runs it in
 # .github/workflows/zizmor.yml.
 rules:
-  # Temporary: the pinned Claude Code CLI lands in its own PR, which
-  # removes this entry.
+  # The bots install the Claude Code CLI from its `stable` dist-tag:
+  # about a week old and regression-filtered by Anthropic, so a freshly
+  # published bad release never reaches them. zizmor flags any install
+  # outside a lockfile, even an exact version; the lockfile route would
+  # put the CLI's ~286 MB platform binary into every `npm ci`.
   adhoc-packages:
     disable: true
 
