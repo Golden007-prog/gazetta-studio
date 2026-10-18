@@ -91,18 +91,24 @@ export const useSelectionStore = defineStore('selection', () => {
     }
   }
 
-  /** Refresh the current selection's detail from the server */
+  /**
+   * Refresh the current selection's detail from the server — the same
+   * locale it was loaded for. Without the locale this reloaded the
+   * default locale: after a French save the editor showed English data
+   * under ?locale=fr (reproduced 2026-10-18).
+   */
   async function reload() {
     if (!selection.value) return
+    const { name, locale } = selection.value
     try {
       if (selection.value.type === 'page') {
-        const { data: detail, etag } = await api.getPageWithEtag(selection.value.name)
-        if (etag) useEditorEtagsStore().set(manifestPath('page', selection.value.name), etag)
-        selection.value = { type: 'page', name: selection.value.name, detail }
+        const { data: detail, etag } = await api.getPageWithEtag(name, { locale })
+        if (etag) useEditorEtagsStore().set(manifestPath('page', name, locale), etag)
+        selection.value = { type: 'page', name, detail, locale }
       } else {
-        const { data: detail, etag } = await api.getFragmentWithEtag(selection.value.name)
-        if (etag) useEditorEtagsStore().set(manifestPath('fragment', selection.value.name), etag)
-        selection.value = { type: 'fragment', name: selection.value.name, detail }
+        const { data: detail, etag } = await api.getFragmentWithEtag(name, { locale })
+        if (etag) useEditorEtagsStore().set(manifestPath('fragment', name, locale), etag)
+        selection.value = { type: 'fragment', name, detail, locale }
       }
     } catch (err) {
       toast.showError(err, 'Failed to reload')
