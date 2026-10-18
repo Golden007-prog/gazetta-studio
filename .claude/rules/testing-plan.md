@@ -132,8 +132,10 @@ Each is a 30-line addition. Land one per relevant feature cut, not as a batch.
 
 - **Wait for the stored write, in both directions.** Poll storage (`storedDraftTitles` / `storedDraftKeys` in `tests/e2e/helpers.ts`) before a reload, and again after a discard; never sleep and reload. The Don't Save test first passed *without* the fix because it reloaded before the debounced write (#964).
 - **Check what's stored in the failure case, not only after success.** Offline cold load erased the persisted query cache — 4 queries stored before going offline, 0 after — and only the offline e2e test showed it (#970).
-- **The worker's site copy is shared across files.** With `fullyParallel: true` one worker runs tests from different files in any order on one copy. Use unique names, clean up in `afterEach`, and read the state a test depends on at its start; never assume the starter's content (#972: two tests created the same redirect → 409; #973: a scenario had reset English `home`).
-- **Before pushing a new e2e spec, run it with `--repeat-each=3 --workers=1`.** That catches a test leaking into its own next run. It can't put another file in between — files run in path order and repeats stay together — so independence from other files has to come from the test itself (previous line).
+- **The worker's site copy is shared across files.** One worker runs tests from several files on one copy, so other files' tests run in between yours. Use unique names, clean up in `afterEach`, and read the state a test depends on at its start; never assume the starter's content (#972: two tests created the same redirect → 409; #973: a scenario had reset English `home`).
+- **Before pushing a new e2e spec, run it twice in one worker:**
+  - `--repeat-each=3 --workers=1` on the spec alone catches a test leaking into its own next run (#972).
+  - `npx playwright test --project=dev tests/e2e/scenarios <spec> --repeat-each=2 --workers=1` reruns your spec after the scenario tests: each repeat is one pass over all listed files in path order (checked with `--reporter=list`; `--list` shows a different order). This catches assumptions about state other files leave (#973).
 - **Compare files by meaning, not bytes.** A save that reorders JSON keys looked like metadata loss.
 
 ## Cross-foundation integration test punch list
