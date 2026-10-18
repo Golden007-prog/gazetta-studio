@@ -7,7 +7,6 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import type { EditorMount } from '../types.js'
 import type { IChangeEvent } from '@rjsf/core'
@@ -673,8 +672,10 @@ function RichTextWidget(props: WidgetProps) {
       StarterKit.configure({
         heading: { levels: [2, 3] },
         codeBlock: { HTMLAttributes: { spellcheck: 'false' } },
+        // StarterKit 3 bundles Link; configure it here rather than adding
+        // Link again, which registers a duplicate extension.
+        link: { openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer' } },
       }),
-      Link.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer' } }),
       Placeholder.configure({ placeholder: 'Start writing...' }),
     ],
     content: props.value || '',
@@ -684,10 +685,21 @@ function RichTextWidget(props: WidgetProps) {
 
   if (!editor) return null
 
-  const Btn = ({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) => (
+  const Btn = ({
+    active,
+    onClick,
+    testId,
+    children,
+  }: {
+    active?: boolean
+    onClick: () => void
+    testId?: string
+    children: React.ReactNode
+  }) => (
     <button
       type="button"
       className={`gz-rt-btn${active ? ' active' : ''}`}
+      data-testid={testId ? `richtext-${testId}` : undefined}
       onMouseDown={e => {
         e.preventDefault()
         onClick()
@@ -709,50 +721,78 @@ function RichTextWidget(props: WidgetProps) {
   }
 
   return (
-    <div className="gz-richtext">
+    <div className="gz-richtext" data-testid="richtext-editor">
       {/* Fixed toolbar */}
       <div className="gz-richtext-toolbar">
-        <Btn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <Btn testId="bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
           B
         </Btn>
-        <Btn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <Btn
+          testId="italic"
+          active={editor.isActive('italic')}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+        >
           I
         </Btn>
-        <Btn active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}>
+        <Btn
+          testId="strike"
+          active={editor.isActive('strike')}
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+        >
           S
         </Btn>
-        <Btn active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()}>
+        <Btn testId="code" active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()}>
           &lt;/&gt;
         </Btn>
         <div className="gz-rt-sep" />
         <Btn
+          testId="h2"
           active={editor.isActive('heading', { level: 2 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         >
           H2
         </Btn>
         <Btn
+          testId="h3"
           active={editor.isActive('heading', { level: 3 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         >
           H3
         </Btn>
         <div className="gz-rt-sep" />
-        <Btn active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <Btn
+          testId="bullet-list"
+          active={editor.isActive('bulletList')}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
           &bull;
         </Btn>
-        <Btn active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <Btn
+          testId="ordered-list"
+          active={editor.isActive('orderedList')}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        >
           1.
         </Btn>
-        <Btn active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+        <Btn
+          testId="blockquote"
+          active={editor.isActive('blockquote')}
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        >
           &ldquo;
         </Btn>
         <div className="gz-rt-sep" />
-        <Btn active={editor.isActive('link')} onClick={addLink}>
+        <Btn testId="link" active={editor.isActive('link')} onClick={addLink}>
           Link
         </Btn>
-        <Btn onClick={() => editor.chain().focus().setHorizontalRule().run()}>&#x2014;</Btn>
-        <Btn active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+        <Btn testId="hr" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+          &#x2014;
+        </Btn>
+        <Btn
+          testId="code-block"
+          active={editor.isActive('codeBlock')}
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        >
           Code
         </Btn>
       </div>
