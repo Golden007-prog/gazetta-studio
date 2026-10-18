@@ -56,6 +56,8 @@ Walk the design's primitives:
 
 Walk the technical design tree — architecture, data model, lifecycle, multi-instance, cache, audit, hooks, validation, render, plugin, offline, collaboration. Resolve one Q at a time per the grilling pattern.
 
+When the design changes what an existing action does (Discard, Save, a store method several components call), list the action's callers (`git grep` its name) and say what each should do after the change. #978 added page metadata to the page-level Discard without listing its callers. A component row's revert also called it, so reverting the open component would have dropped the page's unsaved SEO edits. It surfaced while wiring #981 and went back to the maintainer as a UX question.
+
 Implementation grilling is allowed to push back on UX choices that are technically expensive — but the pushback goes back to UX-grilling, not absorbed silently. "We can't do X because the architecture..." is the right warning sign that the UX needs revisiting.
 
 **Durable artifact**: a design doc — see Phase 3.

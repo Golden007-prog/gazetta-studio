@@ -163,10 +163,13 @@ Default for new rules: untagged (apply universally). Add `[local]` only when bot
    - **Same affordances regardless of system state** when possible — e.g., save button identical online and offline; author's mental model unchanged by connection state.
    - **Plain language** — "Was edited by someone else" not "STALE conflict"; "Saved locally" not "Queued."
    - **When tempted to add a help tooltip, fix the UI instead** — if the indicator needs explanation, the indicator is wrong.
+   - **Offer UX choices as what the author does and sees** — when options behave differently, describe each as the author's steps and what they see afterwards, next to today's behaviour. The mechanism that differs hides the consequence the decision is about.
 
    Why: every sub-decision in UX work risks accumulating cognitive load on users. The default question for any UI element should be "can I remove this without losing meaning?" not "what should I add?"
 
    Example: `design-offline.md`'s sync-state visibility went through three iterations — initially 5 explicit states with "Queued" badges and numeric progress; the Krug-aligned final has a cloud-with-slash icon (synced is the absence of indicator), plain-language messages, and an identical save button online/offline. Two-thirds of the original UI surface removed without losing meaning.
+
+   Example (offering a choice): #981's row-revert question first described each option's mechanism ("a row's revert keeps calling Discard when its component is open"), and the maintainer asked for the UX view. The second version was a table of author scenarios showing what each option undoes, next to today's behaviour. Its key row: with hero open, reverting hero would also drop the page's SEO edit, which isn't on screen. That settled it in one answer.
 
 24. **Validate every primitive against the 5K-page envelope.** Per [`design-scale.md`](.claude/rules/design-scale.md), Gazetta targets 5,000 pages / 20,000 assets / 50 components-per-page as the operating envelope. Every new primitive (route handler, validator, walk, lookup, sidecar, cache key) must hold there:
 
@@ -328,16 +331,17 @@ Default for new rules: untagged (apply universally). Add `[local]` only when bot
 
    **(d) `git rebase` auto-drops cherry-pick equivalents.** When a stacked PR's parent merges, rebasing the child onto fresh main makes git skip the parent's commits via patch-id detection (`warning: skipped previously applied commit XXX`). No interactive rebase needed; no manual `git drop`. The opposite — `--reapply-cherry-picks` — preserves them, but the default is what you want for stacked-PR cleanup. Reference example: today's #325 → #326 → #327 chain cleaned up with three plain `git rebase origin/main` calls.
 
-   **(e) Monitor commands polling `gh pr checks` must filter to the latest run.** Operational discipline that flows from (c). When watching a PR's CI completion with a poll loop, a bare `gh pr checks <N> --json name,bucket` query returns checks across ALL runs — cancelled + current + everything. The naïve "all non-pending" exit condition (`all(.bucket != "pending")`) evaluates true the moment the older cancelled run's jobs settle, even though the current run still has 10 pending jobs. Monitor exits early; you miss the actual completion.
+   **(e) Monitor commands polling `gh pr checks` must filter to the newest run of each workflow.** Operational discipline that flows from (c). When watching a PR's CI completion with a poll loop, a bare `gh pr checks <N> --json name,bucket` query returns checks across ALL runs — cancelled + current + everything. The naïve "all non-pending" exit condition (`all(.bucket != "pending")`) evaluates true the moment the older cancelled run's jobs settle, even though the current run still has 10 pending jobs. Monitor exits early; you miss the actual completion.
 
-   The fix: filter to the highest run ID before evaluating completion:
+   Filtering to the newest run *overall* isn't enough, because each workflow has its own run ID. A PR here runs CI (16 checks) plus `actionlint` and `zizmor` (one check each), and on #981 the highest run ID was zizmor's. A loop filtered to it stops when zizmor finishes, while CI is still running. If it also expects CI's job count, it never stops: the #973 and #981 watchers waited for more than 10 checks and ran until stopped by hand.
+
+   The fix: keep the newest run of each workflow before evaluating completion:
 
    ```bash
    while true; do
-     s=$(gh pr checks <N> --json name,bucket,link)
-     # Group by run ID; pick the max (current run)
-     latest=$(jq -r '[.[] | (.link | capture("runs/(?<id>[0-9]+)").id) | tonumber] | max' <<<"$s")
-     current=$(jq --arg rid "$latest" '[.[] | select(.link | contains("runs/" + $rid))]' <<<"$s")
+     s=$(gh pr checks <N> --json name,workflow,bucket,link)
+     # Per workflow, keep only the jobs of its newest run
+     current=$(jq '[group_by(.workflow)[] | (map(.link | capture("runs/(?<id>[0-9]+)").id | tonumber) | max) as $rid | .[] | select(.link | contains("runs/\($rid)/"))]' <<<"$s")
      jq -e 'length > 0 and all(.bucket != "pending")' <<<"$current" >/dev/null && break
      sleep 30
    done

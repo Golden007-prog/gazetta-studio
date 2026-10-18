@@ -88,7 +88,13 @@ The bot opens a draft PR when its judgment says scope should change;
 exits silently otherwise. No human-curated next-list.
 
 Don't gate on score yet — observational metric until each module's baseline
-stabilises. Treat survived mutants as test-quality bugs.
+stabilises. A survived mutant, from Stryker or from breaking code by hand to
+check a test, is either a missing test or code that changes nothing; decide
+which before writing a test. If no input can tell the mutant from the
+original, delete the code, or, if it stays for a reason tests can't see
+(speed, say), note that beside it. In #981 each of the four survivors pointed
+at a case no test checked, and got a test; #984 deleted a `markWritten` branch
+that gave the same answer as the comparison after it.
 
 **Admin-API route track (parallel to the internal-module list above).** Tautological
 tests slip most easily where assertions match observed response shapes ("expect what
@@ -128,9 +134,9 @@ in 1 file. Targets where round-trip / fallback chain semantics matter:
 
 Each is a 30-line addition. Land one per relevant feature cut, not as a batch.
 
-**Persistence and shared-site e2e tests** (from the #962 retrospective — each line is a failure that happened):
+**Persistence and shared-site e2e tests** (from the #962 and #978 retrospectives — each line is a failure that happened):
 
-- **Wait for the stored write, in both directions.** Poll storage (`storedDraftTitles` / `storedDraftKeys` in `tests/e2e/helpers.ts`) before a reload, and again after a discard; never sleep and reload. The Don't Save test first passed *without* the fix because it reloaded before the debounced write (#964).
+- **Wait for the stored write, in both directions.** Poll storage (`storedDraftTitles` / `storedDraftKeys` in `tests/e2e/helpers.ts`) before a reload, and again after a discard; never sleep and reload. The Don't Save test first passed *without* the fix because it reloaded before the debounced write (#964). When an edit isn't stored yet, or isn't stored at all, a reload can't show whether a discard dropped it: check inside the app instead, by switching away and back. The SEO Don't Save test does this with the locale (#981).
 - **Check what's stored in the failure case, not only after success.** Offline cold load erased the persisted query cache — 4 queries stored before going offline, 0 after — and only the offline e2e test showed it (#970).
 - **The worker's site copy is shared across files.** One worker runs tests from several files on one copy, so other files' tests run in between yours. Use unique names, clean up in `afterEach`, and read the state a test depends on at its start; never assume the starter's content (#972: two tests created the same redirect → 409; #973: a scenario had reset English `home`).
 - **Before pushing a new e2e spec, run it twice in one worker:**
@@ -189,6 +195,12 @@ Layout is flat under `tests/e2e/` (12 feature spec files), with subdirectories
 for `pages/` (POMs), `scenarios/` (cross-surface integration), and `matrix/`
 (env × editable × type parameterized). Worker-scoped temp-site fixture per
 [team-preferences rule 10](team-preferences.md).
+
+The `dev` project's servers run `gazetta dev`, which serves the admin from
+`apps/admin/` in your working tree through Vite. That's why breaking admin
+code by hand reaches e2e without a rebuild, and why a source edit made during
+a run reaches the tests still running. Keep other work as a patch until the
+run ends, as #981 did with cut 4 during its e2e mutation runs.
 
 POMs landed: `PublishPanel`, `SiteTree`, `ComponentTree`. Add a POM with its
 first consumer (avoid dead-code POMs), not in advance.
