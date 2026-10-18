@@ -29,6 +29,9 @@ test.describe('Rich-text field', () => {
     await prose.evaluate(el => {
       ;(el as HTMLElement & { editor: { commands: { focus(pos: 'end'): boolean } } }).editor.commands.focus('end')
     })
+    // tiptap applies the focus on the next animation frame; a key pressed
+    // before then is lost (seen in CI: Enter never split the paragraph).
+    await expect(prose).toBeFocused()
     // New paragraph after the existing body, made an H2.
     await page.keyboard.press('Enter')
     await editor.locator('[data-testid="richtext-h2"]').click()
