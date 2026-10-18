@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures'
 import { openEditor } from './helpers'
 import { SiteTreePom } from './pages/SiteTree'
@@ -149,6 +150,41 @@ test.describe('Target switch with unsaved edits', () => {
     await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
     await expect(titleField).toHaveValue(original + ' — dirty')
   })
+
+  test("Don't Save discards the edit, also after a reload", async ({ page }) => {
+    // The edit is mirrored to the persisted-drafts store as it is typed.
+    // "Don't Save" used to clear the editor but not that mirror, so the
+    // discarded text came back on the next reload.
+    test.setTimeout(60_000)
+    // Switching to staging previews an unpublished target, which answers
+    // 404 with its "No content on this target yet" placeholder.
+    test.info().annotations.push({ type: 'allow-console-errors' })
+    await openEditor(page, 'home')
+    await new ComponentTreePom(page).open('hero')
+    const titleField = page.locator('input[name="root_title"]').first()
+    await titleField.waitFor({ timeout: 15000 })
+    const original = await titleField.inputValue()
+    await titleField.fill(original + ' — discarded')
+    await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
+    // Wait for the debounced write so the test can't pass by reloading
+    // before the draft reached IndexedDB.
+    await expect.poll(() => storedDraftTitles(page)).toContain(original + ' — discarded')
+
+    await page.locator('[data-testid="active-target-indicator"]').click()
+    await page.locator('[data-testid="active-target-menu"]').getByRole('menuitem', { name: 'staging' }).click()
+    const dialog = page.getByRole('dialog', { name: /unsaved changes/i })
+    await dialog.waitFor({ timeout: 5000 })
+    await dialog.getByRole('button', { name: "Don't Save" }).click()
+    await expect(page.locator('[data-testid="active-target-indicator"]')).toContainText('staging')
+    // Discarding is a store change too, persisted after the same debounce.
+    await expect.poll(() => storedDraftTitles(page)).not.toContain(original + ' — discarded')
+
+    await page.goto('/admin/pages/home/edit?target=local')
+    await new ComponentTreePom(page).open('hero')
+    await titleField.waitFor({ timeout: 15000 })
+    await expect(titleField).toHaveValue(original)
+    await expect(page.locator('[data-testid="save-btn"]')).toBeDisabled()
+  })
 })
 
 test.describe('Target in URL', () => {
@@ -199,3 +235,19 @@ test.describe('Target in URL', () => {
     await expect(page.locator('[data-testid="active-target-indicator"]')).toContainText('staging')
   })
 })
+
+/** Titles held in the persisted-drafts snapshot in IndexedDB. */
+function storedDraftTitles(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((res, rej) => {
+      const req = indexedDB.open('gazetta-cache')
+      req.onsuccess = () => res(req.result)
+      req.onerror = () => rej(req.error)
+    })
+    const row = await new Promise<{ value?: { entries?: [string, { editedContent?: { title?: string } }][] } }>(res => {
+      const req = db.transaction('cache').objectStore('cache').get('pending-edits:dirty')
+      req.onsuccess = () => res(req.result ?? {})
+    })
+    return (row.value?.entries ?? []).map(([, e]) => e.editedContent?.title ?? '')
+  })
+}

@@ -240,3 +240,60 @@ describe('Cut 8b — discard / revertStashed clean up persisted entries', () => 
     expect(persistedStore.has(key)).toBe(false)
   })
 })
+
+// clear() is what "Don't Save" runs (target switch, fragment navigation,
+// leaving edit mode, deleting the open page). It must drop the persisted
+// mirror of what it discards, or the discarded edit comes back on reload.
+describe('clear() cleans up persisted entries for what it discards', () => {
+  it('clears the persisted entry for the current edit', async () => {
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const actions = useEditorActions()
+    await actions.openPageRoot()
+    actions.markDirty({ title: 'Discarded by clear' })
+
+    const persistedStore = usePersistedEditsStore()
+    const key = persistedEditKey('page', 'home', undefined, '_root')
+    expect(persistedStore.has(key)).toBe(true)
+
+    actions.clear()
+
+    expect(persistedStore.has(key)).toBe(false)
+  })
+
+  it('clears the persisted entries for stashed edits', async () => {
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const actions = useEditorActions()
+    useEditorStashStore().stash(
+      'hero',
+      { template: 'hero', path: 'hero', content: { title: 'Stashed' }, schema: {}, save: async () => {} },
+      { title: 'Stashed' },
+    )
+    const persistedStore = usePersistedEditsStore()
+    const key = persistedEditKey('page', 'home', undefined, 'hero')
+    persistedStore.set(key, { title: 'Stashed' })
+
+    actions.clear()
+
+    expect(persistedStore.has(key)).toBe(false)
+  })
+
+  it('keeps persisted drafts of other pages that were never opened this session', async () => {
+    // Drafts restored at boot are not counted as pending edits until
+    // their page is opened, so the unsaved-changes guard never asked
+    // about them. clear() must not delete them.
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const persistedStore = usePersistedEditsStore()
+    const other = persistedEditKey('page', 'about', undefined, '_root')
+    persistedStore.set(other, { title: 'Unopened draft' })
+    const actions = useEditorActions()
+    await actions.openPageRoot()
+    actions.markDirty({ title: 'Discarded by clear' })
+
+    actions.clear()
+
+    expect(persistedStore.has(other)).toBe(true)
+  })
+})
