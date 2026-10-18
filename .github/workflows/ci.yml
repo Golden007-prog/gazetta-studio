@@ -205,6 +205,39 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # The Playwright projects that run against production builds: the built
+  # admin (incl. its service worker and offline reload), static and ESI
+  # targets, and the target matrix. The e2e job above runs `dev` only, and
+  # dev mode has no service worker.
+  e2e-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/gazetta
+      - run: npm run build:admin -w packages/gazetta
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project=prod-admin --project=prod-static --project=prod-esi --project=matrix
+      - name: Upload test-results on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-test-results-prod
+          path: test-results/
+          retention-days: 7
+
   # Pack once on linux — tarball is platform-independent.
   pack:
     runs-on: ubuntu-latest

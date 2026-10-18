@@ -203,7 +203,7 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 - [ ] All 18 cuts merged (1-7, 8a, 8b, 9, 9b, 10-16)
 - [ ] Manual test: edit page offline → close laptop → reopen → edits persist → reconnect → sync invisibly
 - [ ] Conflict scenario test: edit offline + concurrent online edit → reconnect → conflict banner surfaces
-- [ ] Service worker test: cold-load admin offline → SPA loads from cache
+- [x] Service worker test: cold-load admin offline → SPA loads from cache (`tests/e2e/production-offline.test.ts`, CI job `e2e-prod`; site data from IndexedDB on that cold load does not load yet)
 
 ## Deferred items
 

@@ -36,7 +36,7 @@ export default defineConfig({
     },
     {
       name: 'prod-admin',
-      testMatch: 'production.test.ts',
+      testMatch: ['production.test.ts', 'production-offline.test.ts'],
       use: { baseURL: 'http://localhost:4002' },
     },
     {

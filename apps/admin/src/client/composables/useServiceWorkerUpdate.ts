@@ -37,7 +37,8 @@
  * Vite's `useRegisterSW` is a no-op in dev because the SW isn't
  * built or registered there. Importing this composable in dev is
  * harmless (no-op subscription) — but the production behavior is
- * the only behavior we test in CI's prod-build smoke.
+ * the only behavior that matters; it's tested by
+ * tests/e2e/production-offline.test.ts (CI job `e2e-prod`).
  */
 import { watch } from 'vue'
 import { useRegisterSW } from 'virtual:pwa-register/vue'
