@@ -626,6 +626,17 @@ export function useEditorActions() {
 
   function clear() {
     cancelPending()
+    // Drop the persisted mirror of exactly what is being discarded — the
+    // open editor and this selection's stash. Not clearAll(): drafts of
+    // pages not opened this session aren't pending edits, so the
+    // unsaved-changes guard never asked about them.
+    const persistedStore = usePersistedEditsStore()
+    const currentKey = persistedKeyForCurrent()
+    if (currentKey) persistedStore.clear(currentKey)
+    for (const [path] of stash.entries) {
+      const k = persistedKeyForStashEntry(path)
+      if (k) persistedStore.clear(k)
+    }
     ec.clear()
     persistence.saving = false
     persistence.lastSaveError = null
