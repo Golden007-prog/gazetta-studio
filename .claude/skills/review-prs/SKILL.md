@@ -187,6 +187,7 @@ git fetch origin <branch> && git log origin/main..origin/<branch> --oneline
 ```
 
 Recovery sequence (do NOT merge the stacked PR first):
+0. **If the stacked PR's base is the parent's branch** (not `main`), retarget it first: `gh pr edit <stacked> --base main`. Merging the parent with `--delete-branch` deletes that base, and GitHub then *sometimes* retargets the stacked PR to `main` and sometimes **closes** it, and a closed PR's base can't be changed (`Cannot change the base branch of a closed pull request`). Both happened on 2026-10-18: #946 was retargeted when #945 merged, #953 was closed when #952 merged and had to be reopened as #954. Retargeting first makes it one behaviour.
 1. **Land the parent PR first** (rebase-merge to main)
 2. **Rebase the stacked PR onto fresh main**:
    ```bash
