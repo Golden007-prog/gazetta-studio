@@ -56,7 +56,11 @@ async function save() {
     if (ogImage.value) metadata.ogImage = ogImage.value
     if (canonical.value) metadata.canonical = canonical.value
     if (noindex.value) metadata.robots = 'noindex'
-    await pagesApi.updatePage(selection.name, { metadata })
+    // Save to the locale the form was loaded from: metadata is per locale
+    // file (page.fr.json has its own). Without it, editing the French
+    // page's title wrote it into page.json (reproduced 2026-10-18).
+    const locale = selection.selection?.locale
+    await pagesApi.updatePage(selection.name, { metadata }, locale ? { locale } : undefined)
     dirty.value = false
     await selection.reload()
     toast.show('Metadata saved')

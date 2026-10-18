@@ -53,7 +53,11 @@ export interface PagesApi {
     opts?: { onConflict?: 'restore' | 'replace' | 'moveAside' },
   ): Promise<{ ok: boolean; name: string; resolution?: string }>
   deletePage(name: string): Promise<{ ok: boolean }>
-  updatePage(name: string, data: Partial<PageDetail>): Promise<{ ok: boolean }>
+  updatePage(
+    name: string,
+    data: Partial<PageDetail>,
+    opts?: { locale?: string; ifMatch?: string },
+  ): Promise<{ ok: boolean }>
 }
 export const PAGES_API: InjectionKey<PagesApi> = Symbol('PagesApi')
 export function usePagesApi(): PagesApi {

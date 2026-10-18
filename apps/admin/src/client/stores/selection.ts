@@ -7,9 +7,14 @@ import { useSiteStore } from './site.js'
 import { useLocaleStore } from './locale.js'
 import { manifestPath, useEditorEtagsStore } from './editorEtags.js'
 
+/**
+ * `locale` is the locale `detail` was loaded for (undefined = default).
+ * Writes that save `detail`'s data go back to that locale's file, not
+ * to whichever locale is active by the time they run.
+ */
 export type Selection =
-  | { type: 'page'; name: string; detail: PageDetail }
-  | { type: 'fragment'; name: string; detail: FragmentDetail }
+  | { type: 'page'; name: string; detail: PageDetail; locale?: string }
+  | { type: 'fragment'; name: string; detail: FragmentDetail; locale?: string }
 
 export const useSelectionStore = defineStore('selection', () => {
   const toast = useToastStore()
@@ -60,7 +65,7 @@ export const useSelectionStore = defineStore('selection', () => {
       // source of truth.
       const { data: detail, etag } = await api.getPageWithEtag(pageName, { signal, locale })
       if (etag) useEditorEtagsStore().set(manifestPath('page', pageName, locale), etag)
-      selection.value = { type: 'page', name: pageName, detail }
+      selection.value = { type: 'page', name: pageName, detail, locale }
       fragmentHostPage.value = null
       usePreviewStore().invalidate()
     } catch (err) {
@@ -77,7 +82,7 @@ export const useSelectionStore = defineStore('selection', () => {
       const locale = useLocaleStore().effectiveLocale ?? undefined
       const { data: detail, etag } = await api.getFragmentWithEtag(fragName, { signal, locale })
       if (etag) useEditorEtagsStore().set(manifestPath('fragment', fragName, locale), etag)
-      selection.value = { type: 'fragment', name: fragName, detail }
+      selection.value = { type: 'fragment', name: fragName, detail, locale }
       if (!fragmentHostPage.value) resolveDefaultHostPage()
       usePreviewStore().invalidate()
     } catch (err) {
