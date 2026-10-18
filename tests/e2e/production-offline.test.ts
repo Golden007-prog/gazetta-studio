@@ -6,10 +6,14 @@ import { test, expect } from '@playwright/test'
  * shell when the network is gone. Dev mode has no service worker, so this
  * only runs in the prod-admin project.
  *
- * Covers what works today — shell, icon font, Offline banner. The design
- * also promises site data from IndexedDB on an offline cold load
- * (design-offline.md, "Cold-load admin offline"); that part doesn't load
- * yet and is investigated separately.
+ * Covers the shell, icon font and Offline banner, and — since Cut 5b —
+ * the site tree from the persisted query cache (design-offline.md, "The
+ * site tree reads through the query cache") plus deep links served by
+ * the service worker's navigation fallback. Before Cut 5b the tree said
+ * "Failed to fetch" and deep links didn't load offline at all.
+ *
+ * Not covered: editing a page offline (needs the page manifest, template
+ * schema and custom editor modules cached).
  */
 test.describe('Production admin offline', () => {
   test('reloads offline from the service worker with icons and the Offline banner', async ({ page, context }) => {
@@ -40,6 +44,12 @@ test.describe('Production admin offline', () => {
       .toBe(true)
     // Connection state settles on Offline (passes through "Connection unstable").
     await expect(page.locator('[data-testid="offline-banner"]')).toContainText('Offline', { timeout: 30_000 })
+    // Site tree from the persisted query cache, not "Failed to fetch".
+    await expect(page.locator('[data-testid="site-page-home"]')).toBeVisible({ timeout: 20_000 })
+
+    // A deep link still loads offline (service-worker navigation fallback).
+    await page.goto('/admin/pages/home')
+    await expect(page.locator('[data-testid="site-page-home"]')).toBeVisible({ timeout: 20_000 })
 
     // Back online: the banner clears.
     await context.setOffline(false)

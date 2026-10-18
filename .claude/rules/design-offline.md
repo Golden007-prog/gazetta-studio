@@ -181,7 +181,7 @@ Promise being kept: "Cold-load admin offline → SW serves cached shell → Inde
 
 **How it works:**
 
-1. **The two stores read through the query client** (`useQueryClient()` inside the Pinia setup stores). Their public APIs don't change (17 + 14 consumer files).
+1. **The two stores read through the query client**, via a small helper (`queries/read-through.ts`) that `main.ts` registers with the query client — the same pattern as `setActiveTargetProvider`. *Implementation note:* the lock first said `useQueryClient()` inside the setup stores; that only works inside the Vue app context, so every store unit test would have needed the app and Vue Query. Unregistered, the helper just fetches. Their public APIs don't change (17 + 14 consumer files).
 2. **Query keys:** `['site']`, `['targets']`, `['pages', target]`, `['fragments', target]`. `target` is the value the request actually carries — `getActiveTarget() ?? '(default)'` — because the router loads the site before the target list, so the first page-list request has no `?target=`.
 3. **Reading** (one shared helper, four callers):
    - Connection store says `offline` and a cached answer exists → serve it **immediately** (no retries).
@@ -189,7 +189,12 @@ Promise being kept: "Cold-load admin offline → SW serves cached shell → Inde
    - `networkMode: 'always'` on these fetches: the connection store drives `onlineManager`, and in the default mode a fetch would pause forever while offline instead of failing.
 4. **Wait for the restore.** `main.ts` wraps the client persister and keeps the restore promise it returns (`persistQueryClientRestore` catches its own errors, so it never rejects). The helper awaits it before the first read.
 5. **Retention:** `maxAge` and `gcTime` = 7 days (default 24 h fails a weekend; TanStack requires `gcTime` ≥ `maxAge`).
+   *Implementation note:* the persister also stores queries whose last refresh failed (`shouldDehydrateQuery: query has data`). TanStack's default keeps only `success` queries, so the first failed fetch of an offline cold load erased the stored answers (observed in the e2e test).
 6. **Reset key (`buster`)** = `{gazetta version}:{site}:{owner}`, with site and owner from Cut 8c's identity (the last online identity when offline; `anonymous` when unknown). The version comes from a Vite `define`. A different version, site or user discards the whole persisted cache.
+
+7. **Deep links offline:** the service worker serves admin navigations network-first, falling back to the precached `index.html` when the network fails — before Cut 5b only `/admin` itself loaded offline. Server-answered paths (`api`, `preview`, `ping`, `theme.css`) are excluded. Network-first, not cache-first, because `gazetta build` rewrites `index.html` with the custom-editor import map.
+
+**Not covered:** opening a page in the editor offline — the page manifest, template schema and custom editor modules aren't cached ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)).
 
 **Freshness:** offline, the global Offline banner is the indicator. Per-item "last synced" stays with the Q4 freshness UI below.
 

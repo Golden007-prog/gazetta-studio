@@ -125,6 +125,16 @@ This is purely a hint to the admin's heartbeat scheduler — it doesn't
 override anything. If the network really is down, the probe just
 fails again and the banner stays.
 
+### Opening the admin offline
+
+Once you've used the admin online in a browser, you can open it there
+offline — including a bookmarked page URL — and see the site tree as it
+was last time. The lists come from the last answers the server gave;
+the Offline banner tells you they may be out of date. They are kept for
+7 days.
+
+Opening a page in the editor offline doesn't work yet (#969).
+
 ### Storage warning
 
 If your browser's local storage approaches its cap (around 80%), a
@@ -255,7 +265,7 @@ Quick check after deploying a new version:
 4. DevTools → Network → throttle to "Offline."
 5. Reload the page.
 6. Admin should still load (from SW cache) with the "Offline" banner
-   at the top.
+   at the top, and the site tree should show the pages.
 7. Throttle back to "Online."
 8. Banner replaces with brief "Connection back" toast; admin
    reconnects.
