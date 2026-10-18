@@ -5,10 +5,13 @@
  * — no module mocks, no global stubs needed. Target persistence is driven
  * by the URL query param (?target=), not localStorage.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { QueryClient } from '@tanstack/vue-query'
 import { createPinia, setActivePinia } from 'pinia'
 import type { TargetInfo } from '../src/client/api/client.js'
 import { useActiveTargetStore, type LoadTargets } from '../src/client/stores/activeTarget.js'
+import { api } from '../src/client/api/client.js'
+import { configureReadThrough } from '../src/client/queries/read-through.js'
 
 const TARGETS: TargetInfo[] = [
   { name: 'local', environment: 'local', type: 'static', editable: true, altText: { available: false, auto: false } },
@@ -206,5 +209,25 @@ describe('useActiveTargetStore', () => {
     expect(store.error).toBe(null)
     expect(store.targets).toHaveLength(3)
     expect(attempt).toBe(2)
+  })
+})
+
+describe('default loader reads through the query cache (Cut 5b)', () => {
+  it('offline: picks the active target from the cached list without calling the API', async () => {
+    const client = new QueryClient()
+    const cached: TargetInfo[] = [{ name: 'local', editable: true } as TargetInfo]
+    client.setQueryData(['targets'], cached)
+    configureReadThrough({ client, restored: Promise.resolve(), isOffline: () => true })
+    const getTargets = vi.spyOn(api, 'getTargets')
+    try {
+      setActivePinia(createPinia())
+      const store = useActiveTargetStore()
+      await store.load()
+      expect(store.activeTargetName).toBe('local')
+      expect(getTargets).not.toHaveBeenCalled()
+    } finally {
+      configureReadThrough(null)
+      getTargets.mockRestore()
+    }
   })
 })

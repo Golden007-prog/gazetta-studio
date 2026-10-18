@@ -13,6 +13,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api, type TargetInfo } from '../api/client.js'
+import { readThrough } from '../queries/read-through.js'
 
 /**
  * How the store obtains its list of targets. Injected so tests (and any
@@ -39,7 +40,7 @@ export const useActiveTargetStore = defineStore('activeTarget', () => {
 
   // Injected dependencies. Default to production wiring; tests (and any
   // future alternative backend) call configure() before load().
-  let loadTargetsFn: LoadTargets = () => api.getTargets()
+  let loadTargetsFn: LoadTargets = () => readThrough(['targets'], () => api.getTargets())
 
   /** Override the loader — call before load(). */
   function configure(opts: ActiveTargetStoreOptions) {

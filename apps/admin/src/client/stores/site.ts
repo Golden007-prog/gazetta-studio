@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api, type PageSummary, type FragmentSummary, type SiteManifest } from '../api/client.js'
+import { getActiveTarget } from '../api/_request.js'
+import { readCached, readThrough } from '../queries/read-through.js'
 
 export const useSiteStore = defineStore('site', () => {
   const manifest = ref<SiteManifest | null>(null)
@@ -27,9 +29,18 @@ export const useSiteStore = defineStore('site', () => {
     loading.value = true
     error.value = null
     try {
+      // Page and fragment lists depend on the target the request carries
+      // (none on the very first load, before the target list is known).
+      const target = getActiveTarget() ?? '(default)'
+      const keys = { site: ['site'], pages: ['pages', target], fragments: ['fragments', target] } as const
       for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-          const [site, pageList, fragmentList] = await Promise.all([api.getSite(), api.getPages(), api.getFragments()])
+          // allowCache false: a cached answer mustn't cut the retry loop short.
+          const [site, pageList, fragmentList] = await Promise.all([
+            readThrough(keys.site, () => api.getSite(), { allowCache: false }),
+            readThrough(keys.pages, () => api.getPages(), { allowCache: false }),
+            readThrough(keys.fragments, () => api.getFragments(), { allowCache: false }),
+          ])
           manifest.value = site
           pages.value = pageList
           fragments.value = fragmentList
@@ -42,6 +53,18 @@ export const useSiteStore = defineStore('site', () => {
           ) {
             await new Promise(r => setTimeout(r, 1000))
             continue
+          }
+          // Giving up: show the last answer we had, if we have all of it.
+          const [site, pageList, fragmentList] = await Promise.all([
+            readCached<SiteManifest>(keys.site),
+            readCached<PageSummary[]>(keys.pages),
+            readCached<FragmentSummary[]>(keys.fragments),
+          ])
+          if (site && pageList && fragmentList) {
+            manifest.value = site
+            pages.value = pageList
+            fragments.value = fragmentList
+            return
           }
           error.value = msg
           return
