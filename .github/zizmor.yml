@@ -1,0 +1,29 @@
+# zizmor config. Run with `npm run lint:actions:security`; CI runs it in
+# .github/workflows/zizmor.yml.
+rules:
+  # Temporary, while rolling out: SHA pinning (93 refs) and the pinned
+  # Claude Code CLI land in their own PRs, which remove these entries.
+  unpinned-uses:
+    disable: true
+  adhoc-packages:
+    disable: true
+
+  # These bots push branches and open PRs with git, so their checkout
+  # must keep its token.
+  artipacked:
+    ignore:
+      - bots-compact.yml
+      - dead-code-watcher.yml
+      - feature-bot.yml
+      - fix-bot.yml
+      - mutation-area-picker.yml
+      - review-bot.yml
+
+  # workflow_run on Mutation, which runs only on schedule and manual
+  # dispatch on main, never on PR code.
+  dangerous-triggers:
+    ignore:
+      - mutation-watcher.yml
+      # issue_comment: the job's `if:` only lets OWNER/MEMBER/COLLABORATOR
+      # comments through (author_association), so outsiders can't start it.
+      - review-on-comment.yml

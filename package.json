@@ -25,6 +25,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint:actions": "bash scripts/actionlint.sh",
+    "lint:actions:security": "bash scripts/zizmor.sh",
     "knip": "knip --reporter compact",
     "knip:json": "knip --reporter json --no-exit-code",
     "storybook": "storybook dev -p 6006",

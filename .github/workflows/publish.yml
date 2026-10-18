@@ -13,12 +13,17 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
-          cache: npm
+          # No npm cache: a release build must not restore a cache that
+          # other workflows can write (zizmor cache-poisoning). setup-node
+          # caches automatically unless this is false.
+          package-manager-cache: false
 
       - run: npm ci
 

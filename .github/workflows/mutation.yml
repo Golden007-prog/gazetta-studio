@@ -16,6 +16,9 @@ on:
     # Manual trigger — for running against a branch before merging a
     # big change to the targeted modules.
 
+permissions:
+  contents: read
+
 jobs:
   stryker:
     runs-on: ubuntu-latest
@@ -25,6 +28,8 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 22

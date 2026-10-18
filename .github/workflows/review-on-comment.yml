@@ -65,6 +65,7 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # PR comments target the PR's head ref. We need the merge base
           # for `git diff main...HEAD`-style commands; fetch-depth: 0
           # keeps history available.

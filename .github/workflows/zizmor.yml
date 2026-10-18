@@ -1,0 +1,28 @@
+name: zizmor
+
+# Security lint for workflow files (template injection, token exposure,
+# risky triggers, unpinned actions). Separate from ci.yml for the same
+# reason as actionlint: a broken ci.yml produces no run at all. No paths
+# filter, so it can be a required check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # pipx is preinstalled on GitHub's Ubuntu runners.
+      - run: bash scripts/zizmor.sh --format github
+        env:
+          GH_TOKEN: ${{ github.token }}
