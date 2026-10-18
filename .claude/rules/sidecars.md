@@ -72,6 +72,9 @@ references with hashed forms so the hash catches upstream changes:
 - For **static-mode page hashes only**: `"@header"` → `"@header#ef567890"` using
   the fragment's content hash. Fragments are baked into pages in static mode,
   so a fragment change must invalidate every page that uses it.
+- A page's `metadata`, when it has at least one field. It renders into the
+  page's `<head>`, so a metadata-only edit is a change. A page without
+  metadata, or with `{}`, hashes as it did before metadata counted.
 
 ESI-mode pages don't include fragment hashes — fragments are published
 separately, and the edge runtime composes per request.

@@ -93,6 +93,28 @@ describe('compareTargets', () => {
     expect(r1).toBeDefined()
   })
 
+  it('detects modified when only the page metadata changed after a publish', async () => {
+    const { hashManifest } = await import('../src/hash.js')
+    const { scanTemplates, templateHashesFrom } = await import('../src/templates-scan.js')
+    const { loadSite } = await import('../src/site-loader.js')
+    const tHashes = templateHashesFrom(await scanTemplates(templatesDir, root))
+    const site = await loadSite({ siteDir, storage: source, templatesDir, manifest: { name: 'Test' } })
+    for (const [name, page] of site.pages) {
+      await writeSidecar(join(targetDir, 'pages', name), hashManifest(page, { templateHashes: tHashes }))
+    }
+    for (const [name, frag] of site.fragments) {
+      await writeSidecar(join(targetDir, 'fragments', name), hashManifest(frag, { templateHashes: tHashes }))
+    }
+    await writeFile(
+      join(siteDir, 'pages/home/page.json'),
+      JSON.stringify({ template: 'page', content: { title: 'Hello' }, metadata: { title: 'SEO title' } }),
+    )
+
+    const r = await compareTargets({ sourceRoot, target, templatesDir, projectRoot: root, manifest: { name: 'Test' } })
+    expect(r.modified).toEqual(['pages/home'])
+    expect(r.unchanged).toEqual(['fragments/header'])
+  })
+
   it('detects modified when content changes locally', async () => {
     // Write a stale sidecar with wrong hash
     await writeSidecar(join(targetDir, 'pages/home'), '00000000')

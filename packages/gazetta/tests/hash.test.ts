@@ -24,6 +24,29 @@ describe('hashManifest', () => {
     components: [{ name: 'hero', template: 'hero', content: { title: 'A' } }, '@header'],
   }
 
+  describe('page metadata', () => {
+    const t = new Map([
+      ['hero', 'h1'],
+      ['page-default', 'p1'],
+    ])
+
+    it('a page without metadata keeps the hash it had before metadata counted', () => {
+      // Recorded before the change; a different value would show every
+      // published page without metadata as changed after upgrading.
+      expect(hashManifest(baseManifest, { templateHashes: t })).toBe('66dc7999')
+      expect(hashManifest({ ...baseManifest, metadata: {} }, { templateHashes: t })).toBe('66dc7999')
+    })
+
+    it('changes when metadata changes, whatever its key order', () => {
+      const withTitle = hashManifest({ ...baseManifest, metadata: { title: 'A' } }, { templateHashes: t })
+      expect(withTitle).not.toBe('66dc7999')
+      expect(hashManifest({ ...baseManifest, metadata: { title: 'B' } }, { templateHashes: t })).not.toBe(withTitle)
+      expect(hashManifest({ ...baseManifest, metadata: { title: 'A', description: 'D' } }, { templateHashes: t })).toBe(
+        hashManifest({ ...baseManifest, metadata: { description: 'D', title: 'A' } }, { templateHashes: t }),
+      )
+    })
+  })
+
   it('is stable for the same input', () => {
     const t = new Map([
       ['hero', 'h1'],

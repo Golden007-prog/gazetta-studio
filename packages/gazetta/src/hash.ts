@@ -136,7 +136,8 @@ export interface HashManifestOptions {
  * Compute the content hash for a page or fragment manifest.
  *
  * Substitutes template references with `name#hash` form in memory (source files
- * are not modified), serializes with stable key ordering, then MD5s.
+ * are not modified), serializes with stable key ordering, then MD5s. A page's
+ * metadata counts too: it renders into the page's `<head>`.
  *
  * Result: 8 hex chars.
  */
@@ -147,11 +148,15 @@ export function hashManifest(manifest: PageManifest | FragmentManifest, opts: Ha
   // missing template normalizes to null, same as content/components do.
   const template = manifest.template
   const rootHash = template !== undefined ? opts.templateHashes.get(template) : undefined
-  const normalized = {
+  const normalized: Record<string, unknown> = {
     template: template !== undefined ? (rootHash ? `${template}#${rootHash}` : template) : null,
     content: manifest.content ?? null,
     components: substituteHashes(manifest.components, opts.templateHashes, opts.fragmentHashes) ?? null,
   }
+  // Only when it has a field: pages without metadata keep the hash they had
+  // before metadata counted, and `{}` renders the same as no metadata.
+  const metadata = 'metadata' in manifest ? manifest.metadata : undefined
+  if (metadata && Object.keys(metadata).length > 0) normalized.metadata = metadata
   const json = JSON.stringify(normalized, sortedReplacer)
   return createHash('md5').update(json).digest('hex').slice(0, 8)
 }

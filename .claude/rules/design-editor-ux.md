@@ -189,8 +189,8 @@ outside the editor state, has exactly this gap ([`docs/audits/cms-seo-metadata-s
 | Keep the open row's revert page-wide | Drops work the author can't see: the SEO form shows only on the page row, and pending moves have no dot in either tree |
 
 **Known limits.** Toast Undo restores only the last write; a Save that wrote content and metadata
-undoes only the metadata (an existing multi-write limit, not new). Publishing doesn't yet see
-metadata-only changes: the publish hash ignores metadata (separate fix).
+undoes only the metadata (an existing multi-write limit, not new). Publishing sees metadata-only
+changes: the publish hash counts metadata ([`sidecars.md`](sidecars.md), "Hash input").
 
 **Foundational checks.** Client-only change on the existing save route, so multi-instance, scale
 (O(pending entries)), cache, render, plugin and collaboration are unaffected. Locale: keyed and

@@ -58,6 +58,7 @@ complaint without adding admin UI complexity.
 | Character counters (title 60, description 160) with color | #186 | ✓ |
 | SERP preview (always light-themed Google snippet) | #186 | ✓ |
 | Metadata is a pending edit: the page's one Save writes it, the unsaved-changes guard covers it, kept across reload ([design-editor-ux.md](design-editor-ux.md), "Page metadata is a pending lane") | — | ✓ |
+| Publish sees metadata-only edits: metadata is part of the publish hash ([sidecars.md](sidecars.md), "Hash input") | — | ✓ |
 
 ---
 
