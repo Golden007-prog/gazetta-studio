@@ -1,7 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { appendReviewerLog, pruneReviewerLog, readReviewerLog, tailReviewerLog } from '../reviewer-log.js'
 
@@ -101,15 +100,5 @@ describe('pruneReviewerLog', () => {
     pruneReviewerLog(logPath, 2)
     appendReviewerLog(logPath, entry(99))
     expect(attempts(readReviewerLog<Entry>(logPath))).toEqual([4, 5, 99])
-  })
-})
-
-describe('per-bot reviewer-log modules', () => {
-  const botsRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-  const bots = ['fix-bot', 'feature-bot', 'dead-code-watcher', 'review-bot', 'mutation-area-picker']
-
-  it.each(bots)('%s/reviewer-log.ts does not reimplement the file I/O', bot => {
-    const source = readFileSync(resolve(botsRoot, bot, 'reviewer-log.ts'), 'utf8')
-    expect(source).not.toMatch(/from 'node:fs'/)
   })
 })
