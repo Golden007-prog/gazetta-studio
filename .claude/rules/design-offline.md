@@ -175,6 +175,38 @@ A tab still open from user A after B signs in keeps writing records owned by A. 
 
 **Not covered:** a tab already open when the signed-in user changes still holds the previous user's edits *in memory* and would save them as the new user. That is not a persistence problem; it needs the tab to notice the principal change (revisit with the collaboration presence work).
 
+### The site tree reads through the query cache (locked 2026-10-18, #962)
+
+Promise being kept: "Cold-load admin offline → SW serves cached shell → IndexedDBCache hydrates state → admin renders" (service worker section below). Before this lock nothing used Vue Query: the site and active-target stores called `api.*` directly, so the persister had nothing to persist and an offline cold load showed "Failed to fetch" in the site tree. Because the target list also failed, the active target was `null` — so Cut 8c's draft scope was `null` too, and **unsaved drafts didn't load offline** either.
+
+**How it works:**
+
+1. **The two stores read through the query client** (`useQueryClient()` inside the Pinia setup stores). Their public APIs don't change (17 + 14 consumer files).
+2. **Query keys:** `['site']`, `['targets']`, `['pages', target]`, `['fragments', target]`. `target` is the value the request actually carries — `getActiveTarget() ?? '(default)'` — because the router loads the site before the target list, so the first page-list request has no `?target=`.
+3. **Reading** (one shared helper, four callers):
+   - Connection store says `offline` and a cached answer exists → serve it **immediately** (no retries).
+   - Otherwise fetch fresh, keeping the site store's existing retry loop (dev-server start-up). On final failure, serve the cached answer if there is one; else surface the error as today.
+   - `networkMode: 'always'` on these fetches: the connection store drives `onlineManager`, and in the default mode a fetch would pause forever while offline instead of failing.
+4. **Wait for the restore.** `main.ts` wraps the client persister and keeps the restore promise it returns (`persistQueryClientRestore` catches its own errors, so it never rejects). The helper awaits it before the first read.
+5. **Retention:** `maxAge` and `gcTime` = 7 days (default 24 h fails a weekend; TanStack requires `gcTime` ≥ `maxAge`).
+6. **Reset key (`buster`)** = `{gazetta version}:{site}:{owner}`, with site and owner from Cut 8c's identity (the last online identity when offline; `anonymous` when unknown). The version comes from a Vite `define`. A different version, site or user discards the whole persisted cache.
+
+**Freshness:** offline, the global Offline banner is the indicator. Per-item "last synced" stays with the Q4 freshness UI below.
+
+**Known limit:** sites served alternately from one origin discard each other's persisted cache (different `buster`). Acceptable; the browser `IndexedDBCache` has no per-site prefix (see Storage isolation).
+
+**Rejected:**
+
+| Option | Why rejected |
+|---|---|
+| `useQuery` in components | Churns the ~30 files that read the two stores today. |
+| Stores keep their own snapshots | A second persistence path beside the query cache. |
+| Service worker caches `/api/*` | Blind to target and auth; hides offline state from the app. |
+| Narrow the design (drop offline cold load) | Drops a locked promise. |
+| Per-site key prefix inside `IndexedDBCache` | Changes the cache provider for every key; the `buster` already isolates the persisted query cache, which is the only per-site browser cache. |
+| Hook `clientPersisterOnSuccess` for the restore wait | The client persister already returns the restore promise; wrapping it is simpler and covers failure too. |
+| Retention 24 h / 30 d / no expiry | 24 h fails a weekend; 30 d keeps stale structure too long; no expiry never cleans up. |
+
 ### `navigator.storage.persist()` opt-in
 
 ```ts

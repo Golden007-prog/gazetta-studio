@@ -25,6 +25,7 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 | 3 | Provider selection: `IndexedDBCache` primary; `MemoryCache` fallback when IndexedDB unavailable | ✓ | Low | Graceful degradation |
 | 4 | BroadcastChannel cross-tab invalidation | ✓ | Low | Multi-tab coordination |
 | 5 | Vue Query setup + `IndexedDBPersister` bridge to L6 | ✓ | Medium | Query/mutation cache + offline queue |
+| 5b | Site tree reads through the query cache: site + active-target stores via `useQueryClient()`, cache fallback (immediate when offline), restore wait, 7-day retention, `buster` = version + site + owner (design-offline.md "The site tree reads through the query cache"; #962) | ☐ | Medium | Offline cold load shows the site tree and unsaved drafts |
 | 6 | Connection state Pinia store: hybrid `navigator.onLine` + heartbeat to `/api/health` | ✓ | Medium | 5-state model |
 | 7 | Health endpoint `GET /api/health` | ✓ | Low | Server-side support |
 | 8a | Pending-edits store migration — `editorStructural` only (pure-data subset) | ✓ | Medium | Structural edits survive reload |
@@ -77,6 +78,17 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 - `apps/admin/src/client/queries/persister.ts` — bridges Vue Query to `IndexedDBCache`
 
 **Tests:** Vue Query state rehydrates from IndexedDB at boot
+
+### Cut 5b: Site tree reads through the query cache (pending, #962)
+
+**Tests:**
+- `tests/e2e/production-offline.test.ts` — offline reload shows the site tree (`site-page-home`) and restores an unsaved draft
+- `apps/admin/tests/readThroughCache.test.ts` — online fetch; fallback to cache on failure; immediate cache when the connection store is offline (no fetch); no cache → error; waits for the restore promise; key carries the request's target
+- `apps/admin/tests/siteStore.test.ts` (new), `activeTarget.test.ts` — public API unchanged; target switch reads the new target's key
+
+**Files:** `queries/read-through.ts` (helper); `stores/site.ts`, `stores/activeTarget.ts`; `queries/client.ts` (7 d, restore promise); `main.ts` (buster, restore wiring); `vite.config.ts` (`define` for the version); `docs/offline.md`.
+
+**Open:** whether anything else at boot also blocks the tree offline (sync status, validation issues, dependents) — the e2e test will show it.
 
 ### Cut 6: Connection state store
 
