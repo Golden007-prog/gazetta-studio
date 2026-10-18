@@ -23,6 +23,8 @@ import { useConflictDiscard } from '../composables/useConflictDiscard.js'
 
 const editing = useEditingStore()
 const selection = useSelectionStore()
+// A redirect or pure archive has no template: the archive banner is all there is.
+const nothingToEdit = computed(() => !!selection.detail && !selection.detail.template)
 const theme = useThemeStore()
 const unsavedGuard = useUnsavedGuardStore()
 const localeStore = useLocaleStore()
@@ -136,10 +138,12 @@ async function handleConflictDiscard() {
       <p>This is part of a shared fragment.</p>
       <a class="fragment-go-link" data-testid="fragment-go-link" @click.stop.prevent="goToFragment">Edit @{{ editing.fragmentLink }}</a>
     </div>
-    <div v-else-if="!editing.path" class="editor-empty" data-testid="editor-empty">
-      <i class="pi pi-pencil" style="font-size: 2rem; opacity: 0.3; margin-bottom: 0.5rem;" />
-      <p>Select a component to edit</p>
-    </div>
+    <template v-else-if="!editing.path">
+      <div v-if="!nothingToEdit" class="editor-empty" data-testid="editor-empty">
+        <i class="pi pi-pencil" style="font-size: 2rem; opacity: 0.3; margin-bottom: 0.5rem;" />
+        <p>Select a component to edit</p>
+      </div>
+    </template>
     <div v-else class="editor-active">
       <!-- #82 — breadcrumb shows the user-set component name path
            ("home > features > fast") instead of the template-name

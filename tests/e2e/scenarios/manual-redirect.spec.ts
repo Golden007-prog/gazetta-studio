@@ -110,4 +110,24 @@ test.describe('Scenario — create a manual redirect, see it greyed in tree', ()
     // Alias suffix renders as "→ about" (page kind; fragments would be "→ @about")
     await expect(archivedRow).toContainText('→ about')
   })
+
+  test('opening a redirect shows the archive banner and no editor (#965)', async ({ page, request, baseURL }) => {
+    // A redirect has no template. The editor used to request the schema of
+    // template "undefined" and show "Failed to load" under the banner.
+    // The preview iframe still answers 500 for a redirect (#971); remove
+    // this allowance when that's fixed.
+    test.info().annotations.push({ type: 'allow-console-errors' })
+    const res = await request.post(`${baseURL}/admin/api/page-redirects`, { data: { from: 'old-about', to: 'about' } })
+    expect(res.status()).toBe(201)
+    const schemaRequests: string[] = []
+    page.on('request', r => {
+      if (r.url().includes('/templates/')) schemaRequests.push(r.url())
+    })
+
+    await page.goto('/admin/pages/old-about/edit')
+    await expect(page.locator('[data-testid="archive-banner-page-old-about"]')).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('[data-testid="editor-error"]')).toHaveCount(0)
+    await expect(page.locator('[data-testid="editor-empty"]')).toHaveCount(0)
+    expect(schemaRequests.filter(u => u.includes('/templates/undefined/'))).toEqual([])
+  })
 })

@@ -343,21 +343,28 @@ export function useEditorActions() {
 
   // --- Build an EditingTarget from a selection ---
 
-  async function buildTarget(sel: EditorSelection, signal: AbortSignal): Promise<EditingTarget> {
+  /**
+   * Null when the item has no template — a redirect (archived with an
+   * alias) or a pure archive has nothing to edit; the archive banner is
+   * the whole UI for it.
+   */
+  async function buildTarget(sel: EditorSelection, signal: AbortSignal): Promise<EditingTarget | null> {
     const selStore = useSelectionStore()
     switch (sel.kind) {
       case 'root': {
         const d = selStore.detail
         const selection = selStore.selection
         if (!d || !selection) throw new Error('No page/fragment selected')
+        const template = d.template
+        if (!template) return null
         const pageContent = (d.content as Record<string, unknown>) ?? {}
-        const { schema, hasEditor, editorUrl, fieldsBaseUrl } = await fetchSchema(d.template, signal)
+        const { schema, hasEditor, editorUrl, fieldsBaseUrl } = await fetchSchema(template, signal)
         const kind = selection.type === 'page' ? ('page' as const) : ('fragment' as const)
         const saveFn = (c: Record<string, unknown>) => {
           // pending = the manifest the author tried to save — used
           // by the conflict diff view to show "yours."
           const pending: Record<string, unknown> = {
-            template: d.template,
+            template,
             content: c,
             components: d.components,
           }
@@ -369,7 +376,7 @@ export function useEditorActions() {
           return updateManifest(kind, selection.name, { content: c }, pending)
         }
         return {
-          template: d.template,
+          template,
           path: '_root',
           content: pageContent,
           schema,
@@ -404,6 +411,7 @@ export function useEditorActions() {
         // (direct fragment-edit URL) is the other entry point.
         const { data: frag, etag } = await api.getFragmentWithEtag(sel.fragmentName, { signal, locale })
         if (etag) useEditorEtagsStore().set(manifestPath('fragment', sel.fragmentName, locale), etag)
+        if (!frag.template) return null
         const fragContent = (frag.content as Record<string, unknown>) ?? {}
         const { schema, hasEditor, editorUrl, fieldsBaseUrl } = await fetchSchema(frag.template, signal)
         return {
@@ -470,6 +478,13 @@ export function useEditorActions() {
     const { signal } = navController
     try {
       const target = await buildTarget(sel, signal)
+      if (!target) {
+        // Nothing to edit (redirect / archived without a template).
+        persistence.saving = false
+        persistence.lastSaveError = null
+        ec.clear()
+        return
+      }
       persistence.saving = false
       persistence.lastSaveError = null
       // Cut 8b: fall through to the cross-page persisted-edits store
