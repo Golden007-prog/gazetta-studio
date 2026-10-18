@@ -23,7 +23,7 @@
  *   - SRP: this store owns "what dirty/stashed edits exist that
  *     must survive reload, and where do they belong." It does NOT
  *     know how the editor consumes them (useEditorActions navigate
- *     seam) or how they get to disk (_pendingEditsPersistence).
+ *     seam) or how they get to disk (drafts/persistence).
  *   - DIP: tests + persistence coordinator depend on the typed
  *     API; the underlying Map is implementation detail.
  *

@@ -236,18 +236,19 @@ test.describe('Target in URL', () => {
   })
 })
 
-/** Titles held in the persisted-drafts snapshot in IndexedDB. */
+/** Titles of the unsaved field drafts held in the draft store (IndexedDB). */
 function storedDraftTitles(page: Page): Promise<string[]> {
   return page.evaluate(async () => {
     const db: IDBDatabase = await new Promise((res, rej) => {
-      const req = indexedDB.open('gazetta-cache')
+      const req = indexedDB.open('gazetta-drafts')
       req.onsuccess = () => res(req.result)
       req.onerror = () => rej(req.error)
     })
-    const row = await new Promise<{ value?: { entries?: [string, { editedContent?: { title?: string } }][] } }>(res => {
-      const req = db.transaction('cache').objectStore('cache').get('pending-edits:dirty')
-      req.onsuccess = () => res(req.result ?? {})
+    if (!db.objectStoreNames.contains('drafts')) return []
+    const rows = await new Promise<Array<{ id: string[]; value?: { editedContent?: { title?: string } } }>>(res => {
+      const req = db.transaction('drafts').objectStore('drafts').getAll()
+      req.onsuccess = () => res(req.result)
     })
-    return (row.value?.entries ?? []).map(([, e]) => e.editedContent?.title ?? '')
+    return rows.filter(r => r.id[3] === 'edit').map(r => r.value?.editedContent?.title ?? '')
   })
 }

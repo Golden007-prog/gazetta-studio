@@ -22,6 +22,7 @@ import { useLocaleStore } from '../stores/locale.js'
 import { useEditorEtagsStore, manifestPath } from '../stores/editorEtags.js'
 import { useSaveConflictsStore } from '../stores/saveConflicts.js'
 import { persistedEditKey, persistedEditKeyForSelection, usePersistedEditsStore } from '../stores/persistedEdits.js'
+import { draftsLoaded } from '../drafts/persistence.js'
 
 const MAX_RETRY_ATTEMPTS = 3
 const BASE_RETRY_DELAY = 3000
@@ -483,6 +484,9 @@ export function useEditorActions() {
       const name = sl.selection?.name ?? null
       const localeForKey = useLocaleStore().effectiveLocale ?? undefined
       const persistedKey = persistedEditKeyForSelection(sel, kind, name, localeForKey)
+      // Drafts for this target may still be loading from the draft store.
+      await draftsLoaded()
+      if (signal.aborted) return
       const persisted = persistedKey ? usePersistedEditsStore().get(persistedKey) : null
       if (persisted) {
         await ec.open(target, persisted.editedContent)

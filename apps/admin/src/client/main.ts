@@ -8,7 +8,10 @@ import { selectBrowserCacheProvider } from './cache/provider-selector.js'
 import { createAdminQueryClient, createGazettaClientPersister } from './queries/client.js'
 import { createGazettaPersister } from './queries/persister.js'
 import { useConnectionState } from './stores/connectionState.js'
-import { attachPendingEditsPersistence, attachPersistedEditsPersistence } from './stores/_pendingEditsPersistence.js'
+import { attachDraftPersistence } from './drafts/persistence.js'
+import { selectDraftStore } from './drafts/select.js'
+import { askIdentity, resolveDraftIdentity } from './drafts/identity.js'
+import { useActiveTargetStore } from './stores/activeTarget.js'
 import { useServiceWorkerUpdate } from './composables/useServiceWorkerUpdate.js'
 import 'primeicons/primeicons.css'
 import './assets/tokens.css'
@@ -21,9 +24,17 @@ import { adminPreset } from './assets/preset.js'
 // into the VueQueryPlugin install.
 async function bootstrap(): Promise<void> {
   const provider = await selectBrowserCacheProvider()
+  // Whose unsaved drafts this boot may load — decided before anything
+  // hydrates (design-offline.md, "Unsaved drafts live in their own store").
+  const drafts = await selectDraftStore(provider.degraded)
+  const identity = await resolveDraftIdentity(drafts, await askIdentity())
+  // Drafts used to live in the cache as two snapshots; drop them once.
+  void provider.cache.invalidate('pending-edits:structural')
+  void provider.cache.invalidate('pending-edits:dirty')
   const queryClient = createAdminQueryClient()
   const persister = createGazettaPersister(provider.cache)
-  const clientPersister = createGazettaClientPersister(persister)
+  // A different user never sees the previous user's query cache.
+  const clientPersister = createGazettaClientPersister(persister, identity?.owner ?? 'anonymous')
 
   const app = createApp(App)
   app.use(createPinia())
@@ -50,9 +61,12 @@ async function bootstrap(): Promise<void> {
   // cache keys. Await both hydrations so the first editor render
   // sees structural reorders (Cut 8a) AND restored dirty content
   // (Cut 8b) that survived a previous session.
-  const structuralPersistence = attachPendingEditsPersistence(provider.cache)
-  const editsPersistence = attachPersistedEditsPersistence(provider.cache)
-  await Promise.all([structuralPersistence.hydrated, editsPersistence.hydrated])
+  const activeTarget = useActiveTargetStore()
+  const draftPersistence = attachDraftPersistence(drafts, () =>
+    identity && activeTarget.activeTargetName ? { ...identity, target: activeTarget.activeTargetName } : null,
+  )
+  // Don't lose the last keystrokes when the tab closes inside the debounce.
+  window.addEventListener('pagehide', () => void draftPersistence.flush())
 
   // Register the service worker (production builds only; dev no-op).
   // Surfaces the "new version available" toast when an update lands.
