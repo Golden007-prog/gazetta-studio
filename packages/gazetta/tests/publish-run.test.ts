@@ -399,3 +399,39 @@ describe('PublishRunResult type contract', () => {
     expectTypeOf(result.targets).toEqualTypeOf<readonly PublishTargetResult[]>()
   })
 })
+
+// ─── Render mode per target type (through the real entry point) ────
+
+describe('publishRun — page render mode per target type', () => {
+  // The starter's `esi-test` target is `type: 'dynamic'`, which today is
+  // the ESI target type (the request-time worker assembles pages from
+  // separately published fragments). Its pages must keep ESI
+  // placeholders; baking fragments in means publishing a fragment alone
+  // never reaches the pages that use it. `local` is the static control.
+  it.each([
+    ['esi-test', true],
+    ['local', false],
+  ] as const)('%s target: page has ESI placeholders = %s', async (targetName, expectEsi) => {
+    const { site, manifest, sourceRoot } = await setup()
+    expect(manifest.targets?.[targetName], `starter must define ${targetName}`).toBeDefined()
+    const targetStorage = memoryStorage()
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: 'home' }],
+      targets: [targetName],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([[targetName, targetStorage]]),
+    })
+    expect(result.ok).toBe(true)
+
+    // Home's HTML: under pages/home/ (ESI layout) or at the root (static
+    // URL layout) — this test is about the placeholders, not the path.
+    const keys = [...targetStorage.dump().keys()]
+    const homePath = keys.find(k => k === 'pages/home/index.html' || k === 'index.html')
+    expect(homePath, keys.join(', ')).toBeDefined()
+    const html = await targetStorage.readFile(homePath!)
+    expect(html.includes('<!--esi'), html.slice(0, 300)).toBe(expectEsi)
+  })
+})
