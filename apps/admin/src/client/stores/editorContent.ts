@@ -87,12 +87,13 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     content.value = newContent
   }
 
-  /** Update saved baseline to match current content (after successful save). */
-  function markSaved() {
-    if (content.value) {
-      saved.value = deepClone(content.value)
-      savedJson.value = JSON.stringify(content.value)
-    }
+  /**
+   * After a successful save: what was written becomes the saved baseline.
+   * Content typed while the save ran differs from it, so it stays dirty.
+   */
+  function markSaved(written: Record<string, unknown>) {
+    saved.value = deepClone(written)
+    savedJson.value = JSON.stringify(written)
   }
 
   function discard() {

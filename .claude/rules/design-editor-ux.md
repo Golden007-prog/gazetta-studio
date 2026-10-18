@@ -116,7 +116,9 @@ canonical, robots). All are pending until explicit save; all contribute to the d
 indicator and the unsaved-changes guard; all are reverted by Discard for the focused page;
 one Save writes them all. The writes are sequential, not one transaction: a failure part-way
 leaves the earlier writes on disk and keeps everything pending, including what already landed;
-the next Save rewrites it (the guard stays put on a failed save, #977). Authors see the tree reflect a pending reorder immediately, but the disk file is
+the next Save rewrites it (the guard stays put on a failed save, #977). Edits made while a save
+runs stay pending: what the save wrote becomes each lane's baseline, so text typed or a component
+moved meanwhile is neither marked saved nor dropped. Authors see the tree reflect a pending reorder immediately, but the disk file is
 unchanged until save lands. This avoids the asymmetry where a discard would revert content
 edits while structural changes silently persisted.
 

@@ -174,18 +174,14 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
   }
 
   /**
-   * After a save wrote `written`: entries unchanged since then are on disk
-   * and go away. An entry edited while the save ran stays pending, with the
-   * written value as its new baseline.
+   * After a save wrote `written`: an entry whose value now is the one written
+   * goes away. One edited while the save ran stays pending, with the written
+   * value as its new baseline.
    */
   function markWritten(written: Array<[string, MetadataEntry]>) {
     for (const [k, entry] of written) {
       const now = entries.get(k)
       if (!now) continue
-      if (toRaw(now) === toRaw(entry)) {
-        entries.delete(k)
-        continue
-      }
       const original = copy(entry.pending)
       if (canonical(now.pending) === canonical(original)) entries.delete(k)
       else entries.set(k, { original, pending: copy(now.pending) })

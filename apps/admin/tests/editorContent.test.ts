@@ -204,14 +204,22 @@ describe('editorContent', () => {
   })
 
   describe('markSaved', () => {
-    it('updates saved baseline to match current content', async () => {
+    it('takes what was written as the saved baseline', async () => {
       const store = useEditorContentStore()
       await store.open(makeTarget())
       store.markDirty({ title: 'New' })
       expect(store.dirty).toBe(true)
-      store.markSaved()
+      store.markSaved({ title: 'New' })
       expect(store.dirty).toBe(false)
       expect(store.saved).toEqual({ title: 'New' })
+    })
+
+    it('content typed after what was written stays dirty', async () => {
+      const store = useEditorContentStore()
+      await store.open(makeTarget())
+      store.markDirty({ title: 'Newer' })
+      store.markSaved({ title: 'New' })
+      expect(store.dirty).toBe(true)
     })
   })
 
