@@ -52,7 +52,7 @@ async function goToFragment() {
 // the fragment's reach, not the current sub-edit.
 const fragmentName = computed(() => (selection.type === 'fragment' ? selection.name : null))
 
-const { editorMount: editorMountRef, hasProperties } = useActiveEditorMount()
+const { editorMount: editorMountRef, hasProperties, editorLoading } = useActiveEditorMount()
 
 const contentRef = computed(() => editing.content)
 const schemaRef = computed(() => editing.schema as Record<string, unknown> | null)
@@ -149,6 +149,12 @@ async function handleConflictDiscard() {
         <EditorBreadcrumb />
         <FragmentBlastRadius v-if="fragmentName" :fragmentName="fragmentName" />
       </div>
+      <!-- The custom editor mounts only once its code has loaded (#912), so
+           say so instead of showing an empty pane. -->
+      <p v-if="editorLoading" class="editor-loading" role="status" data-testid="editor-loading">
+        <i class="pi pi-spin pi-spinner" aria-hidden="true" />
+        <span>Loading editor…</span>
+      </p>
       <div v-if="hasProperties" ref="containerRef" class="editor-container" data-testid="editor-container" :key="editing.path" />
       <PageMetadataEditor v-if="selection.type === 'page' && editing.path === '_root'" />
       <p v-else-if="!hasProperties" class="editor-no-schema">No editable content. Edit its children instead.</p>
@@ -182,4 +188,5 @@ async function handleConflictDiscard() {
 .fragment-go-link:hover { text-decoration: underline; }
 .editor-container { font-size: 0.875rem; }
 .editor-no-schema { color: var(--color-muted); font-size: 0.875rem; }
+.editor-loading { display: flex; align-items: center; gap: 0.5rem; color: var(--color-muted); font-size: 0.875rem; }
 </style>

@@ -20,5 +20,8 @@ export function useActiveEditorMount() {
     return createEditorMount(ec.schema)
   })
 
-  return { editorMount, hasProperties }
+  /** True while the open target's custom editor is still loading and nothing is mounted yet. */
+  const editorLoading = computed(() => hasProperties.value && ec.customEditorLoading)
+
+  return { editorMount, hasProperties, editorLoading }
 }

@@ -129,8 +129,11 @@ test.describe('Keyboard shortcuts', () => {
     const editorLoaded = page.waitForResponse(r => r.url().includes('/admin/editors/hero.tsx'))
     await openEditor(page, 'home')
     await new ComponentTreePom(page).open('hero')
+    // While the delayed editor loads, the pane says so instead of staying empty.
+    await expect(page.locator('[data-testid="editor-loading"]')).toBeVisible()
     const titleField = page.locator('input[name="root_title"]').first()
     await titleField.waitFor({ timeout: 10000 })
+    await expect(page.locator('[data-testid="editor-loading"]')).toHaveCount(0)
     const original = await titleField.inputValue()
 
     await titleField.fill(original + ' edited')

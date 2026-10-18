@@ -105,4 +105,26 @@ describe('useActiveEditorMount', () => {
     wrapper.unmount()
     warn.mockRestore()
   })
+
+  it('reports loading while a custom editor import is pending, and not otherwise', async () => {
+    let loading: { value: boolean } | undefined
+    const Probe = defineComponent({
+      setup() {
+        loading = useActiveEditorMount().editorLoading
+        return () => h('div')
+      },
+    })
+    const wrapper = mount(Probe)
+    const ec = useEditorContentStore()
+
+    const pending = ec.open(makeTarget({ hasEditor: true, editorUrl: CUSTOM_EDITOR_URL }))
+    expect(loading!.value).toBe(true)
+    await pending
+    await flushPromises()
+    expect(loading!.value).toBe(false)
+
+    await ec.open(makeTarget())
+    expect(loading!.value).toBe(false)
+    wrapper.unmount()
+  })
 })

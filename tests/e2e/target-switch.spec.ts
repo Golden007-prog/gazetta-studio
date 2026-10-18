@@ -129,7 +129,9 @@ test.describe('Target switch with unsaved edits', () => {
     await new ComponentTreePom(page).open('hero')
     await page.waitForTimeout(300)
     const titleField = page.locator('input[name="root_title"]').first()
-    await titleField.waitFor({ timeout: 5000 })
+    // hero's custom editor mounts only after its code loads (#912); under
+    // `gazetta dev` a cold first load can take several seconds on CI.
+    await titleField.waitFor({ timeout: 15000 })
     const original = await titleField.inputValue()
     await titleField.fill(original + ' — dirty')
     // Save button becomes enabled when there are pending edits.
