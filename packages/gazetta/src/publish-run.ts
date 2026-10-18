@@ -58,6 +58,20 @@ import { publishDepIndices, publishSiteManifest } from './publish-rendered.js'
 import type { Site } from './site-loader.js'
 import { templateHashesFrom, type TemplateInfo } from './templates-scan.js'
 import { getType } from './types.js'
+
+/**
+ * Map the config's target type onto the publish pipeline's rendering
+ * type. Config `TargetType` is still `'static' | 'dynamic'`, and today's
+ * `'dynamic'` is the ESI target: a worker assembles pages from separately
+ * published fragments at request time. The pipeline already speaks the
+ * three-type taxonomy of design-rendering.md (`'esi'` = ESI placeholders;
+ * `'dynamic'` = request-time SSR with static page fallback), so passing
+ * `'dynamic'` through baked every page and broke fragment-only publishes.
+ * When design-rendering.md Cut 1 widens `TargetType`, this mapping goes.
+ */
+function renderTargetType(type: 'static' | 'dynamic'): PublishTarget['type'] {
+  return type === 'dynamic' ? 'esi' : 'static'
+}
 import type { PurgeStrategy, SiteManifest, StorageProvider, TargetConfig } from './types.js'
 
 /**
@@ -297,7 +311,7 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     }
 
     const targetConfig: TargetConfig | undefined = input.siteManifest.targets?.[targetName]
-    const targetType = targetConfig ? getType(targetConfig) : 'static'
+    const targetType = targetConfig ? renderTargetType(getType(targetConfig)) : 'static'
 
     input.onProgress?.({ kind: 'target-start', target: targetName })
 
