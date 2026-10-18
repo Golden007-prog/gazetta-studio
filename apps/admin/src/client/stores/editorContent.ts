@@ -101,28 +101,31 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     mountVersion.value++
   }
 
-  function setLoadError(message: string) {
+  /** Discards any pending custom-editor import and the custom-editor state of the target being left. */
+  function abandonPendingOpen() {
     openGeneration++
-    target.value = null
-    loadError.value = message
     customEditorMount.value = null
     customEditorLoading.value = false
   }
 
+  function setLoadError(message: string) {
+    abandonPendingOpen()
+    target.value = null
+    loadError.value = message
+  }
+
   function showFragmentLink(nameOrPath: string) {
-    openGeneration++
+    abandonPendingOpen()
     loadError.value = null
     target.value = null
     content.value = null
     saved.value = null
     savedJson.value = ''
     fragmentLink.value = nameOrPath.startsWith('@') ? nameOrPath.split('/')[0].slice(1) : nameOrPath
-    customEditorMount.value = null
-    customEditorLoading.value = false
   }
 
   function clear() {
-    openGeneration++
+    abandonPendingOpen()
     loadError.value = null
     fragmentLink.value = null
 
@@ -130,8 +133,6 @@ export const useEditorContentStore = defineStore('editorContent', () => {
     content.value = null
     saved.value = null
     savedJson.value = ''
-    customEditorMount.value = null
-    customEditorLoading.value = false
   }
 
   return {
