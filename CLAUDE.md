@@ -113,7 +113,8 @@ npm run format:check                     # CI gate
 **Workflow lint** — actionlint (pinned in `scripts/actionlint.sh`; same check as the `actionlint` CI job). Run after editing anything in `.github/workflows/`:
 
 ```bash
-npm run lint:actions
+npm run lint:actions            # actionlint: syntax, keys, permissions, shellcheck
+npm run lint:actions:security   # zizmor: injection, token exposure, risky triggers (config: .github/zizmor.yml)
 ```
 
 **E2e** — Playwright; no wrapping npm script:
