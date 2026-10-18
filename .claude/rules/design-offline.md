@@ -74,7 +74,7 @@ Save-as-commit aligns with `design-editor-ux.md`'s pending-edits model: author e
 - **Pending edits persist across browser reload.** The existing pending-edits Pinia stores (`editorContent`, `editorStash`, `editorStructural`) hydrate from IndexedDB on admin boot.
 - **Read paths degrade to last-cached.** When the server is unreachable, `/api/pages`, `/api/fragments`, `/api/assets` etc. return cached results with a staleness indicator. Cache backed by `AdminCache` with `IndexedDBCache` provider — extends the cache provider taxonomy.
 - **Save queue replays on reconnect.** Save / publish attempts that happened while offline are queued separately from pending edits; replayed on reconnect in submission order. Conflict on replay surfaces per Q3.
-- **Cache scope respects RBAC.** Cached entries are scoped to the role principal at cache time; switching role / re-auth invalidates the cache. Don't leak data across role switches.
+- **Cache scope respects RBAC.** Cached entries are scoped to the role principal at cache time; switching role / re-auth invalidates the cache. Don't leak data across role switches. Mechanism: "Persisted data has one owner" below.
 - **Audit log on reconnect.** Replay events go to audit log with `replayed: true` + original-attempt timestamp. Operators see the offline activity later.
 
 ## Persistence layer (Q1 locked)
@@ -124,6 +124,38 @@ async function selectBrowserCacheProvider(): Promise<AdminCache> {
 
 - Per-site key prefix matches `design-cache.md` Gap 3 lock — `IndexedDBCache` auto-prefixes keys with site name internally. Multi-site projects share IndexedDB without collision.
 - Cross-tab sync via native **BroadcastChannel** — invalidations broadcast to peer tabs in same origin. No library needed.
+
+### Persisted data has one owner (locked 2026-10-18, #962)
+
+Everything the browser persists — pending edits (`pending-edits:structural`, `pending-edits:dirty`) and the Vue Query client (`gazetta-vue-query`) — belongs to exactly one **owner**: the string `{trustMode}:{id}:{role}` of the principal that wrote it. Role is part of the owner, so a role change counts as a different owner (the RBAC invariant above).
+
+Why this needs a mechanism: in trust modes that identify the user upstream (`cloudflare-access`, the proxy modes), two people can use one browser profile. Before this lock, drafts persisted under global keys and were restored live into the editor, so user B could open — and save, as B — user A's unsaved edits.
+
+**How it works:**
+
+1. **`GET /api/me`** returns `{ id, role, trustMode }` for the requesting principal. Schema-typed under `admin-api/schemas/` (MCP discipline). No capability gate — every request has a principal (`id: 'unknown'` in `none` mode).
+2. **Owner record.** `persistence:owner` holds the owner of the last *online* boot.
+3. **Boot check, before any hydration.** In `main.ts`, between cache-provider selection and attaching persistence: fetch `/api/me`. If its owner differs from the record, delete the three keys by exact name (not `invalidatePrefix`, which is best-effort), then write the new record.
+4. **Every snapshot carries its owner.** Writers tag each snapshot with the owner their tab booted as; hydration drops any snapshot whose owner differs from the current one. This covers the case the boot check can't see: a tab still open from user A keeps writing A's drafts after B signs in.
+5. **Offline boot** can't ask the server, so it uses the record — the last online user's data loads. Inherent to offline; documented in `docs/offline.md`.
+6. **Query cache buster** includes the owner (from the record when offline), so a different owner never sees the previous query cache.
+
+On a mismatch the previous owner's unsaved drafts are deleted, not kept for later. That is deliberate: anything left in IndexedDB on a shared profile is readable by the next user through devtools.
+
+**Drafts are also scoped to the target.** Pending-edit keys gain the active target: `{target}:{kind}:{name}:{locale}:{path}` for drafts, `{target}:{kind}:{name}` for structural edits. Before this lock a draft made on `local` loaded into the same page on `staging`.
+
+**Rejected:**
+
+| Option | Why rejected |
+|---|---|
+| Persist only in trust mode `none` | Teams lose offline mode entirely. |
+| Weaken the RBAC invariant | It is a locked decision, and the leak is real. |
+| Clear on logout | No logout signal exists; upstream auth signs out outside Gazetta. |
+| Keep each owner's data under its own key prefix | A's drafts would survive B's session, but stay readable by B through devtools; storage grows per user with no cleanup point. |
+| Boot check only (no per-snapshot owner) | Misses the stale-tab case in step 4. |
+| Clear with `invalidatePrefix('pending-edits:')` | Best-effort with a time cap; a privacy purge must not be best-effort. |
+
+**Not covered:** a tab already open when the signed-in user changes still holds the previous user's edits *in memory* and would save them as the new user. That is not a persistence problem; it needs the tab to notice the principal change (revisit with the collaboration presence work).
 
 ### `navigator.storage.persist()` opt-in
 
@@ -631,7 +663,7 @@ How offline composes with each of the other 12 foundational dimensions plus the 
 - Locale switch invalidates per-locale entries.
 
 ### Auth + RBAC (#4)
-- Cache scoped to role principal at cache time; switching role / re-auth invalidates the L6 cache.
+- Cache scoped to role principal at cache time; switching role / re-auth invalidates the L6 cache. Mechanism: "Persisted data has one owner" (Persistence layer).
 - Per `design-auth-rbac.md` Foundational checks: "Browser-side cache scoped to role principal; role switch invalidates."
 - Replayed write events on reconnect record the actor at queue time, not replay time. If actor lost capability while offline, replay fails with `outcome: 'forbidden'` recorded.
 - Trust mode determines auth headers on replay (e.g., Cloudflare Access JWT may have expired during offline; replay fails with `outcome: 'unauthenticated'` → user re-auths → resumes).

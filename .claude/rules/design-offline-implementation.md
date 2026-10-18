@@ -29,6 +29,7 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 | 7 | Health endpoint `GET /api/health` | ✓ | Low | Server-side support |
 | 8a | Pending-edits store migration — `editorStructural` only (pure-data subset) | ✓ | Medium | Structural edits survive reload |
 | 8b | usePersistedEditsStore (cross-page key) + auto-mirror on markDirty/stashCurrent + navigate seam rebuilds target via buildTarget + clear-on-save | ✓ | Medium | Content edits survive reload |
+| 8c | Principal-scoped persistence: `GET /api/me`, owner record + boot check before hydration, owner tag on every snapshot, target in pending-edit keys (design-offline.md "Persisted data has one owner"; #962) | ☐ | Medium | No draft crosses users or targets |
 | 9 | Save-etag plumbing: server `ETag` + `If-Match` + 409 STALE + client `StaleSaveError` + `getPageWithEtag` / `updatePage(..., ifMatch)` | ✓ | High | Conflict-detection contract |
 | 9b | useEditorEtags Pinia store + useEditorActions integration (selection.ts If-Match plumbing, updateManifest helper, EditorPanel ConflictBanner wiring) | ✓ | High | End-to-end save-conflict flow |
 | 10 | Conflict UX: useSaveConflictsStore + ConflictBanner.vue + ConflictDiffView.vue (Show / Discard actions; no overwrite per Krug lock) | ✓ | High | Conflict resolution UX |
@@ -114,6 +115,20 @@ Branch: `offline-v1` off `main`. Sequenced after AdminCache (depends on `AdminCa
 **Tricky bit — closure rebuild on rehydration:** `EditingTarget.save` is `buildSaveFn(namePath)` (page selection state captured at navigate time). Persisted entries carry a "data-only snapshot" (no closure). On `navigate(path)`, the action checks the persisted entry and rebuilds the `save` closure from the freshly-fetched manifest's selection context.
 
 **Tests:** browser reload preserves stashed edits across pages; current-page dirty state restored on reload via navigate flow; stash restore picks up persisted dirty content during multi-page-edit scenario.
+
+### Cut 8c: Principal-scoped persistence (pending, #962)
+
+Closes the gap Cuts 8a/8b left against the RBAC invariant: drafts were persisted under global keys and restored into whichever user opened the page next.
+
+**Tests first:**
+- `packages/gazetta/tests/admin-api-me.test.ts` — `/api/me` returns the principal for `none` and a proxy trust mode; response matches the schema
+- `apps/admin/tests/persistenceOwner.test.ts` — owner mismatch deletes all three keys before hydration; match keeps them; offline (fetch fails) uses the record; a snapshot tagged with another owner is not hydrated
+- `apps/admin/tests/persistedEdits.test.ts` — keys include the target; a draft on one target is not restored on another
+- e2e, proxy trust mode with two principal headers: user A's unsaved draft does not appear for user B
+
+**Files:** `admin-api/routes/me.ts` + `schemas/me.ts`; `apps/admin/src/client/stores/_persistenceOwner.ts` (new: resolve owner, purge, record); `_pendingEditsPersistence.ts` (owner tag, snapshot version 2); `persistedEdits.ts` + `editorStructural.ts` keys; `main.ts` boot order; `docs/offline.md`.
+
+**Open:** structural keys carry no locale either. Verify whether component lists can differ per locale variant before deciding.
 
 ### Cut 9: Save-etag plumbing (shipped)
 
