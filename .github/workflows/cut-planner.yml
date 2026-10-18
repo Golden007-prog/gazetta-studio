@@ -71,12 +71,12 @@ jobs:
       issues: write
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -98,7 +98,7 @@ jobs:
       # key includes ${{ github.run_id }} so exact-match ALWAYS misses,
       # forcing fall-through to restore-keys.
       - name: Restore decision-log cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/cut-planner/decision-log.jsonl
           key: cut-planner-decision-log-v1-${{ github.run_id }}
@@ -120,14 +120,14 @@ jobs:
       # failure.
       - name: Save decision-log cache
         if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/cut-planner/decision-log.jsonl
           key: cut-planner-decision-log-v1-${{ github.run_id }}
 
       - name: Upload transcripts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cut-planner-transcripts
           path: bots/transcripts/

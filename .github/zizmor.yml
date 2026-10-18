@@ -1,10 +1,8 @@
 # zizmor config. Run with `npm run lint:actions:security`; CI runs it in
 # .github/workflows/zizmor.yml.
 rules:
-  # Temporary, while rolling out: SHA pinning (93 refs) and the pinned
-  # Claude Code CLI land in their own PRs, which remove these entries.
-  unpinned-uses:
-    disable: true
+  # Temporary: the pinned Claude Code CLI lands in its own PR, which
+  # removes this entry.
   adhoc-packages:
     disable: true
 

@@ -48,7 +48,7 @@ jobs:
       group: dead-code-watcher
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -57,7 +57,7 @@ jobs:
           git config user.name 'dead-code-watcher'
           git config user.email 'noreply@anthropic.com'
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -77,7 +77,7 @@ jobs:
       # writes the PRUNED log under a fresh per-run key, which the next
       # daily run's restore then picks up.
       - name: Restore reviewer-log cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/dead-code-watcher/reviewer-log.jsonl
           key: dead-code-watcher-reviewer-log-v1-${{ github.run_id }}
@@ -97,14 +97,14 @@ jobs:
       # run restores the latest state.
       - name: Save reviewer-log cache
         if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/dead-code-watcher/reviewer-log.jsonl
           key: dead-code-watcher-reviewer-log-v1-${{ github.run_id }}
 
       - name: Upload transcripts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dead-code-watcher-compact-transcripts
           path: bots/transcripts/
@@ -126,7 +126,7 @@ jobs:
       group: fix-bot
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -135,7 +135,7 @@ jobs:
           git config user.name 'fix-bot'
           git config user.email 'noreply@anthropic.com'
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -155,7 +155,7 @@ jobs:
       # writes the PRUNED log under a fresh per-run key, which the next
       # daily run's restore then picks up.
       - name: Restore reviewer-log cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/fix-bot/reviewer-log.jsonl
           key: fix-bot-reviewer-log-v1-${{ github.run_id }}
@@ -175,14 +175,14 @@ jobs:
       # run restores the latest state.
       - name: Save reviewer-log cache
         if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/fix-bot/reviewer-log.jsonl
           key: fix-bot-reviewer-log-v1-${{ github.run_id }}
 
       - name: Upload transcripts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fix-bot-compact-transcripts
           path: bots/transcripts/
@@ -204,7 +204,7 @@ jobs:
       group: review-bot
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -213,7 +213,7 @@ jobs:
           git config user.name 'review-bot'
           git config user.email 'noreply@anthropic.com'
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -233,7 +233,7 @@ jobs:
       # writes the PRUNED log under a fresh per-run key, which the next
       # daily run's restore then picks up.
       - name: Restore reviewer-log cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/review-bot/reviewer-log.jsonl
           key: review-bot-reviewer-log-v1-${{ github.run_id }}
@@ -253,14 +253,14 @@ jobs:
       # run restores the latest state.
       - name: Save reviewer-log cache
         if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/review-bot/reviewer-log.jsonl
           key: review-bot-reviewer-log-v1-${{ github.run_id }}
 
       - name: Upload transcripts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: review-bot-compact-transcripts
           path: bots/transcripts/
@@ -284,7 +284,7 @@ jobs:
       group: cut-planner
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -293,7 +293,7 @@ jobs:
           git config user.name 'cut-planner'
           git config user.email 'noreply@anthropic.com'
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -310,7 +310,7 @@ jobs:
       # save writes the pruned log under a fresh per-run key that the next
       # daily run's restore picks up.
       - name: Restore decision-log cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/cut-planner/decision-log.jsonl
           key: cut-planner-decision-log-v1-${{ github.run_id }}
@@ -327,14 +327,14 @@ jobs:
 
       - name: Save decision-log cache
         if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bots/cut-planner/decision-log.jsonl
           key: cut-planner-decision-log-v1-${{ github.run_id }}
 
       - name: Upload transcripts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cut-planner-compact-transcripts
           path: bots/transcripts/

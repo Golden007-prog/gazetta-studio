@@ -30,4 +30,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Actions are pinned to commit SHAs (zizmor unpinned-uses); one weekly
+    # PR bumps every SHA and its `# vX.Y.Z` comment together.
+    groups:
+      github-actions:
+        patterns: ["*"]
     open-pull-requests-limit: 3
