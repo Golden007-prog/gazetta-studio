@@ -435,3 +435,50 @@ describe('publishRun — page render mode per target type', () => {
     expect(html.includes('<!--esi'), html.slice(0, 300)).toBe(expectEsi)
   })
 })
+
+// ─── Static output layout (through the real entry point) ───────────
+
+describe('publishRun — static target writes pages at their URL paths', () => {
+  // A static target is served by a plain file server (`gazetta serve`,
+  // GitHub Pages, S3, nginx): `/about` must be `about/index.html`. Since
+  // publish pipeline Cut 3 every page went to `pages/{name}/index.html`,
+  // so every page 404'd. Locales are a path prefix; sidecars stay under
+  // `pages/{name}/` (they aren't served).
+  async function publishStatic(items: PublishItemRef[], tweak?: (site: Site) => void) {
+    const { site, manifest, sourceRoot } = await setup()
+    tweak?.(site)
+    const targetStorage = memoryStorage()
+    const result = await publishRun({
+      items,
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+    })
+    expect(result.ok, JSON.stringify(result.items)).toBe(true)
+    return { site, files: [...targetStorage.dump().keys()], targetStorage }
+  }
+
+  it.each([
+    [{ kind: 'page', name: 'home' }, 'index.html', 'Welcome to Gazetta'],
+    [{ kind: 'page', name: 'about' }, 'about/index.html', 'About Gazetta'],
+    [{ kind: 'page', name: 'about', locale: 'fr' }, 'fr/about/index.html', '<html'],
+    [{ kind: 'page', name: 'home', locale: 'fr' }, 'fr/index.html', '<html'],
+  ] as const)('%o → %s', async (ref, path, contains) => {
+    const { files, targetStorage } = await publishStatic([ref])
+    expect(files, files.join(', ')).toContain(path)
+    expect(await targetStorage.readFile(path)).toContain(contains)
+    expect(files.filter(f => /^pages\/[^/]+\/index(\.[a-z-]+)?\.html$/.test(f))).toEqual([])
+  })
+
+  it('archived page: the marker goes to its URL path', async () => {
+    const { files, targetStorage } = await publishStatic([{ kind: 'page', name: 'about' }], site => {
+      const about = site.pages.get('about')!
+      site.pages.set('about', { ...about, archived: true, aliasOf: 'home' } as typeof about)
+    })
+    expect(files, files.join(', ')).toContain('about/index.html')
+    expect(await targetStorage.readFile('about/index.html')).toContain('<!-- gazetta:archived alias=home -->')
+    expect(files).not.toContain('pages/about/index.html')
+  })
+})
