@@ -267,6 +267,25 @@ async function cleanupOldFiles(
  * mode is handled by `pages/publish.ts` Cut 4 — core treats all kinds
  * uniformly under `{kind}s/{name}/`.
  */
+/**
+ * Where a static target serves a page: `/` → `index.html`, `/about` →
+ * `about/index.html`, locale `fr` → `fr/about/index.html`. Same rule as
+ * before publish pipeline Cut 3.
+ */
+export function staticPageIndexPath(route: string, locale?: string): string {
+  const base = route === '/' ? '' : route.replace(/^\/+|\/+$/g, '')
+  const urlPath = locale ? (base ? `${locale}/${base}` : locale) : base
+  return urlPath ? `${urlPath}/index.html` : 'index.html'
+}
+
+async function removeIfExists(storage: StorageProvider, path: string): Promise<void> {
+  try {
+    if (await storage.exists(path)) await storage.rm(path)
+  } catch {
+    /* best-effort cleanup */
+  }
+}
+
 function itemDir(kind: PublishItemKind, name: string): string {
   return `${kind === 'page' ? 'pages' : 'fragments'}/${name}`
 }
@@ -343,10 +362,15 @@ export async function publishItemCore(input: PublishItemInput): Promise<PublishI
   }
 
   // Step 8 — list old hashed files at item dir for cleanup pass below.
-  // Static-mode page writes use URL-derived paths handled by per-kind
-  // wrapper (Cut 4); core's cleanup applies to ESI / fragment /
-  // archive layouts under `{kind}s/{name}/`.
+  // Hashed files and sidecars live under `{kind}s/{name}/` for every
+  // layout; only a static page's index HTML moves (see indexPath).
   const dir = itemDir(kind, name)
+  // Pages on a static target are served by a plain file server, so the
+  // index (page or archive marker) goes to the page's URL path. ESI
+  // pages and fragments keep `{kind}s/{name}/{indexFile}`.
+  const staticRoute = kind === 'page' && target.type === 'static' ? site.pages.get(name)?.route : undefined
+  const staticPage = staticRoute !== undefined
+  const indexPath = staticPage ? staticPageIndexPath(staticRoute, locale) : `${dir}/${output.indexFile}`
   const oldFiles = await listHashedFiles(target.storage, dir)
   const newFiles: string[] = []
 
@@ -355,7 +379,14 @@ export async function publishItemCore(input: PublishItemInput): Promise<PublishI
   // STORAGE_WRITE_FAILED per Q4.
   try {
     await target.storage.mkdir(dir)
-    await target.storage.writeFile(`${dir}/${output.indexFile}`, output.indexHtml)
+    if (staticPage) {
+      const parent = indexPath.includes('/') ? indexPath.slice(0, indexPath.lastIndexOf('/')) : ''
+      if (parent) await target.storage.mkdir(parent)
+    }
+    await target.storage.writeFile(indexPath, output.indexHtml)
+    // A static page published between publish pipeline Cut 3 and this
+    // fix left its index under `pages/{name}/`; nothing serves it there.
+    if (staticPage) await removeIfExists(target.storage, `${dir}/${output.indexFile}`)
     let fileCount = 1 // index file
     for (const f of output.files) {
       await target.storage.writeFile(f.path, f.content)
