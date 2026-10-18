@@ -23,4 +23,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - run: bash scripts/actionlint.sh -color
