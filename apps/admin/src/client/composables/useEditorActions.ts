@@ -707,13 +707,24 @@ export function useEditorActions() {
     return locale ? { ...key, locale } : { ...key }
   }
 
+  /** Drop the stash and its persisted mirror. The stash only holds the selected page's edits. */
+  function dropStash() {
+    const persistedStore = usePersistedEditsStore()
+    for (const [path] of stash.entries) {
+      const k = persistedKeyForStashEntry(path)
+      if (k) persistedStore.clear(k)
+    }
+    stash.clearAll()
+  }
+
   /**
    * Page-level discard, for the conflict banner's "Discard my changes": the
-   * open editor, the page's structural edits and its metadata. Stashed
-   * component edits stay (#980).
+   * open editor, stashed component edits, the page's structural edits and its
+   * metadata.
    */
   function discard() {
     ec.discard()
+    dropStash()
     const key = currentManifestKey()
     if (key) structural.discard(inCurrentLocale(key))
     const metadataKey = currentMetadataKey()
@@ -734,17 +745,12 @@ export function useEditorActions() {
     // open editor and this selection's stash. Not clearAll(): drafts of
     // pages not opened this session aren't pending edits, so the
     // unsaved-changes guard never asked about them.
-    const persistedStore = usePersistedEditsStore()
     const currentKey = persistedKeyForCurrent()
-    if (currentKey) persistedStore.clear(currentKey)
-    for (const [path] of stash.entries) {
-      const k = persistedKeyForStashEntry(path)
-      if (k) persistedStore.clear(k)
-    }
+    if (currentKey) usePersistedEditsStore().clear(currentKey)
+    dropStash()
     ec.clear()
     persistence.saving = false
     persistence.lastSaveError = null
-    stash.clearAll()
     structural.clearActive()
     metadata.clearActive()
   }

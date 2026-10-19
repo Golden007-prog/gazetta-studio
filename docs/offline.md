@@ -62,8 +62,9 @@ Two actions:
 - **Show what changed** — opens a field-by-field diff. "Title: 'Mine'
   vs 'Theirs.'" Object/array fields show "(changes inside)" without
   diving deep — at-a-glance information so you can decide.
-- **Discard my changes** — drops your local edits and reloads the
-  server's current version.
+- **Discard my changes** — drops every unsaved edit on this page (in
+  this language), including edits to other components you opened
+  earlier, and reloads the server's current version.
 
 There's deliberately no "Save anyway / Overwrite" button. If you want
 your changes on top of theirs, view the diff, manually port the edits
