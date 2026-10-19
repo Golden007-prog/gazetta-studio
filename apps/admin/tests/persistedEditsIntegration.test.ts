@@ -20,6 +20,7 @@ import { api } from '../src/client/api/client.js'
 import { useEditorActions } from '../src/client/composables/useEditorActions.js'
 import { useEditorContentStore } from '../src/client/stores/editorContent.js'
 import { useEditorStashStore } from '../src/client/stores/editorStash.js'
+import { useEditorPersistenceStore } from '../src/client/stores/editorPersistence.js'
 import { useSelectionStore } from '../src/client/stores/selection.js'
 import { persistedEditKey, usePersistedEditsStore } from '../src/client/stores/persistedEdits.js'
 
@@ -295,5 +296,66 @@ describe('clear() cleans up persisted entries for what it discards', () => {
     actions.clear()
 
     expect(persistedStore.has(other)).toBe(true)
+  })
+})
+
+// discard() is the conflict banner's "Discard my changes". After a STALE save
+// the page reloads with the other author's version; any edit left pending would
+// be written over it on the next Save, with the fresh etag.
+describe('discard() drops every unsaved edit on the page', () => {
+  function stashHero() {
+    useEditorStashStore().stash(
+      'hero',
+      { template: 'hero', path: 'hero', content: { title: 'Saved' }, schema: {}, save: async () => {} },
+      { title: 'Stashed' },
+    )
+    const key = persistedEditKey('page', 'home', undefined, 'hero')
+    usePersistedEditsStore().set(key, { title: 'Stashed' })
+    return key
+  }
+
+  it('drops stashed component edits and their persisted drafts', async () => {
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const actions = useEditorActions()
+    const key = stashHero()
+    await actions.openPageRoot()
+    actions.markDirty({ title: 'Open edit' })
+
+    actions.discard()
+
+    expect(actions.hasPendingEdit('hero')).toBe(false)
+    expect(usePersistedEditsStore().has(key)).toBe(false)
+    expect(actions.hasPendingEdits.value).toBe(false)
+  })
+
+  it('leaves nothing for the next Save to write', async () => {
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const actions = useEditorActions()
+    stashHero()
+    await actions.openPageRoot()
+
+    actions.discard()
+    const persistence = useEditorPersistenceStore()
+    const saveSpy = vi.spyOn(persistence, 'save').mockResolvedValue({ success: true })
+    await actions.save()
+
+    expect(saveSpy).toHaveBeenCalledOnce()
+    expect(saveSpy.mock.calls[0][1]).toEqual([])
+  })
+
+  it('keeps persisted drafts of other pages', async () => {
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const other = persistedEditKey('page', 'about', undefined, 'hero')
+    usePersistedEditsStore().set(other, { title: 'Other page' })
+    const actions = useEditorActions()
+    stashHero()
+    await actions.openPageRoot()
+
+    actions.discard()
+
+    expect(usePersistedEditsStore().has(other)).toBe(true)
   })
 })
