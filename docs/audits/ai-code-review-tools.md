@@ -2,7 +2,7 @@
 
 Researched 2026-10-19. Question: which third-party AI reviewer can a public repo on GitHub's free organisation plan connect for free, and how good are they?
 
-**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, drafts included, except dependency-bot PRs.
+**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, drafts included, except dependency-bot PRs. A second reviewer, Gemini through `.github/workflows/gemini-review.yml`, reviews each PR once, when it's opened as a non-draft or marked ready, and on `@gemini-cli /review` from someone with write access.
 
 **Decision (updated 2026-10-19).** Trial **Sourcery** for 3–4 weeks on real PRs. CodeRabbit was tried first and dropped: its free plan allows one review an hour (see "Seeded-bug results"). The reviewer's comments are an input to the local review, which checks each claim before relying on it.
 
@@ -20,6 +20,17 @@ Researched 2026-10-19. Question: which third-party AI reviewer can a public repo
 Not free for us: GitHub Copilot code review (organisations need a paid plan, [plans](https://docs.github.com/en/copilot/get-started/plans)), Gemini Code Assist on GitHub (consumer version shut down 2026-07-17, [notice](https://developers.google.com/gemini-code-assist/docs/deprecations/consumer-code-review)), hosted Qodo Merge, Graphite (personal-account repos only on Hobby), DeepSource AI review (pay-as-you-go), Bito, Cubic.
 
 Who uses CodeRabbit (a `.coderabbit.yaml` in the repo): TanStack/query, trpc/trpc, biomejs/biome, and two CMSes, payloadcms/payload and strapi/strapi.
+
+### Second search (2026-10-19)
+
+Only two more were free for us:
+
+| Service | Free terms | Notes |
+|---|---|---|
+| **Gemini CLI GitHub Action** ([run-gemini-cli](https://github.com/google-github-actions/run-gemini-cli)) with a free Gemini API key | Free AI Studio tier; limits per project, not published as a table | We write the workflow, so we choose the triggers. On the free tier Google uses submitted content to improve its models and "human reviewers may read" it ([terms](https://ai.google.dev/gemini-api/terms)); fine for public MIT code. Pre-1.0. **Adopted** as the second reviewer. |
+| **Amazon Q Developer for GitHub** (preview) | Free GitHub App without an AWS account; "limited invocations per month… limited number of lines for code reviews per month", numbers unpublished ([docs](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/amazon-q-for-github.html)) | Reviews when a PR opens or is reopened, not on new commits. Also brings a development agent that writes PRs from labelled issues. Not adopted. |
+
+Not free for us: OpenAI Codex review and Cursor Bugbot (paid plans), Augment (paid add-on; its open-source offer seems gone), Windsurf (paid seats), Kilo (pay-per-token credits), Aikido (pricing page excludes PR review from the free plan, while another page promises free open-source review; unresolved), Baz, Panto, Entelligence, Tabnine, Semgrep Assistant, LinearB. GitHub Models' free tier was retired on 2026-07-30. Not checked yet: Mergify AI, Snyk, Corgea, CodePeer, Callstack, Cline-style Actions.
 
 ## Quality evidence
 

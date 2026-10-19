@@ -1,0 +1,108 @@
+name: Gemini review
+
+# A second AI review, from Gemini on the free API tier, next to Sourcery.
+# Why and how it's judged: docs/audits/ai-code-review-tools.md. The prompt
+# is .gemini/commands/gemini-review.toml.
+#
+# Runs when:
+#   - a non-draft PR from this repo is opened, or a PR is marked ready.
+#     Bot PRs open as drafts through GITHUB_TOKEN, which starts no
+#     workflows; marking them ready does.
+#   - someone with write access comments `@gemini-cli /review` on a PR.
+#     Fork PRs get no secrets on `pull_request`, so this is how they get
+#     a review. For comments the checkout is main, so a PR can't change
+#     the prompt the review runs with.
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: gemini-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      (github.event_name == 'pull_request' &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+        startsWith(github.event.comment.body, '@gemini-cli /review'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check for the API key
+        id: key
+        env:
+          KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::GEMINI_API_KEY isn't set, so there's no Gemini review."; fi
+
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write the review context
+        if: steps.key.outputs.present == 'true'
+        env:
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          mkdir -p .gemini
+          jq -n --arg repo "$REPOSITORY" --arg pr "$PULL_REQUEST_NUMBER" \
+            '{repository: $repo, pull_request_number: $pr}' > .gemini/context.json
+
+      - name: Review with Gemini
+        if: steps.key.outputs.present == 'true'
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          workflow_name: gemini-review
+          github_pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          prompt: /gemini-review
+          # Read-only file tools, and only the GitHub tools a review needs.
+          settings: |-
+            {
+              "model": { "maxSessionTurns": 25 },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server:v0.27.0"],
+                  "includeTools": ["pull_request_read", "pull_request_review_write", "add_comment_to_pending_review"],
+                  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+                }
+              },
+              "tools": { "core": ["read_file", "list_directory", "glob", "grep_search"] }
+            }
+
+      # The GitHub tool can approve, and Actions may approve PRs here (the
+      # bots need that setting to open PRs). A bot approval would meet the
+      # one-review branch protection meant for a person, so undo any.
+      - name: Dismiss any approval by the workflow's bot account
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          ids=$(gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST_NUMBER/reviews" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and .state == "APPROVED") | .id')
+          for id in $ids; do
+            gh api -X PUT "repos/$REPOSITORY/pulls/$PULL_REQUEST_NUMBER/reviews/$id/dismissals" \
+              -f message="Approvals here come from people; this one came from the Gemini review." -f event=DISMISS >/dev/null
+            echo "Dismissed approval $id"
+          done
