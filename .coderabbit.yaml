@@ -1,0 +1,13 @@
+# CodeRabbit: trial from 2026-10. Why and how it's judged:
+# docs/audits/ai-code-review-tools.md
+reviews:
+  # Only the most important comments inline; the rest go in the summary.
+  profile: quiet
+  auto_review:
+    enabled: true
+    # Bot PRs open as drafts; they're reviewed once marked ready.
+    drafts: false
+    ignore_usernames:
+      - dependabot[bot]
+  path_filters:
+    - "!package-lock.json"
