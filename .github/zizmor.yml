@@ -28,6 +28,3 @@ rules:
       # issue_comment: the job's `if:` only lets OWNER/MEMBER/COLLABORATOR
       # comments through (author_association), so outsiders can't start it.
       - review-on-comment.yml
-      # issue_comment: the same author_association check. On a comment the
-      # job checks out main, so a fork PR's files never set the prompt.
-      - gemini-review.yml
