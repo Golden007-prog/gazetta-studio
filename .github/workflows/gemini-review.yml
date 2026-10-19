@@ -63,31 +63,50 @@ jobs:
           jq -n --arg repo "$REPOSITORY" --arg pr "$PULL_REQUEST_NUMBER" \
             '{repository: $repo, pull_request_number: $pr}' > .gemini/context.json
 
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # Run the CLI directly rather than google-github-actions/run-gemini-cli:
+      # that action uses other actions by tag, and this repo only allows
+      # actions pinned to a commit SHA.
+      - name: Install Gemini CLI
+        if: steps.key.outputs.present == 'true'
+        run: npm install --global --no-audit --no-fund @google/gemini-cli@0.64.0
+
+      # Read-only file tools, and only the GitHub tools a review needs.
+      - name: Configure Gemini CLI
+        if: steps.key.outputs.present == 'true'
+        run: |
+          cat > .gemini/settings.json <<'JSON'
+          {
+            "model": { "maxSessionTurns": 25 },
+            "mcpServers": {
+              "github": {
+                "command": "docker",
+                "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server:v0.27.0"],
+                "includeTools": ["pull_request_read", "pull_request_review_write", "add_comment_to_pending_review"],
+                "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+              }
+            },
+            "tools": { "core": ["read_file", "list_directory", "glob", "grep_search"] }
+          }
+          JSON
+
       - name: Review with Gemini
         if: steps.key.outputs.present == 'true'
-        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22
         env:
-          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          workflow_name: gemini-review
-          github_pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
-          prompt: /gemini-review
-          # Read-only file tools, and only the GitHub tools a review needs.
-          settings: |-
-            {
-              "model": { "maxSessionTurns": 25 },
-              "mcpServers": {
-                "github": {
-                  "command": "docker",
-                  "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server:v0.27.0"],
-                  "includeTools": ["pull_request_read", "pull_request_review_write", "add_comment_to_pending_review"],
-                  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
-                }
-              },
-              "tools": { "core": ["read_file", "list_directory", "glob", "grep_search"] }
-            }
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+        run: |
+          if ! gemini --yolo --prompt "/gemini-review" --output-format json > "$RUNNER_TEMP/gemini-out.json" 2> "$RUNNER_TEMP/gemini-err.log"; then
+            echo "::error::Gemini CLI failed"
+            tail -n 40 "$RUNNER_TEMP/gemini-err.log"
+            exit 1
+          fi
+          jq -r '.stats // empty | tostring' "$RUNNER_TEMP/gemini-out.json" || true
 
       # The GitHub tool can approve, and Actions may approve PRs here (the
       # bots need that setting to open PRs). A bot approval would meet the
