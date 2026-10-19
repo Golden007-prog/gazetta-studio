@@ -51,6 +51,7 @@ import { fileURLToPath } from 'node:url'
 import { detectInfraStop, runClaude } from '../_lib/claude.js'
 import { type DeliveryResult, deliveryFailureComment, pushBranch, runGh, savePatch } from '../_lib/delivery.js'
 import { branchHasCommits, captureCommitMessages, captureDiff, resetToMain } from '../_lib/git-tree.js'
+import { describeClaim, fetchIssueClaim } from '../_lib/issue-claim.js'
 import {
   addLabel,
   findIssuesByLabels,
@@ -199,6 +200,22 @@ async function main(): Promise<void> {
       label: `#${candidate.number} · ${candidate.title}`,
       elapsedSec: Math.round(elapsed / 1000),
     })
+
+    // Someone else is already on it (an assignee, or another open PR that
+    // references the issue): skip rather than open a second PR. If the check
+    // itself fails, skip too; the next run tries again.
+    try {
+      const claim = await fetchIssueClaim(octokit.graphql, repo, candidate.number, `fix/issue-${candidate.number}`)
+      if (claim) {
+        printNotice(`Skipping #${candidate.number}: ${describeClaim(claim)}.`)
+        processed++
+        continue
+      }
+    } catch (err) {
+      printWarning(`Couldn't check #${candidate.number} for other open work (${err}); skipping it this run.`)
+      processed++
+      continue
+    }
 
     // Reset HEAD to clean main between candidates so each `fixOneIssue`
     // starts with a deterministic working tree. Closes the class of
