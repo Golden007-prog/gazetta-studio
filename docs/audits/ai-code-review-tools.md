@@ -4,7 +4,7 @@ Researched 2026-10-19. Question: which third-party AI reviewer can a public repo
 
 **How we review today.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. A PR gets its first review only when that local session runs, and outside contributors wait for it.
 
-**Decision.** Trial CodeRabbit for 3–4 weeks (`.coderabbit.yaml`), judged by the plan below. Its comments are an input to the local review, which checks each claim before relying on it.
+**Decision (updated 2026-10-19).** Trial **Sourcery** for 3–4 weeks on real PRs. CodeRabbit was tried first and dropped: its free plan allows one review an hour (see "Seeded-bug results"). The reviewer's comments are an input to the local review, which checks each claim before relying on it.
 
 ## Free options (checked against official pricing pages, 2026-10-19)
 
@@ -40,19 +40,31 @@ General findings, all independent:
 
 Checked first-hand by the maintainer's session: CodeRabbit's pricing wording, the Gemini shutdown notice, the Lin et al. abstract and Martian's post. The rest is from two research passes that cited official pages; their unverified points are listed under "Unknown".
 
+## Seeded-bug results (2026-10-19)
+
+Four PRs (#1007–#1010) each undid the source part of one fix from that week, with tests and docs left in place and neutral titles. Each fix's own tests failed on its branch, so each bug was really back.
+
+| Bug brought back | CodeRabbit | Sourcery |
+|---|---|---|
+| #979: restored reorders act on any page | Found half (`clear()` drops other pages' drafts), plus a stale-etag point. Took the other half as "update the test". | Found both halves, with the right fix |
+| #971: previewing an archived page returns 500 | Not reviewed (rate limit) | Found, with the right fix |
+| #984: edits made during a save get lost | Not reviewed (rate limit) | Found every part, as five findings |
+| #983: metadata missing from the publish hash | Not reviewed (rate limit) | Found, including "absent and empty stay equal" |
+
+- **CodeRabbit's limit:** after the first review, "Your plan provides up to 1 included review per hour". The next PRs got "Review limit reached" and aren't retried by themselves. Fix-bot can open several PRs a night, so this doesn't fit our volume.
+- **Sourcery:** all four reviewed within minutes, no limit hit. One weak comment: on #1007 it suggested updating the failing tests to match the code, the same mistake CodeRabbit made.
+- **Caveat:** these were easy targets. Each PR deleted protective code that is visible in the diff. Bugs written fresh, with no removed guard to see, are harder; the real-PR trial is what tests that.
+- **Not tried:** Codacy AI Reviewer (its automatic review runs once at PR open and skips drafts, so fix-bot's draft PRs would need a manual run each time; it also adds static analysis and a status check to every PR). Gitar (needs an application, write access to Actions and workflows, and pushes its own commits to PR branches, which our reviewed-PR workflow rules out; budgets unpublished).
+
 ## Trial plan
 
-1. **Install** the CodeRabbit GitHub App on `gazetta-studio/gazetta-studio` (organisation owner). Config: `quiet` profile, Dependabot ignored, drafts skipped, lockfile excluded.
-2. **Seeded bugs.** For each fix below, open a PR that reverts only its source changes (tests kept out), titled `[seeded-bug test]`, not a draft, and close it without merging. Record whether CodeRabbit flags the bug, and whether a local `/review-prs` session does.
-   - `6e87c8f1`: restored reorder drafts act on whichever page is open (#979)
-   - `7adfced3`: previewing a redirect returns 500 (#971)
-   - `03757410`: edits made while a save runs get lost (#984)
-   - `bbd678ab`: a metadata-only edit doesn't count as a change for publishing (#983)
-3. **Real PRs, 3–4 weeks.** For each CodeRabbit comment, record accepted, discussed or rejected (the Lin et al. categories), and whether the local review had already found it.
-4. **Decide.** Keep it if it catches bugs the local review misses, at a noise level the local review filters without much cost. Otherwise uninstall it and delete `.coderabbit.yaml`. Fallback to try: Sourcery.
+1. **Installed:** the Sourcery GitHub App, on all org repos, with default settings (drafts and dependency bots skipped; configured in Sourcery's web settings, no repo file). CodeRabbit was uninstalled.
+2. **Seeded bugs:** done, see above. Still open: score the same four commits (`6e87c8f1`, `7adfced3`, `03757410`, `bbd678ab`) with a local `/review-prs` in a fresh session that doesn't know the answers.
+3. **Real PRs, 3–4 weeks from 2026-10-19.** For each Sourcery comment, record accepted, discussed or rejected (the Lin et al. categories), whether the local review had already found it, and any limit message.
+4. **Decide.** Keep it if it catches bugs the local review misses, at a noise level the local review filters without much cost. If kept, add the Sourcery badge to the README. Otherwise uninstall it.
 
 ## Unknown
 
-- CodeRabbit's rate limits for open-source plans (not published), and whether it reviews fork PRs.
+- Sourcery's limits for public repos (not published; paid plans list "higher review limits"), and whether it reviews fork PRs.
 - Bot and fork-PR behaviour, training policy and quality for Codacy, Gitar, Kodus and CodeAnt.
 - How much any tool overlaps with a Claude review of the same PR.
