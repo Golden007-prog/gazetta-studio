@@ -2,7 +2,7 @@
 
 Researched 2026-10-19. Question: which third-party AI reviewer can a public repo on GitHub's free organisation plan connect for free, and how good are they?
 
-**How we review today.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. A PR gets its first review only when that local session runs, and outside contributors wait for it.
+**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, except drafts and dependency-bot PRs.
 
 **Decision (updated 2026-10-19).** Trial **Sourcery** for 3–4 weeks on real PRs. CodeRabbit was tried first and dropped: its free plan allows one review an hour (see "Seeded-bug results"). The reviewer's comments are an input to the local review, which checks each claim before relying on it.
 
@@ -58,8 +58,8 @@ Four PRs (#1007–#1010) each undid the source part of one fix from that week, w
 
 ## Trial plan
 
-1. **Installed:** the Sourcery GitHub App, on all org repos, with default settings (drafts and dependency bots skipped; configured in Sourcery's web settings, no repo file). CodeRabbit was uninstalled.
-2. **Seeded bugs:** done, see above. Still open: score the same four commits (`6e87c8f1`, `7adfced3`, `03757410`, `bbd678ab`) with a local `/review-prs` in a fresh session that doesn't know the answers.
+1. **Installed:** the Sourcery GitHub App, on all org repos. Settings live in Sourcery's web settings, not in a repo file. Defaults skip drafts and dependency bots. Fix-bot and feature-bot open drafts only once their work is done, so **turn on draft reviews**; until that's done, comment `@sourcery-ai review` when marking a bot PR ready, or the trial leaves out the bot PRs. CodeRabbit was uninstalled.
+2. **Seeded bugs:** done, see above. Still open: a local review of the same four changes, in a fresh session that doesn't know the answers. `/review-prs` lists only open PRs and the seeded PRs are closed, so review each commit's revert directly (`git diff <sha> <sha>^ -- '*/src/*'` for `6e87c8f1`, `7adfced3`, `03757410`, `bbd678ab`) or reopen the PRs for it.
 3. **Real PRs, 3–4 weeks from 2026-10-19.** For each Sourcery comment, record accepted, discussed or rejected (the Lin et al. categories), whether the local review had already found it, and any limit message.
 4. **Decide.** Keep it if it catches bugs the local review misses, at a noise level the local review filters without much cost. If kept, add the Sourcery badge to the README. Otherwise uninstall it.
 
