@@ -30,7 +30,17 @@ Only two more were free for us:
 | **Gemini CLI GitHub Action** ([run-gemini-cli](https://github.com/google-github-actions/run-gemini-cli)) with a free Gemini API key | Free AI Studio tier; limits per project, not published as a table | We write the workflow, so we choose the triggers. On the free tier Google uses submitted content to improve its models and "human reviewers may read" it ([terms](https://ai.google.dev/gemini-api/terms)); fine for public MIT code. Pre-1.0. **Adopted** as the second reviewer. |
 | **Amazon Q Developer for GitHub** (preview) | Free GitHub App without an AWS account; "limited invocations per month… limited number of lines for code reviews per month", numbers unpublished ([docs](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/amazon-q-for-github.html)) | Reviews when a PR opens or is reopened, not on new commits. Also brings a development agent that writes PRs from labelled issues. Not adopted. |
 
-Not free for us: OpenAI Codex review and Cursor Bugbot (paid plans), Augment (paid add-on; its open-source offer seems gone), Windsurf (paid seats), Kilo (pay-per-token credits), Aikido (pricing page excludes PR review from the free plan, while another page promises free open-source review; unresolved), Baz, Panto, Entelligence, Tabnine, Semgrep Assistant, LinearB. GitHub Models' free tier was retired on 2026-07-30. Not checked yet: Mergify AI, Snyk, Corgea, CodePeer, Callstack, Cline-style Actions.
+Not free for us: OpenAI Codex review and Cursor Bugbot (paid plans), Augment (paid add-on; its open-source offer seems gone), Windsurf (paid seats), Kilo (pay-per-token credits), Aikido (pricing page excludes PR review from the free plan, while another page promises free open-source review; unresolved), Baz, Panto, Entelligence, Tabnine, Semgrep Assistant, LinearB. GitHub Models' free tier was retired on 2026-07-30. 
+### Third search (2026-10-19)
+
+| Service | Free for us? | Notes |
+|---|---|---|
+| **Sentry Seer AI Code Review** | By application: the open-source sponsorship includes "Seer for 5 active contributors", "no term limit", for projects under "a friendly license like Apache or MIT" ([sponsorship](https://sentry.io/for/open-source/)) | Skips drafts; reviews when marked ready, on each later commit, and on `@sentry review` ([docs](https://docs.sentry.io/product/ai-in-sentry/ai-code-review/)). Needs a Sentry organisation. **The fallback** if Sourcery or Gemini disappoints. |
+| Aikido | By application only; the free plan excludes PR review ([pricing](https://www.aikido.dev/pricing)) | No published terms |
+| Snyk Secure Developer Program | By application; README and website link required; "not backed by any corporate entity" ([programme](https://snyk.io/open-source/)) | Security fixes, not general review |
+| OpenHands, Cline PR-review Actions | Free software, but need a paid model key | Cline's split into a read-only review job and a write-only posting job is the safest design seen |
+
+Not free or gone: Mergify (no AI review), Corgea (PR scanning paid), Tenki and GitZoid (paid), Roo Code (shut down 2026-05), Aider (no maintained review Action). Unreachable: CodePeer, Callstack.ai.
 
 ## Quality evidence
 
