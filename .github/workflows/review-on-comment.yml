@@ -35,7 +35,9 @@ jobs:
     #
     # Commenter must have write access to the repo. The repo is public, so
     # without this anyone could comment `@claude review` on any PR and run
-    # Claude on our token against a diff they wrote.
+    # Claude on our token against a diff they wrote. author_association is
+    # only a cheap pre-filter: MEMBER and COLLABORATOR include read-only
+    # access, so the first step checks the actual permission.
     if: >
       github.event.issue.pull_request != null &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
@@ -54,6 +56,18 @@ jobs:
       issues: write
       actions: read
     steps:
+      - name: Check the commenter has write access
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          permission=$(gh api "repos/$REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)
+          case "$permission" in
+            admin|maintain|write) ;;
+            *) echo "::error::$COMMENTER has '$permission' access; a review needs write access."; exit 1 ;;
+          esac
+
       - name: React 👀 (workflow started)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -66,11 +80,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # PR comments target the PR's head ref. We need the merge base
-          # for `git diff main...HEAD`-style commands; fetch-depth: 0
-          # keeps history available.
+          # Always main: this job runs `npm ci` and the bot with secrets, so
+          # it must never run code from the PR. The bot reads the PR through
+          # `gh pr diff`. (The old `pull_request.head.ref || 'main'` always
+          # fell back to main: issue_comment events carry no head ref.)
           fetch-depth: 0
-          ref: ${{ github.event.issue.pull_request.head.ref || 'main' }}
+          ref: main
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
