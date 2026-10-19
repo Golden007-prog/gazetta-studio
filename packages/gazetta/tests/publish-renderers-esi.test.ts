@@ -181,6 +181,21 @@ describe('renderPageWithEsi — exact output', () => {
     )
   })
 
+  it('a page template without css adds no css line', async () => {
+    await writeTestFile(
+      sourceDir,
+      'pages/plain/page.json',
+      JSON.stringify({ route: '/plain', template: 'plain-layout', components: [{ name: 'hero', template: 'leaf' }] }),
+    )
+    const site = await loadTestSite()
+
+    const out = await renderPageWithEsi('plain', { site })
+
+    const leaf = scopeOf(out.indexHtml, '<leaf>')
+    const css = out.files.find(f => f.path.endsWith('.css'))
+    expect(css?.content).toBe(`[data-gz="${leaf}"] .leaf{}`)
+  })
+
   it('locale-suffixes the fragment placeholders and index file; lang follows locale', async () => {
     await writeTestFile(
       sourceDir,
