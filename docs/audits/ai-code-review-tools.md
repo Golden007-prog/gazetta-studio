@@ -59,6 +59,10 @@ Four PRs (#1007–#1010) each undid the source part of one fix from that week, w
 ## Trial plan
 
 1. **Installed:** the Sourcery GitHub App, on all org repos. Settings live in Sourcery's web settings, not in a repo file. Draft reviews are on (turned on 2026-10-19), because fix-bot and feature-bot open drafts once their work is done. Dependency-bot PRs are still skipped. **Auto-approve is off** (2026-10-19): Sourcery's approvals are real GitHub approvals, and branch protection needs one approving review, so a bot approval passed the gate meant for a person. CodeRabbit was uninstalled.
+   Settings for the trial, kept fixed until it ends:
+   - General: review comments on, review profile **Balanced**, review guide and sequence diagrams on (useful to people reading a PR), PR summary **off** (it edits the PR description; bodies are written on purpose and a stray "Fixes #N" would close an issue), tips-and-commands comment off, approval off, path filter `package-lock.json`.
+   - Auto-review: no title, label or branch filters; drafts reviewed.
+   - Security scanning on. Review rules empty; add targeted rules only after the trial, if the same misses repeat.
 2. **Seeded bugs:** done, see above. Still open: a local review of the same four changes, in a fresh session that doesn't know the answers. `/review-prs` lists only open PRs and the seeded PRs are closed, so review each commit's revert directly (`git diff <sha> <sha>^ -- '*/src/*'` for `6e87c8f1`, `7adfced3`, `03757410`, `bbd678ab`) or reopen the PRs for it.
 3. **Real PRs, 3–4 weeks from 2026-10-19.** For each Sourcery comment, record accepted, discussed or rejected (the Lin et al. categories), whether the local review had already found it, and any limit message.
 4. **Decide.** Keep it if it catches bugs the local review misses, at a noise level the local review filters without much cost. If kept, add the Sourcery badge to the README. Otherwise uninstall it.
