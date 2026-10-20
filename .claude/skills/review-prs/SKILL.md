@@ -75,7 +75,7 @@ Agent B already does this check; you're the second pair of eyes. If you see a mi
 
 For `structural` mode, the line reads `Runtime exercise: N/A — <reason>`. That's expected. The failing test pins the structural invariant; no behavioral surface to exercise.
 
-**Test-only PRs** (tests or test fixtures, no product code): the bot's red-then-green shows only that the new test needs what the PR adds. Put back the bug the test exists for and confirm the test fails. (2026-10-20, #1021: the e2e spec failed without its new fixture field; undoing #981's fix showed it also catches the bug it was written for.)
+**Test-only PRs** (tests or test fixtures, no product code): the bot's red-then-green shows only that the new test needs what the PR adds. Put back the bug the test exists for and confirm the test fails. (2026-10-20, #1021: the e2e spec failed without its new fixture field; undoing #981's fix showed it also catches the bug it was written for.) If the PR changes a fixture every e2e test uses, also search the other tests for waits on what it adds, per `testing-plan.md`: #1021 passed that check above and its own CI, and was still reverted (#1031) for breaking other tests' waits.
 
 **Discovered**: each entry is a candidate follow-up issue. The bot intentionally surfaces these instead of widening scope. Treat them as input to the "Follow-up issues" workflow below.
 
