@@ -104,8 +104,10 @@ One row per PR and reviewer, using the categories in item 3. "Local first" says 
 | 10-20 | #1017 | Seer | 1 | Discussed, not acted on: `cache` isn't checked on save. The admin never sends it, and a bad value falls back to the target's cache | No |
 | 10-20 | #1022 | Seer | 1 | Accepted: the sibling test needs the same wait; added to the PR | Yes (the bot's own note) |
 | 10-20 | #1018–#1021 | both | 0 | No findings | – |
+| 10-20 | #1037 | Sourcery | 1 | Rejected: said a locale variant's archive state can differ from the default page's. In our design, variants share it, and archiving only one locale is deferred | Yes |
+| 10-20 | #1037 | Seer | 0 | No findings | – |
 
-So far, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed.
+Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see.
 
 ## Unknown
 
