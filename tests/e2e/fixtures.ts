@@ -137,19 +137,6 @@ export const test = base.extend<{ page: Page }, { testSite: TestSite; baseURL: s
       }
       await writeFileFs(siteConfigPath, config)
 
-      // The starter's page-default has no fields, so nothing would edit a
-      // page's own content (page-content.spec.ts). Give the copy one.
-      const pageTemplatePath = resolve(projectDir, 'templates/page-default/index.ts')
-      const pageTemplate = await readFile(pageTemplatePath, 'utf-8')
-      const schemaAnchor = 'z.object({})'
-      if (!pageTemplate.includes(schemaAnchor)) {
-        throw new Error('Could not locate `z.object({})` in starter templates/page-default/index.ts')
-      }
-      await writeFileFs(
-        pageTemplatePath,
-        pageTemplate.replace(schemaAnchor, 'z.object({ intro: z.string().optional() })'),
-      )
-
       const server = spawnDev(projectDir, port)
       try {
         await waitForServer(port, server)
