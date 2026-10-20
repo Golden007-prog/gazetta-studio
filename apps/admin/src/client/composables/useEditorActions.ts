@@ -476,7 +476,6 @@ export function useEditorActions() {
     if (stashKey) {
       const stashed = stash.restore(stashKey)
       if (stashed) {
-        persistence.saving = false
         persistence.lastSaveError = null
         await ec.open(stashed.target, stashed.editedContent)
         usePreviewStore().invalidateDraft()
@@ -491,12 +490,10 @@ export function useEditorActions() {
       const target = await buildTarget(sel, signal)
       if (!target) {
         // Nothing to edit (redirect / archived without a template).
-        persistence.saving = false
         persistence.lastSaveError = null
         ec.clear()
         return
       }
-      persistence.saving = false
       persistence.lastSaveError = null
       // Cut 8b: fall through to the cross-page persisted-edits store
       // for dirty content that survived a reload. Keys are richer
