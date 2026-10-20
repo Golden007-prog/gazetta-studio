@@ -214,6 +214,21 @@ code by hand reaches e2e without a rebuild, and why a source edit made during
 a run reaches the tests still running. Keep other work as a patch until the
 run ends, as #981 did with cut 4 during its e2e mutation runs.
 
+To run one `dev`-project spec locally, use a throwaway config that drops the
+four production web servers `playwright.config.ts` always starts:
+
+```ts
+// .tmp/pw-dev-only.config.ts (.tmp/ is gitignored)
+import base from '../playwright.config.ts'
+export default { ...base, testDir: '../tests/e2e', reporter: 'line', webServer: [] }
+```
+
+Then `npx playwright test -c .tmp/pw-dev-only.config.ts --project=dev <spec>`.
+Run it from the main checkout, not a git worktree: a worktree with symlinked
+`node_modules` writes the main checkout's Vite cache. Until #1028 gives each
+dev server its own Vite cache, a run with two or more workers can also fail
+on `504 (Outdated Optimize Dep)`.
+
 POMs landed: `PublishPanel`, `SiteTree`, `ComponentTree`. Add a POM with its
 first consumer (avoid dead-code POMs), not in advance.
 

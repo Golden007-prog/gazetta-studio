@@ -17,6 +17,7 @@ Walk every open PR. For each, do a real review (not a summary). Always ask befor
    - **Read the linked issue** if one exists — `gh issue view <N>` (look for `Closes #X` in body)
    - **Read the diff** — `gh pr diff <N>` (or use Read on changed files for big diffs)
    - **Fact-check load-bearing claims** — see the "Fact-check" section below
+   - **Read the AI reviewers' comments** — see "AI reviewer comments" below
    - **Check CI** — if green, note it; if no checks, diagnose (see "CI not firing"); if running, monitor or note pending
    - **Detect stacked PRs** — see "Stacked-PR detection"
    - **Recommend** — merge / close / push back / wait for CI — with reasoning
@@ -73,6 +74,8 @@ Agent B already does this check; you're the second pair of eyes. If you see a mi
 - If the fix touches symmetric surfaces (page+fragment kinds, etc.), both are exercised
 
 For `structural` mode, the line reads `Runtime exercise: N/A — <reason>`. That's expected. The failing test pins the structural invariant; no behavioral surface to exercise.
+
+**Test-only PRs** (tests or test fixtures, no product code): the bot's red-then-green shows only that the new test needs what the PR adds. Put back the bug the test exists for and confirm the test fails. (2026-10-20, #1021: the e2e spec failed without its new fixture field; undoing #981's fix showed it also catches the bug it was written for.)
 
 **Discovered**: each entry is a candidate follow-up issue. The bot intentionally surfaces these instead of widening scope. Treat them as input to the "Follow-up issues" workflow below.
 
@@ -174,6 +177,14 @@ Don't trust the PR body's root-cause description without verifying it. For every
 When a claim doesn't survive fact-check, say so explicitly. Don't just accept the PR body. Phrase: *"PR claims X. Checked against `path/to/file.ts:42` — actually Y. The fix [does/doesn't] address the real cause."*
 
 If the PR's fix is right but the explanation is wrong, that's still a smell — file a follow-up explaining the real cause so future readers don't inherit the wrong mental model.
+
+## AI reviewer comments
+
+Sourcery reviews every PR, drafts included; Sentry Seer reviews a PR once it's marked ready, and after each later commit (see `docs/audits/ai-code-review-tools.md`). Read both on every PR: inline comments with `gh api repos/{owner}/{repo}/pulls/<N>/comments`, reviews with `.../pulls/<N>/reviews`. Check each finding against the code, like a bot's claim.
+
+- **A finding about code the diff doesn't touch is a follow-up candidate, not noise.** On #1017, Sourcery said translated pages are published with the default page's cache headers, in code #1017 didn't change. Reproducing it showed their title, description and ESI component list were wrong too (#1024).
+- **Compare a finding about the fix with the linked issue's Expected section.** If the issue asked for it, the fix is incomplete (see "Anti-patterns to catch"). If the issue's own notes left it out, file a follow-up. Seer showed #1016's Discard missed drafts restored after a reload, which #980's notes hadn't mentioned (#1025).
+- **Record the outcome.** React 👍 or 👎 (Sourcery learns from reactions), reply with what you did or the follow-up issue, and add a row to the audit doc's trial log while the trial runs.
 
 ## Stacked-PR detection
 
@@ -283,6 +294,8 @@ Bot-authored PRs (fix-bot, feature-bot) open as **draft** by design. Before merg
 If two PRs are both green and unrelated:
 - Merge sequentially, not batched — keeps blame attribution clean if main breaks
 - After first merge, second PR may need rebase; check `gh pr view <N> --json mergeable`
+
+If several PRs edit the same file, check they pass together before merging the first: GitHub's rebase merge stacks them on `main` without running CI on the result. Apply them in merge order on `main` in a temporary worktree (symlink `node_modules`) and run that package's tests. (2026-10-20: #1016, #1018 and #1019 all edited `useEditorActions.ts`; stacked, the admin suite passed.) Unit tests run fine in a worktree; e2e doesn't, see `testing-plan.md`.
 
 Doc-only PRs (per memory: `*.md`-only diffs by the maintainer) may admin-rebase-merge immediately without CI wait. Bot doc-only PRs still go through CI — the bot's PR-body claims need verification.
 
