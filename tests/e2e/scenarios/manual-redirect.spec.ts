@@ -42,7 +42,10 @@ test.describe('Scenario — create a manual redirect, see it greyed in tree', ()
   // remove created pages, so the next test in this worker would hit a 409
   // (or see the archived toggle it asserts is absent). Purge through the
   // app so its alias sidecar goes too. 404 = nothing was created.
-  test.afterEach(async ({ request, baseURL }) => {
+  // Leave the admin first: the purge triggers a dev-server reload, and an
+  // editor still open on old-about would refetch its preview and log a 404.
+  test.afterEach(async ({ page, request, baseURL }) => {
+    await page.goto('about:blank')
     const res = await request.delete(`${baseURL}/admin/api/pages/old-about/purge`)
     expect([200, 204, 404]).toContain(res.status())
   })
