@@ -14,7 +14,7 @@
  * Format conversion (WebP/AVIF emission) is a separate capability and
  * lives out of scope for this module.
  */
-import sharp from 'sharp'
+import sharp, { type FormatEnum, type Sharp } from 'sharp'
 
 /** The v1 srcset ladder. Ordered ascending — callers rely on this. */
 export const VARIANT_WIDTHS: readonly number[] = [400, 800, 1200, 1600]
@@ -69,10 +69,9 @@ export async function generateVariants(source: Uint8Array): Promise<GeneratedVar
  * format, but being explicit here keeps behavior deterministic and
  * makes future per-format quality tuning a one-line change.
  */
-function toSourceFormat(pipeline: sharp.Sharp, format: keyof sharp.FormatEnum): sharp.Sharp {
+function toSourceFormat(pipeline: Sharp, format: Extract<keyof FormatEnum, string>): Sharp {
   switch (format) {
     case 'jpeg':
-    case 'jpg':
       return pipeline.jpeg()
     case 'png':
       return pipeline.png()
