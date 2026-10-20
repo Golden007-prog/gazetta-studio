@@ -18,6 +18,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Node 25's built-in Web Storage globals shadow jsdom's and lack clear().
+    execArgv: ['--no-experimental-webstorage'],
     setupFiles: ['./tests/_setup/suppress-webstorage-warning.ts'],
   },
 })
