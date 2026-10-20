@@ -21,7 +21,14 @@ import { staticSourceResolver, createSourceContext } from '../src/admin-api/sour
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { principalMiddleware } from '../src/admin-api/middleware/principal.js'
 import { HookRegistry } from '../src/hooks/index.js'
-import type { AfterUploadHook, BeforeUploadHook, UploadHookAsset, UploadHookResult } from '../src/hooks/index.js'
+import type {
+  AfterUploadHook,
+  BeforeUploadHook,
+  HookContext,
+  UploadHookAsset,
+  UploadHookResult,
+} from '../src/hooks/index.js'
+import type { SiteManifest } from '../src/types.js'
 import { tempDir } from './_helpers/temp.js'
 
 const testDir = tempDir('http-hooks-upload-test-' + Date.now())
@@ -68,10 +75,10 @@ function multipartForm(fields: Record<string, string | { name: string; bytes: Ui
   return form
 }
 
-function buildApp(opts: { hooks?: HookRegistry } = {}) {
+function buildApp(opts: { hooks?: HookRegistry; manifest?: SiteManifest } = {}) {
   const dir = join(testDir, `app-${Math.random().toString(36).slice(2, 8)}`)
   const storage = createFilesystemProvider(dir)
-  const source = createSourceContext({ storage, siteDir: '' })
+  const source = createSourceContext({ storage, siteDir: '', manifest: opts.manifest })
   const resolve = staticSourceResolver(source)
   const app = new Hono()
   app.use('/api/*', principalMiddleware())
@@ -105,6 +112,31 @@ describe('Cut 6 — beforeUpload + afterUpload firing', () => {
     expect(beforeCalls[0].asset.mime).toBe('image/jpeg')
     expect(beforeCalls[0].asset.alt).toBe('Hero banner')
     expect(beforeCalls[0].byteLength).toBe(bytes.byteLength)
+  })
+
+  it('beforeUpload context carries the request id and site name', async () => {
+    const hooks = new HookRegistry()
+    let seen: HookContext | undefined
+    const capture: BeforeUploadHook = async (asset, bytes, ctx) => {
+      seen = ctx
+      return { asset, bytes }
+    }
+    hooks.register('beforeUpload', capture, { name: 'capture' })
+    hooks.seal()
+
+    const { app } = buildApp({ hooks, manifest: { name: 'Test Site' } as SiteManifest })
+    const bytes = await jpegBuffer()
+    const res = await app.request('/api/assets', {
+      method: 'POST',
+      headers: { 'x-request-id': 'req-998' },
+      body: multipartForm({
+        file: { name: 'hero.jpg', bytes: new Uint8Array(bytes), type: 'image/jpeg' },
+        name: 'hero',
+      }),
+    })
+    expect(res.status).toBe(201)
+    expect(seen?.requestId).toBe('req-998')
+    expect(seen?.site.name).toBe('Test Site')
   })
 
   it('afterUpload fires with the persisted asset hash', async () => {

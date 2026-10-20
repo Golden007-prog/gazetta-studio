@@ -128,20 +128,22 @@ describe('POST /api/assets', () => {
       body: multipartForm({ name: 'hero' }),
     })
     expect(res.status).toBe(400)
-    const body = await res.json()
-    expect(body.code).toBe('BAD_REQUEST')
+    expect(await res.json()).toEqual({ code: 'BAD_REQUEST', message: 'Missing or invalid "file" field' })
   })
 
-  it('400s when name field is missing', async () => {
+  it.each([
+    ['missing', undefined],
+    ['empty', ''],
+  ])('400s when name field is %s', async (_label, name) => {
     const { app } = buildApp()
     const bytes = await jpegBuffer()
-    const res = await app.request('/api/assets', {
-      method: 'POST',
-      body: multipartForm({
-        file: { name: 'hero.jpg', bytes: new Uint8Array(bytes), type: 'image/jpeg' },
-      }),
-    })
+    const fields: Parameters<typeof multipartForm>[0] = {
+      file: { name: 'hero.jpg', bytes: new Uint8Array(bytes), type: 'image/jpeg' },
+    }
+    if (name !== undefined) fields.name = name
+    const res = await app.request('/api/assets', { method: 'POST', body: multipartForm(fields) })
     expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ code: 'BAD_REQUEST', message: 'Missing or invalid "name" field' })
   })
 
   it('400s with ASSET_MIME_MISMATCH for an unsupported format', async () => {
@@ -538,6 +540,17 @@ describe('POST /api/assets/:name/locale-bytes', () => {
     expect(res.status).toBe(400)
   })
 
+  it('400s when the file field is missing', async () => {
+    const { app } = buildApp()
+    await uploadAsset(app, 'hero')
+    const res = await app.request('/api/assets/hero/locale-bytes?locale=fr', {
+      method: 'POST',
+      body: multipartForm({ name: 'hero' }),
+    })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ code: 'BAD_REQUEST', message: 'Missing or invalid "file" field' })
+  })
+
   it('400s on invalid locale code', async () => {
     const { app } = buildApp()
     await uploadAsset(app, 'hero')
@@ -668,6 +681,7 @@ describe('PATCH /api/assets/:name', () => {
       body: JSON.stringify({ alt: 42 }),
     })
     expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ code: 'BAD_REQUEST', message: 'alt must be string or null' })
   })
 
   it('400s on non-JSON body', async () => {
@@ -704,6 +718,31 @@ describe('PATCH /api/assets/:name', () => {
     const body = (await res.json()) as { manifest: { overrideLocales: string[]; overrideThemes: string[] } }
     expect(body.manifest.overrideLocales).toEqual([])
     expect(body.manifest.overrideThemes).toEqual([])
+  })
+
+  it('reports each override locale and theme once', async () => {
+    const { app } = buildApp()
+    await uploadAsset(app, 'hero')
+    // Two slices share the `fr` locale; the summary lists it once.
+    for (const query of ['locale=fr', 'locale=fr&theme=dark']) {
+      const up = await app.request(`/api/assets/hero/locale-bytes?${query}`, {
+        method: 'POST',
+        body: multipartForm({
+          file: { name: 'hero.jpg', bytes: new Uint8Array(await jpegBuffer()), type: 'image/jpeg' },
+        }),
+      })
+      expect(up.status).toBe(201)
+    }
+
+    const res = await app.request('/api/assets/hero', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ alt: 'description' }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { manifest: { overrideLocales: string[]; overrideThemes: string[] } }
+    expect(body.manifest.overrideLocales).toEqual(['fr'])
+    expect(body.manifest.overrideThemes).toEqual(['dark'])
   })
 
   it('empty patch is a no-op (200 with current summary)', async () => {
@@ -755,28 +794,61 @@ describe('PATCH /api/assets/:name', () => {
       expect(body.manifest.focalPoint).toBeUndefined()
     })
 
-    it('400s when focalPoint is out of [0, 1]', async () => {
+    it.each([
+      { x: -0.1, y: 0.5 },
+      { x: 2.5, y: 0.5 },
+      { x: 0.5, y: -0.1 },
+      { x: 0.5, y: 1.5 },
+    ])('400s when focalPoint %o is out of [0, 1]', async focalPoint => {
       const { app } = buildApp()
       await uploadAsset(app, 'hero')
 
       const res = await app.request('/api/assets/hero', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ focalPoint: { x: 2.5, y: 0.5 } }),
+        body: JSON.stringify({ focalPoint }),
       })
       expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ code: 'BAD_REQUEST', message: 'focalPoint x and y must be in [0, 1]' })
     })
 
-    it('400s when focalPoint is malformed', async () => {
+    // The range is inclusive: the edges of the image are valid focal points.
+    it.each([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ])('accepts the boundary focalPoint %o', async focalPoint => {
       const { app } = buildApp()
       await uploadAsset(app, 'hero')
 
       const res = await app.request('/api/assets/hero', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ focalPoint: 'not an object' }),
+        body: JSON.stringify({ focalPoint }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { manifest: { focalPoint?: { x: number; y: number } } }
+      expect(body.manifest.focalPoint).toEqual(focalPoint)
+    })
+
+    it.each([
+      ['a string', 'not an object'],
+      ['x not a number', { x: '0.5', y: 0.5 }],
+      ['y not a number', { x: 0.5, y: '0.5' }],
+      ['neither coordinate a number', { x: 'a', y: 'b' }],
+    ])('400s when focalPoint is malformed (%s)', async (_label, focalPoint) => {
+      const { app } = buildApp()
+      await uploadAsset(app, 'hero')
+
+      const res = await app.request('/api/assets/hero', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ focalPoint }),
       })
       expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({
+        code: 'BAD_REQUEST',
+        message: 'focalPoint must be { x: number, y: number } or null',
+      })
     })
 
     it('combined alt + focalPoint patch in one request', async () => {

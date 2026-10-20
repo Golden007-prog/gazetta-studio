@@ -148,6 +148,8 @@ describe('Cross-foundation gap #4 — suggest-alt audit recording', () => {
       locale: 'en',
       refused: false,
     })
+    // A refusal reason is recorded only for refusals.
+    expect(ev.metadata).not.toHaveProperty('refusalReason')
   })
 
   it('refused suggestion records ai-suggest-alt with refused: true + refusalReason', async () => {
