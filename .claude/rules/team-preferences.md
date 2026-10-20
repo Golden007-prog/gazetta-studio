@@ -355,19 +355,19 @@ Default for new rules: untagged (apply universally). Add `[local]` only when bot
 
    **Why this rule earns a number:** today's `/review-prs` session lost ~30 minutes across cycles of "why isn't CI firing?" (a + b), "did the test really fail?" (c), and "how do I unstack this?" (d). Subsection (e) cost ~5 minutes more in the feature-bot-validation session — Monitor exited early TWICE on the same PR because the poll didn't filter by runId. Subsection (f) cost most of a `/review-prs` pass in the #823 docker saga — 10 blocked PRs were close+reopened instead of rebased, so they kept re-running against stale branches that lacked the just-merged fix. Each gotcha is documented somewhere in GitHub's docs but the docs don't surface them together; you only discover them via the failure mode. Centralizing them here means the next session reads one rule instead of rediscovering six.
 
-35. **Flake fixes that pass CI on the first run are not proven.** Rule 31's "verify by reverting and confirming the test fails" doesn't catch race conditions — the race doesn't reproduce locally on demand, and a single green CI run is consistent with the flake simply not firing this time. Before merging a flake-fix PR, verify durability under shard-load conditions:
+35. **Flake fixes that pass CI on the first run are not proven.** Rule 31's "verify by reverting and confirming the test fails" doesn't catch race conditions — the race doesn't reproduce locally on demand, and a single green CI run is consistent with the flake simply not firing this time. Before merging a flake-fix PR, run the spec five times on CI with the `e2e repeat` workflow ([`e2e-repeat.yml`](../../.github/workflows/e2e-repeat.yml)), on the fix's branch:
 
    ```bash
-   npx playwright test --project=dev --shard=<N>/7 <spec-file> --repeat-each=5
+   gh workflow run e2e-repeat.yml --ref <fix-branch> -f spec=<spec-file> [-f grep='<test title>']
    ```
 
-   5 consecutive passes on the affected shard = durable fix. Less than 5 = still flaky; the hypothesis was wrong or the fix is incomplete. Run on CI (where the flake originally surfaced), not locally — local hardware often masks races that only appear under CI's resource constraints.
+   It runs the spec with `--repeat-each=5`, set up like CI's e2e job, with one worker. 5 of 5 passes = durable fix. Fewer = still flaky; the hypothesis was wrong or the fix is incomplete. Run it on CI, where the flake surfaced, not locally — local hardware often masks races that only appear under CI's resource constraints. The spec runs without the other tests of its CI shard; if the flake needs them, it may not show.
 
    **Why:** PR #325 added a double-`requestAnimationFrame` gate to ostensibly fix `component-ops.spec.ts:84` (#288). The PR passed CI on its first run; the issue auto-closed. Within hours #288's same failure recurred verbatim on an unrelated PR (#335) — the gate didn't actually close the race. Costs: stale "closed" issue tracking real flake; reviewer time on the recurrence; fix-bot will now re-attempt with possibly the same hypothesis. A `--repeat-each=5` shard run on #325's branch before merge would have surfaced the hole.
 
    **How to apply:**
    - Mandatory for any PR whose title / body claims to fix a `flake`-labeled issue
-   - The PR description must include the `--repeat-each=N` command run and its result count ("5/5 pass on shard 1 = durable")
+   - The PR description or the review records the run and its result ("e2e repeat run 123: 5/5 pass = durable"). Bots can't wait for another workflow, so for a bot's flake fix the reviewer starts the run
    - Single-run green CI alone is NOT acceptable evidence to merge a flake fix
    - When the hypothesis turns out wrong (recurrence within a week), reopen the issue with the recurrence evidence and the next hypothesis — don't silently re-attempt without acknowledging the prior failure
 
