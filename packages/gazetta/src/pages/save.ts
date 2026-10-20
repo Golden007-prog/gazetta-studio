@@ -146,6 +146,8 @@ export async function savePage(input: SavePageInput): Promise<SaveResult> {
   }
   if (input.body.metadata !== undefined) manifest.metadata = input.body.metadata
   else if (page.metadata) manifest.metadata = page.metadata
+  if (input.body.cache !== undefined) manifest.cache = input.body.cache
+  else if (page.cache) manifest.cache = page.cache
   // Locale variants store their route for preview resolution
   if (locale && page.route) manifest.route = page.route
 
