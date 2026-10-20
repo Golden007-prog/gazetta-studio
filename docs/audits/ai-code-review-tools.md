@@ -2,9 +2,9 @@
 
 Researched 2026-10-19. Question: which third-party AI reviewer can a public repo on GitHub's free organisation plan connect for free, and how good are they?
 
-**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, drafts included, except dependency-bot PRs. A second reviewer, Sentry Seer, is applied for (2026-10-19, waiting on Sentry's open-source sponsorship).
+**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, drafts included, except dependency-bot PRs. Since 2026-10-20, Sentry Seer reviews too: when a PR is marked ready, and on each later commit.
 
-**Decision (updated 2026-10-19).** Trial **Sourcery** for 3–4 weeks on real PRs. CodeRabbit was tried first and dropped: its free plan allows one review an hour (see "Seeded-bug results"). The reviewer's comments are an input to the local review, which checks each claim before relying on it.
+**Decision (updated 2026-10-20).** Trial **Sourcery** for 3–4 weeks on real PRs, with **Sentry Seer** alongside it from 2026-10-20. CodeRabbit was tried first and dropped: its free plan allows one review an hour (see "Seeded-bug results"). The reviewer's comments are an input to the local review, which checks each claim before relying on it.
 
 ## Free options (checked against official pricing pages, 2026-10-19)
 
@@ -35,7 +35,7 @@ Not free for us: OpenAI Codex review and Cursor Bugbot (paid plans), Augment (pa
 
 | Service | Free for us? | Notes |
 |---|---|---|
-| **Sentry Seer AI Code Review** | By application: the open-source sponsorship includes "Seer for 5 active contributors", "no term limit", for projects under "a friendly license like Apache or MIT" ([sponsorship](https://sentry.io/for/open-source/)) | Skips drafts; reviews when marked ready, on each later commit, and on `@sentry review` ([docs](https://docs.sentry.io/product/ai-in-sentry/ai-code-review/)). Needs a Sentry organisation. **Applied for** (2026-10-19) as the second reviewer. Its docs say it "cannot approve or block merges", and only "file names, code diffs, and PR descriptions" go to the AI. |
+| **Sentry Seer AI Code Review** | By application: the open-source sponsorship includes "Seer for 5 active contributors", "no term limit", for projects under "a friendly license like Apache or MIT" ([sponsorship](https://sentry.io/for/open-source/)) | Skips drafts; reviews when marked ready, on each later commit, and on `@sentry review` ([docs](https://docs.sentry.io/product/ai-in-sentry/ai-code-review/)). Needs a Sentry organisation. **Adopted** as the second reviewer: sponsorship approved 2026-10-20. Its docs say it "cannot approve or block merges", and only "file names, code diffs, and PR descriptions" go to the AI. |
 | Aikido | By application only; the free plan excludes PR review ([pricing](https://www.aikido.dev/pricing)) | No published terms |
 | Snyk Secure Developer Program | By application; README and website link required; "not backed by any corporate entity" ([programme](https://snyk.io/open-source/)) | Security fixes, not general review |
 | OpenHands, Cline PR-review Actions | Free software, but need a paid model key | Cline's split into a read-only review job and a write-only posting job is the safest design seen |
@@ -84,12 +84,32 @@ Four PRs (#1007–#1010) each undid the source part of one fix from that week, w
    - General: review comments on, review profile **Balanced**, review guide and sequence diagrams on (useful to people reading a PR), PR summary **off** (it edits the PR description; bodies are written on purpose and a stray "Fixes #N" would close an issue), tips-and-commands comment off, approval off, path filter `package-lock.json`.
    - Auto-review: no title, label or branch filters; drafts reviewed.
    - Security scanning on. Review rules empty; add targeted rules only after the trial, if the same misses repeat.
+   - **Sentry Seer:** the Sentry GitHub integration, on all org repos, with Code Review turned on 2026-10-20. Its check, `Seer Code Review`, ends `neutral` when it has findings and `success` when it has none. It isn't a required check; its docs say it "cannot approve or block merges".
 2. **Seeded bugs:** done, see above. Still open: a local review of the same four changes, in a fresh session that doesn't know the answers. `/review-prs` lists only open PRs and the seeded PRs are closed, so review each commit's revert directly (`git diff <sha> <sha>^ -- '*/src/*'` for `6e87c8f1`, `7adfced3`, `03757410`, `bbd678ab`) or reopen the PRs for it.
-3. **Real PRs, 3–4 weeks from 2026-10-19.** For each Sourcery comment, record accepted, discussed or rejected (the Lin et al. categories), whether the local review had already found it, and any limit message.
+3. **Real PRs, 3–4 weeks from 2026-10-19.** For each Sourcery or Seer comment, record accepted, discussed or rejected (the Lin et al. categories), whether the local review had already found it, and any limit message.
 4. **Decide.** Keep it if it catches bugs the local review misses, at a noise level the local review filters without much cost. If kept, add the Sourcery badge to the README. Otherwise uninstall it.
+
+## Trial log
+
+One row per PR and reviewer, using the categories in item 3. "Local first" says whether the local review had found it before the reviewer did.
+
+| Date | PR | Reviewer | Comments | Outcome | Local first |
+|---|---|---|---|---|---|
+| 10-19 | #1011 | Sourcery | 3 | 3 accepted | not recorded |
+| 10-19 | #1012 | Sourcery | 16 over two pushes, 8 distinct | 7 valid, 1 wrong. All on the Gemini workflow, which was then dropped | not recorded |
+| 10-19 | #1014 | Sourcery | 2 | 2 rejected: both wrong about GitHub's API | – |
+| 10-20 | #1016 | Seer | 1 | Accepted: "Discard my changes" misses drafts restored after a reload → #1025 | No |
+| 10-20 | #1016 | Sourcery | 0 | Posted its review guide when the draft opened, but no review. No reason given | – |
+| 10-20 | #1017 | Sourcery | 1 | Accepted: a translated page is published with the default page's cache headers. Following it up showed its title, description and (on ESI) component list are the default page's too → #1024 | No |
+| 10-20 | #1017 | Seer | 1 | Discussed, not acted on: `cache` isn't checked on save. The admin never sends it, and a bad value falls back to the target's cache | No |
+| 10-20 | #1022 | Seer | 1 | Accepted: the sibling test needs the same wait; added to the PR | Yes (the bot's own note) |
+| 10-20 | #1018–#1021 | both | 0 | No findings | – |
+
+So far, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed.
 
 ## Unknown
 
+- Why Sourcery posted a guide but no review on #1016.
 - Sourcery's limits for public repos (not published; paid plans list "higher review limits"), and whether it reviews fork PRs.
 - Bot and fork-PR behaviour, training policy and quality for Codacy, Gitar, Kodus and CodeAnt.
 - How much any tool overlaps with a Claude review of the same PR.
