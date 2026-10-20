@@ -99,6 +99,9 @@ test.describe('Deep linking', () => {
     // Click the /about preview link — should NOT navigate immediately.
     const iframe = page.frameLocator('[data-testid="preview-iframe"]')
     const aboutLink = iframe.locator('a[href="/about"]').first()
+    // The link renders before the preview bridge attaches its click
+    // handler; #gz-select is created by the same script.
+    await iframe.locator('#gz-select').waitFor({ state: 'attached', timeout: 10000 })
     await aboutLink.click()
 
     // Unsaved-changes dialog appears.
