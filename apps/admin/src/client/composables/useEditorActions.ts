@@ -844,7 +844,7 @@ export function useEditorActions() {
    * save must stop on false, or the unsaved edits are lost.
    */
   async function save(): Promise<boolean> {
-    const current = ec.target && ec.content ? { target: ec.target, content: ec.content } : null
+    const current = ec.target && ec.content && ec.dirty ? { target: ec.target, content: ec.content } : null
     const stashedEntries = [...stash.values()]
     // What each content write sends, by component path. Edits made while the
     // save runs differ from it, so they stay pending afterwards.
