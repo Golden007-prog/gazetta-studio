@@ -65,13 +65,19 @@ test.describe('Deep linking', () => {
     // The starter site's header fragment includes a /about nav link.
     const iframe = page.frameLocator('[data-testid="preview-iframe"]')
     const aboutLink = iframe.locator('a[href="/about"]').first()
-    await aboutLink.waitFor({ timeout: 10000 })
-    await aboutLink.click()
-
-    // After navigation we should be on the about page AND still in edit
-    // mode — the URL must end with /edit, and the component tree (only
-    // rendered in edit mode) must be visible.
-    await expect(page).toHaveURL(/\/pages\/about\/edit/, { timeout: 5000 })
+    // The bridge script is injected at the end of the preview's <body>, so
+    // the link exists before its click handler does; a click in that gap
+    // is lost. #gz-select is created by the same synchronous script that
+    // attaches the handler. The preview can also be re-rendered after the
+    // first load, dropping a click in flight, so the click is retried.
+    await expect(async () => {
+      await iframe.locator('#gz-select').waitFor({ state: 'attached', timeout: 2000 })
+      await aboutLink.click({ timeout: 2000 })
+      // After navigation we should be on the about page AND still in edit
+      // mode — the URL must end with /edit, and the component tree (only
+      // rendered in edit mode) must be visible.
+      await expect(page).toHaveURL(/\/pages\/about\/edit/, { timeout: 2000 })
+    }).toPass({ timeout: 15000 })
     await page.waitForSelector('[data-testid^="component-"]', { timeout: 10000 })
   })
 
