@@ -119,6 +119,9 @@ One row per PR and reviewer, using the categories in item 3. "Local first" says 
 | 10-21 | #1073 | Sourcery (re-review on request) | 1 | Accepted: the `curl` check did not follow redirects, so a redirect to a URL serving the file looked blocked; added `-L` | No |
 | 10-21 | #1073 | Seer (on `@sentry review`) | 1 | Accepted: the doc said the index has `nextId`; the index is only `{ revisions }`, `nextId` survives in a stale header comment in `history-provider.ts` | No |
 | 10-21 | #1076 | Sourcery | 2 | Accepted both: some CDNs reject a `/*` purge; secret rotation covered only page content, not assets | No |
+| 10-21 | #1076 | Seer (on `@sentry review`) | 0 | No findings | – |
+| 10-21 | #1069 (design doc) | Sourcery | 9 | 8 accepted, 1 partly (credentials sent to an arbitrary `siteUrl`: the config is code, but headers now go only to its origin). Accepted: status-only passes on dynamic routes, cache views indistinguishable when the CDN ignores query strings, redirects hidden by auto-follow, stripped markers, report name collisions, crashed runs leaving no report, crashes swallowing alerts, public reports (already an open question) | No |
+| 10-21 | #1069 (design doc) | Seer, 5 rounds | 10 | All accepted. Exit code of `gazetta check`; target indices built from the source site (#1077); running reports clearing the warning; post-deploy check missing changed items; 403 for missing files on S3; `Revision.items` lists the whole snapshot (#1078); CLI publishes write no history (#1079); legacy pages skipped by incremental republish; deferred reports clearing the warning; `Location` compared with its query string; 410 expected on hosts without `gone-status`. Later rounds found implementation details rather than design gaps | No |
 
 Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see. On 10-21, four of the six accepted findings were bugs the local review hadn't found, two of them in code the PR didn't touch.
 
@@ -126,6 +129,8 @@ Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the 
 
 - Why Sourcery posted a guide but no review on #1016.
 - Why Seer didn't review #1051's second commit, when it reviews later commits on other PRs.
+- Why Seer often doesn't start on a push: it skipped #1073 (opened ready), #1076, and several #1069 pushes until asked with `@sentry review`, and cancelled #1072 when the PR was merged mid-review. It ignored `@sentry review` on a merged PR.
+- Sourcery stops automatic re-reviews after 5 per PR ("Auto re-review limit reached", #1069); `@sourcery-ai review` asks for one more. Whether a requested re-review covers the whole PR or only new commits isn't stated.
 - Sourcery's limits for public repos (not published; paid plans list "higher review limits"), and whether it reviews fork PRs.
 - Bot and fork-PR behaviour, training policy and quality for Codacy, Gitar, Kodus and CodeAnt.
 - How much any tool overlaps with a Claude review of the same PR.
