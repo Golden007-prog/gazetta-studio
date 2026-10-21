@@ -115,6 +115,7 @@ One row per PR and reviewer, using the categories in item 3. "Local first" says 
 | 10-21 | #1051 | Seer | 1 | Accepted: moving the reload before `markWritten` let a second save start during the reload; fixed in a second commit, which Seer didn't review | No |
 | 10-21 | #1051 | Sourcery | 0 | No findings | – |
 | 10-21 | #1072 | Sourcery | 2 | Accepted both, posted after a doc-only merge: a public R2 bucket bypasses the worker; the `curl` check tested a folder, which hosts can refuse while serving its files → #1073 | No |
+| 10-21 | #1073 | Sourcery | 1 | Accepted: a host that answers missing paths with a 200 fallback page makes the status-only check a false alarm; doc now says to read the body | No |
 
 Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see. On 10-21, four of the six accepted findings were bugs the local review hadn't found, two of them in code the PR didn't touch.
 
