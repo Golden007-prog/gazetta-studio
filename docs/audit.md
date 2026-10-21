@@ -110,16 +110,16 @@ Pick one, in this order of preference:
    Then check it by requesting a file, not the folder, since some hosts refuse a folder but serve the files in it. `.gazetta/history/index.json` exists on every target with history on (the default) once something has been saved or published to it. Run it against every public URL the storage has, such as your site and an `r2.dev` URL:
 
    ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' https://your-site/.gazetta/history/index.json
+   curl -sL -o /dev/null -w '%{http_code}\n' https://your-site/.gazetta/history/index.json
    ```
 
-   Anything but `200` means it's blocked. If you get `200`, look at what came back, since some hosts answer every missing path with their home or 404 page and status `200`:
+   `-L` follows redirects, so a redirect to a URL that serves the file isn't mistaken for a block. Anything but `200` means it's blocked. If you get `200`, look at what came back, since some hosts answer every missing path with their home or 404 page and status `200`:
 
    ```bash
-   curl -s https://your-site/.gazetta/history/index.json | head -c 200
+   curl -sL https://your-site/.gazetta/history/index.json | head -c 200
    ```
 
-   JSON with `nextId` and `revisions` means the file is public. An HTML page means it isn't. To also check the audit log, do the same with one of the `events-*.jsonl` file names you see in your storage.
+   JSON with a `revisions` list means the file is public. An HTML page means it isn't. To also check the audit log, do the same with one of the `events-*.jsonl` file names you see in your storage.
 
 2. **Don't upload it.** When you copy a filesystem target to a static host yourself, leave the folder out, for example `rsync -a --exclude '.gazetta/' ./dist/production/ host:/var/www/site/`. Gazetta still has its copy in the target folder, so undo and the audit log keep working.
 
