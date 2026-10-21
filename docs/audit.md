@@ -66,6 +66,54 @@ One JSONL file **per admin instance** (Cloud Run revision id, Kubernetes pod nam
 
 The `.gazetta/audit/` directory is gitignored — audit events are runtime state, not source.
 
+## Where Gazetta keeps its own files, and when they're public
+
+Every target keeps Gazetta's own files in a `.gazetta/` folder in its storage, next to the published pages:
+
+| Folder | What's in it | Why it matters |
+|---|---|---|
+| `.gazetta/audit/` | Who saved, published, deleted or restored what, and when | Actor IDs and email addresses, unless `actorPseudonym: 'sha256'` is set |
+| `.gazetta/history/` | Every past version of every page and fragment, for undo and rollback | Includes content you later removed or never meant to publish |
+| `.gazetta/fragment-deps/`, `.gazetta/asset-refs/` | Which pages use which fragments and assets | The site's structure; low risk |
+
+Visitors never need these files. Whether they *can* get them depends on how the target's storage reaches the web.
+
+### Safe: Gazetta serves the site
+
+These read only pages, fragments, `sitemap.xml` and `robots.txt` from storage, so a request for `/.gazetta/…` gets a 404:
+
+- The Cloudflare worker (`cloudflareWorkersDeploy()`, see [`cloudflare.md`](cloudflare.md))
+- `gazetta serve` on an ESI target (`type: 'dynamic'`)
+- A filesystem target that only `gazetta serve` or `gazetta dev` reads and that is never uploaded anywhere
+
+### Not safe: the storage is the public site
+
+If the web server or host serves the storage folder or bucket directly, `.gazetta/` is downloadable like any other file, for example `https://your-site/.gazetta/audit/events-….jsonl`. This happens when:
+
+- An S3 or Azure Blob static website points at the target's bucket or container
+- A filesystem target's folder (such as `./dist/production`) is uploaded as-is to a static host, or served by nginx, Caddy or Apache
+- **`gazetta serve` on a static target (`type: 'static'`)**: it currently returns any file in storage, `.gazetta/` included. Fix tracked in [#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071); until it lands, put it behind a proxy rule like the one below.
+
+### What to do if your storage is public
+
+Pick one, in this order of preference:
+
+1. **Block `/.gazetta/` at the host.** Return 404 for any path starting with `/.gazetta/`, using your host's access rules (bucket policy, CDN rule, or web-server config). In nginx:
+
+   ```nginx
+   location ^~ /.gazetta/ {
+       return 404;
+   }
+   ```
+
+   Then check it: `curl -sI https://your-site/.gazetta/audit/` should not return `200`.
+
+2. **Don't upload it.** When you copy a filesystem target to a static host yourself, leave the folder out, for example `rsync -a --exclude '.gazetta/' ./dist/production/ host:/var/www/site/`. Gazetta still has its copy in the target folder, so undo and the audit log keep working.
+
+3. **At least pseudonymise the audit log.** `actorPseudonym: 'sha256'` replaces actor IDs with salted hashes and drops email addresses (see [Pseudonymization](#pseudonymization)). This does **not** protect history: past versions of your pages are still readable. Only use it on its own if that's acceptable. To turn history off for a target instead, set `history: { enabled: false }`; that also removes undo and rollback there.
+
+Gazetta's planned static-host deploy adapters (GitHub Pages [#208](https://github.com/gazetta-studio/gazetta-studio/issues/208), Netlify [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209), S3 [#211](https://github.com/gazetta-studio/gazetta-studio/issues/211)) will leave `.gazetta/` out of what they upload ([#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070)).
+
 ## Configuration
 
 ```ts

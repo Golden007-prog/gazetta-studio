@@ -86,6 +86,8 @@ These will ship as separate PRs after the contract lands:
 | `s3StaticDeploy` | [#211](https://github.com/gazetta-studio/gazetta-studio/issues/211) | `static` |
 | `azureBlobStaticDeploy` | [#212](https://github.com/gazetta-studio/gazetta-studio/issues/212) | `static` |
 
+Until the static adapters ship, you deploy a static target yourself by uploading its storage or pointing a static host at it. That makes the target's `.gazetta/` folder (audit log, page history) public unless you block or exclude it: see [Where Gazetta keeps its own files, and when they're public](audit.md#where-gazetta-keeps-its-own-files-and-when-theyre-public).
+
 ## Container hosts (Fly.io, Cloud Run, Railway, Render)
 
 These platforms run `gazetta serve` inside a container. **No Gazetta deploy adapter** — use the platform's own CLI from CI or your local machine:
