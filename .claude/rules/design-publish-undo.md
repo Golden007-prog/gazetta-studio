@@ -25,7 +25,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - Restoring old template output (templates are code, versioned in git)
 - A Redo button (History → Restore covers it)
 - A per-target publish lock (concurrent writes are detected, not prevented)
-- Propagating source deletions through a normal publish (open question 1; the removal step built here is what it would use)
+- Propagating source deletions through a normal publish ([#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094), confirmed; the removal step built here is what it would use)
 
 **Unchanged:** undo on the editing target (`local`) restores manifests only; nothing there is pre-rendered.
 
@@ -187,5 +187,5 @@ No production users. Revisions recorded before cut 3 on CLI-published targets ha
 
 ## Future directions
 
-- **Propagate source deletions on publish,** using cut 2's removal step (if open question 1 confirms the gap).
+- **Propagate source deletions on publish** ([#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094)), using cut 2's removal step.
 - **A per-target publish lock** to close the window between the last head check and the first write, if concurrent publishes become common.
