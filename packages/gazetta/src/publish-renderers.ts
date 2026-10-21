@@ -33,7 +33,7 @@ import { resolveFragment, resolvePage } from './resolver.js'
 import { archiveMarker } from './runtime/archive-marker.js'
 import { escapeAttr, resolveSeoTags, type SeoContext } from './seo.js'
 import type { Site } from './site-loader.js'
-import type { CacheConfig } from './types.js'
+import type { CacheConfig, PageManifest } from './types.js'
 
 /**
  * One file to write. The spine emits these — renderer produces the
@@ -98,6 +98,16 @@ function contentHash(content: string): string {
   return createHash('md5').update(content).digest('hex').slice(0, 8)
 }
 
+/**
+ * The manifest a locale page renders from. Locale variants are whole
+ * files, not overlays on the default page (design-i18n.md), so metadata,
+ * cache, route and component order all come from the variant.
+ */
+function pageForLocale(pageName: string, page: PageManifest, ctx: PageRenderContext): PageManifest {
+  if (!ctx.locale) return page
+  return ctx.site.pageLocales.get(pageName)?.locales.get(ctx.locale) ?? page
+}
+
 // ─── Page (ESI mode) ────────────────────────────────────────────────────
 
 /**
@@ -119,6 +129,7 @@ export async function renderPageWithEsi(pageName: string, ctx: PageRenderContext
     throw new Error(`Page "${pageName}" is archived; use renderArchiveMarker instead`)
   }
 
+  const localePage = pageForLocale(pageName, page, ctx)
   const resolved = await resolvePage(pageName, ctx.site, ctx.locale)
 
   // Render each child — fragments become ESI placeholders, local components baked in
@@ -129,7 +140,7 @@ export async function renderPageWithEsi(pageName: string, ctx: PageRenderContext
   const esiHeadTags: string[] = []
 
   for (let i = 0; i < resolved.children.length; i++) {
-    const childEntry = page.components![i]
+    const childEntry = localePage.components![i]
     const isFragment = typeof childEntry === 'string' && childEntry.startsWith('@')
 
     if (isFragment) {
@@ -180,9 +191,9 @@ export async function renderPageWithEsi(pageName: string, ctx: PageRenderContext
   // SEO tags (renderer dedupes against template head)
   const templateHead = localHeadParts.join('\n')
   const seoHead = resolveSeoTags({
-    metadata: page.metadata,
-    content: page.content,
-    route: page.route,
+    metadata: localePage.metadata,
+    content: localePage.content,
+    route: localePage.route,
     seo: ctx.seo ?? {},
     templateHead,
   })
@@ -203,8 +214,8 @@ export async function renderPageWithEsi(pageName: string, ctx: PageRenderContext
 
   // Cache config: page → target → defaults. Comment is read by the
   // worker on serve to set Cache-Control headers.
-  const browser = page.cache?.browser ?? ctx.targetCache?.browser ?? 0
-  const edge = page.cache?.edge ?? ctx.targetCache?.edge ?? 86400
+  const browser = localePage.cache?.browser ?? ctx.targetCache?.browser ?? 0
+  const edge = localePage.cache?.edge ?? ctx.targetCache?.edge ?? 86400
   const cacheComment = `<!--cache:browser=${browser},edge=${edge}-->\n`
 
   const indexHtml = `${cacheComment}<!DOCTYPE html>
@@ -242,10 +253,11 @@ export async function renderPageStatic(pageName: string, ctx: PageRenderContext)
     throw new Error(`Page "${pageName}" is archived; use renderArchiveMarker instead`)
   }
 
+  const localePage = pageForLocale(pageName, page, ctx)
   const resolved = await resolvePage(pageName, ctx.site, ctx.locale)
   const indexHtml = await renderPage(resolved, {
-    metadata: page.metadata,
-    route: page.route,
+    metadata: localePage.metadata,
+    route: localePage.route,
     seo: ctx.seo,
   })
 
