@@ -73,7 +73,7 @@ Every target keeps Gazetta's own files in a `.gazetta/` folder in its storage, n
 | Folder | What's in it | Why it matters |
 |---|---|---|
 | `.gazetta/audit/` | Who saved, published, deleted or restored what, and when | Actor IDs and email addresses, unless `actorPseudonym: 'sha256'` is set |
-| `.gazetta/history/` | Every past version of every page and fragment, for undo and rollback | Includes content you later removed or never meant to publish |
+| `.gazetta/history/` | Every past version of every page and fragment, and the bytes of replaced or deleted assets, for undo and rollback | Includes content and images you later removed or never meant to publish |
 | `.gazetta/fragment-deps/`, `.gazetta/asset-refs/` | Which pages use which fragments and assets | The site's structure; low risk |
 
 Visitors never need these files. Whether they *can* get them depends on how the target's storage reaches the web.
@@ -124,6 +124,15 @@ Pick one, in this order of preference:
 2. **Don't upload it.** When you copy a filesystem target to a static host yourself, leave the folder out, for example `rsync -a --exclude '.gazetta/' ./dist/production/ host:/var/www/site/`. Gazetta still has its copy in the target folder, so undo and the audit log keep working.
 
 3. **At least pseudonymise the audit log.** `actorPseudonym: 'sha256'` replaces actor IDs with salted hashes and drops email addresses (see [Pseudonymization](#pseudonymization)). This does **not** protect history: past versions of your pages are still readable. Only use it on its own if that's acceptable. To turn history off for a target instead, set `history: { enabled: false }`; that also removes undo and rollback there.
+
+### If it was already public
+
+Blocking the folder stops new downloads. It doesn't remove copies made before:
+
+- **Purge your CDN cache** for `/.gazetta/*`, or the cached files keep being served.
+- **Assume the files were copied**: search engines, web archives and anyone who found the URL may have them.
+- **Rotate anything secret that was in page content**, since every past version was readable.
+- **Check whether you need to report it.** The audit log holds people's IDs and, unless pseudonymised, email addresses. Data-protection rules may require you to tell someone.
 
 Gazetta's planned static-host deploy adapters (GitHub Pages [#208](https://github.com/gazetta-studio/gazetta-studio/issues/208), Netlify [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209), S3 [#211](https://github.com/gazetta-studio/gazetta-studio/issues/211)) will leave `.gazetta/` out of what they upload ([#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070)).
 

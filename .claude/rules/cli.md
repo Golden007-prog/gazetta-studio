@@ -169,9 +169,7 @@ Production server. For self-hosting on a VPS, container, or local machine.
 
 - Auto-detects site + target
 - Serves site: ESI assembly from target storage (published content via `gazetta publish`)
-- Serves admin: built SPA + API at `/admin` (from `dist/admin/` via `gazetta build`)
-- Requires both: target storage access (for content) AND local `dist/admin/` (for admin UI)
-- Auth middleware on `/admin/*` routes
+- Serves the site only. The admin (built SPA + API) runs separately with `gazetta admin` (`runAdmin` in `cli/index.ts`); `runServe` doesn't mount it.
 
 ### `gazetta validate`
 
