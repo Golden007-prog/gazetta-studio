@@ -82,7 +82,7 @@ Visitors never need these files. Whether they *can* get them depends on how the 
 
 These read only pages, fragments, `sitemap.xml` and `robots.txt` from storage, so a request for `/.gazetta/…` gets a 404:
 
-- The Cloudflare worker (`cloudflareWorkersDeploy()`, see [`cloudflare.md`](cloudflare.md))
+- The Cloudflare worker (`cloudflareWorkersDeploy()`, see [`cloudflare.md`](cloudflare.md)), as long as the R2 bucket itself is private. If you turn on public access for the bucket (an `r2.dev` URL or a custom domain connected to the bucket), every object in it is served directly, without the worker, `.gazetta/` included.
 - `gazetta serve` on an ESI target (`type: 'dynamic'`)
 - A filesystem target that only `gazetta serve` or `gazetta dev` reads and that is never uploaded anywhere
 
@@ -91,6 +91,7 @@ These read only pages, fragments, `sitemap.xml` and `robots.txt` from storage, s
 If the web server or host serves the storage folder or bucket directly, `.gazetta/` is downloadable like any other file, for example `https://your-site/.gazetta/audit/events-….jsonl`. This happens when:
 
 - An S3 or Azure Blob static website points at the target's bucket or container
+- The target's R2 bucket has public access turned on, even when a worker also serves the site
 - A filesystem target's folder (such as `./dist/production`) is uploaded as-is to a static host, or served by nginx, Caddy or Apache
 - **`gazetta serve` on a static target (`type: 'static'`)**: it currently returns any file in storage, `.gazetta/` included. Fix tracked in [#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071); until it lands, put it behind a proxy rule like the one below.
 
@@ -106,7 +107,13 @@ Pick one, in this order of preference:
    }
    ```
 
-   Then check it: `curl -sI https://your-site/.gazetta/audit/` should not return `200`.
+   Then check it by requesting a file, not the folder, since some hosts refuse a folder but serve the files in it. `.gazetta/history/index.json` exists on every target with history on (the default) once something has been saved or published to it. Run it against every public URL the storage has, such as your site and an `r2.dev` URL:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://your-site/.gazetta/history/index.json
+   ```
+
+   Anything but `200` means it's blocked. To also check the audit log, use one of the `events-*.jsonl` file names you see in your storage.
 
 2. **Don't upload it.** When you copy a filesystem target to a static host yourself, leave the folder out, for example `rsync -a --exclude '.gazetta/' ./dist/production/ host:/var/www/site/`. Gazetta still has its copy in the target folder, so undo and the audit log keep working.
 
