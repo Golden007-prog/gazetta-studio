@@ -84,7 +84,8 @@
     "build:admin": "vite build -c ../../apps/admin/vite.config.ts --base /admin/ --outDir ../../packages/gazetta/admin-dist --emptyOutDir ../../apps/admin",
     "prepublishOnly": "npm run build && npm run build:admin",
     "test": "vitest run",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "test:coverage": "vitest run --coverage --coverage.provider=v8 --coverage.include='src/**' --coverage.reporter=json-summary --coverage.reporter=text-summary"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

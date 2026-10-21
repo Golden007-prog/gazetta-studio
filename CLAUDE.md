@@ -87,6 +87,12 @@ cd packages/gazetta && npx vitest run tests/some-file.test.ts
 cd packages/gazetta && npx vitest run -t "test name pattern"
 ```
 
+**Coverage** — a report, not a gate. CI writes the table to each test job's summary; no job fails on a percentage. Unit coverage misses code run in subprocesses (CLI), the browser (e2e) or Docker:
+
+```bash
+npm run test:coverage -w packages/gazetta   # also -w @gazetta/admin; report in <pkg>/coverage/
+```
+
 **Iterating on one file** — use watch mode (per rule 32 Pattern B); each edit reruns in ~10-50ms instead of the ~1.2s cold-start of `vitest run`:
 
 ```bash

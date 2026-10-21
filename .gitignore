@@ -78,3 +78,6 @@ storybook-static/
 # screenshots Claude captures during browser-verification sessions. Always
 # transient; never committed.
 .playwright-mcp/
+
+# Coverage reports (npm run test:coverage)
+coverage/

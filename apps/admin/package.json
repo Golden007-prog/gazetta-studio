@@ -9,7 +9,8 @@
     "dev": "npm run dev:api & npm run dev:ui",
     "build": "vite build",
     "typecheck": "vue-tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --exclude tests/docker.test.ts && vitest run tests/docker.test.ts"
+    "test": "vitest run --exclude tests/docker.test.ts && vitest run tests/docker.test.ts",
+    "test:coverage": "vitest run --exclude tests/docker.test.ts --coverage --coverage.provider=v8 --coverage.include='src/**' --coverage.reporter=json-summary --coverage.reporter=text-summary && vitest run tests/docker.test.ts"
   },
   "dependencies": {
     "@formkit/drag-and-drop": "0.5.3",
