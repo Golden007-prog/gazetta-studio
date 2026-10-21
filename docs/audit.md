@@ -130,9 +130,9 @@ Pick one, in this order of preference:
 
 Blocking the folder stops new downloads. It doesn't remove copies made before:
 
-- **Purge your CDN cache** for `/.gazetta/*`, or the cached files keep being served.
+- **Purge your CDN cache** for everything under `/.gazetta/`, using the method your CDN supports (some accept a `/.gazetta/*` prefix, some need every URL listed, or a full purge). Then rerun the `curl` check above to confirm the files aren't served any more.
 - **Assume the files were copied**: search engines, web archives and anyone who found the URL may have them.
-- **Rotate anything secret that was in page content**, since every past version was readable.
+- **Rotate any secret that was in the exposed files**: page and fragment content, uploaded files and images, and anything else under `.gazetta/`. Every past version was readable.
 - **Check whether you need to report it.** The audit log holds people's IDs and, unless pseudonymised, email addresses. Data-protection rules may require you to tell someone.
 
 Gazetta's planned static-host deploy adapters (GitHub Pages [#208](https://github.com/gazetta-studio/gazetta-studio/issues/208), Netlify [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209), S3 [#211](https://github.com/gazetta-studio/gazetta-studio/issues/211)) will leave `.gazetta/` out of what they upload ([#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070)).
