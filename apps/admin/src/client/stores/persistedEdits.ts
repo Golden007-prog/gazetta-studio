@@ -124,6 +124,13 @@ export const usePersistedEditsStore = defineStore('persistedEdits', () => {
     entries.value = next
   }
 
+  /** Drop every entry for one page or fragment in one locale, whatever its path. */
+  function clearItem(kind: 'page' | 'fragment', name: string, locale: string | undefined): void {
+    const prefix = persistedEditKey(kind, name, locale, '')
+    const next = new Map([...entries.value].filter(([k]) => !k.startsWith(prefix)))
+    if (next.size !== entries.value.size) entries.value = next
+  }
+
   function clearAll(): void {
     entries.value = new Map()
   }
@@ -149,6 +156,7 @@ export const usePersistedEditsStore = defineStore('persistedEdits', () => {
     get,
     has,
     clear,
+    clearItem,
     clearAll,
     _hydrateAll,
   }

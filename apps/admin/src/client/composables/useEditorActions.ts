@@ -726,11 +726,9 @@ export function useEditorActions() {
     if (key) structural.discard(inCurrentLocale(key))
     const metadataKey = currentMetadataKey()
     if (metadataKey) metadata.discard(metadataKey)
-    // Cut 8b: drop the cross-page persisted mirror for the current
-    // edit. The author explicitly reverted; re-applying the dirty
-    // content on reload would undo their intent.
-    const persistedKey = persistedKeyForCurrent()
-    if (persistedKey) usePersistedEditsStore().clear(persistedKey)
+    // Includes drafts restored after a reload for components not opened
+    // since: opening one later would apply it over the other author's version.
+    if (key) usePersistedEditsStore().clearItem(key.kind, key.name, useLocaleStore().effectiveLocale ?? undefined)
     usePreviewStore().invalidateDraft()
   }
 
