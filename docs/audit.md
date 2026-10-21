@@ -74,6 +74,7 @@ Every target keeps Gazetta's own files in a `.gazetta/` folder in its storage, n
 |---|---|---|
 | `.gazetta/audit/` | Who saved, published, deleted or restored what, and when | Actor IDs and email addresses, unless `actorPseudonym: 'sha256'` is set |
 | `.gazetta/history/` | Every past version of every page and fragment, and the bytes of replaced or deleted assets, for undo and rollback | Includes content and images you later removed or never meant to publish |
+| `.gazetta/review/` | Review state per page or fragment, and who approved it | Approvers' actor IDs |
 | `.gazetta/fragment-deps/`, `.gazetta/asset-refs/` | Which pages use which fragments and assets | The site's structure; low risk |
 
 Visitors never need these files. Whether they *can* get them depends on how the target's storage reaches the web.
@@ -91,7 +92,7 @@ These read only pages, fragments, `sitemap.xml` and `robots.txt` from storage, s
 If the web server or host serves the storage folder or bucket directly, `.gazetta/` is downloadable like any other file, for example `https://your-site/.gazetta/audit/events-….jsonl`. This happens when:
 
 - An S3 or Azure Blob static website points at the target's bucket or container
-- The target's R2 bucket has public access turned on, even when a worker also serves the site
+- The target's R2 bucket has public access turned on, even when a worker also serves the site. Public access exposes the whole bucket, not a path, and is off by default. To block `/.gazetta/` you need a custom domain on the bucket with a WAF rule and the `r2.dev` URL turned off ([Cloudflare: public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/)).
 - A filesystem target's folder (such as `./dist/production`) is uploaded as-is to a static host, or served by nginx, Caddy or Apache
 - **`gazetta serve` on a static target (`type: 'static'`)**: it currently returns any file in storage, `.gazetta/` included. Fix tracked in [#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071); until it lands, put it behind a proxy rule like the one below.
 
