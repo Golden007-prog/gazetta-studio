@@ -64,7 +64,12 @@ jobs:
             for attempt in 1 2 3 4 5 6; do
               # A fresh query value per attempt, so a retry never gets a
               # response cached by an earlier one.
-              status=$(curl -s -o page.html -w '%{http_code}' "https://gazetta.studio${path}?deploy-check=${RUN_ID}-${RUN_ATTEMPT}-${attempt}")
+              # --max-time: a stalled request must not hang the job. A
+              # transfer that fails part-way (curl exits non-zero) is a retry,
+              # even if the status and the marker already arrived.
+              if ! status=$(curl -s --max-time 20 -o page.html -w '%{http_code}' "https://gazetta.studio${path}?deploy-check=${RUN_ID}-${RUN_ATTEMPT}-${attempt}"); then
+                status="curl error"
+              fi
               if [ "$status" = "$want" ] && { [ -z "$grep_for" ] || grep -q "$grep_for" page.html; }; then
                 echo "ok   ${path} -> ${status}"
                 return 0
