@@ -69,6 +69,7 @@ Stateless CMS that structures websites as composable fragments. All state lives 
 - `.claude/rules/design-code-review-implementation.md` — 4-phase build (~3-4 weeks). P1 skill family (10 cuts) → P2 fix-bot integration (3 cuts) → P3 PR-comment workflow (3 cuts) → P4 review-bot autonomous producer with generator-critic loop (6 cuts).
 - `.claude/rules/design-live-check.md` — Live check: after each publish or deploy, verify the target's live site serves what was published (published-version marker, route planner over the target's dependency indices, reports in `.gazetta/live-check/`, `afterLiveCheck` hook). Publish verification, not uptime monitoring. Research: `docs/audits/live-site-health.md`.
 - `.claude/rules/design-public-storage.md` — Public storage: a target whose storage visitors can reach keeps no history, audit or review state (`publicStorage`, public by default except local filesystem targets); `isPublicSitePath` decides which stored files are served; a folder registry marks `.gazetta/` folders safe or not; the live check probes for leaks and locks publishing. Resolves #1070.
+- `.claude/rules/design-publish-undo.md` — Publish undo: undo and rollback on a publish destination restore the previous content and re-render it through the shared target-publish function (with removals), after a check against current templates. Templates stay as deployed. Resolves #1084.
 
 ## Build & Test
 
