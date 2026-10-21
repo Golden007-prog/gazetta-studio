@@ -83,6 +83,39 @@ describe('restoreRevision', () => {
     expect(await storage.exists('pages/new/page.json')).toBe(false)
   })
 
+  it('undoing the first save of a translation reverts it instead of deleting it (#1088)', async () => {
+    // page.fr.json exists before the target has any history. The first
+    // save records the baseline (which must include the variant) and a
+    // revision; undoing back to the baseline must restore the original
+    // translation content, not delete the file.
+    storage.seed({
+      'pages/home/page.json': 'v1',
+      'pages/home/page.fr.json': 'fr-v1',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    // First save: edit the translation. recordWrite runs BEFORE the new
+    // content lands on the tree (admin save order), so its baseline scan
+    // still sees fr-v1; the new content arrives via the items delta.
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/home/page.fr.json', content: 'fr-v2' }],
+    })
+    storage.seed({ 'pages/home/page.fr.json': 'fr-v2' })
+
+    // Undo: restore the baseline.
+    const list = await history.listRevisions()
+    const baseline = list.find(r => r.message === 'Initial baseline')!
+    await restoreRevision({ history, contentRoot, revisionId: baseline.id })
+
+    // The translation is reverted to its pre-save content - NOT deleted.
+    expect(await storage.readFile('pages/home/page.fr.json')).toBe('fr-v1')
+    expect(await storage.readFile('pages/home/page.json')).toBe('v1')
+  })
+
   it('records a new forward revision (soft undo)', async () => {
     storage.seed({ 'pages/home/page.json': 'v1' })
     const history = createHistoryProvider({ storage })

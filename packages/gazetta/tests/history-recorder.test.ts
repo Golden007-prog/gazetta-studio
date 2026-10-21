@@ -63,6 +63,42 @@ describe('recordWrite', () => {
     ])
   })
 
+  it('baseline captures locale variant manifests, including nested pages (#1088)', async () => {
+    // A translation that exists before the target has any history must
+    // be in the first snapshot - otherwise undoing its first save
+    // restores a baseline without it and DELETES it.
+    storage.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/home/page.json': '{"template":"page-default"}',
+      'pages/home/page.fr.json': '{"template":"page-default","content":{"title":"Accueil"}}',
+      'pages/blog/[slug]/page.json': '{"template":"page-default"}',
+      'pages/blog/[slug]/page.ja.json': '{"template":"page-default","content":{"title":"ホーム"}}',
+      'fragments/header/fragment.json': '{"template":"header-layout"}',
+      'fragments/header/fragment.pt-br.json': '{"template":"header-layout"}',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/home/page.json', content: '{"template":"page-default","edited":true}' }],
+    })
+
+    const list = await history.listRevisions()
+    expect(list).toHaveLength(2)
+    const baseline = await history.readRevision(list[1].id)
+    expect(baseline.message).toBe('Initial baseline')
+    const paths = Object.keys(baseline.snapshot)
+    expect(paths).toContain('pages/home/page.json')
+    expect(paths).toContain('pages/home/page.fr.json')
+    expect(paths).toContain('pages/blog/[slug]/page.json')
+    expect(paths).toContain('pages/blog/[slug]/page.ja.json')
+    expect(paths).toContain('fragments/header/fragment.json')
+    expect(paths).toContain('fragments/header/fragment.pt-br.json')
+  })
+
   it('second revision overlays the delta onto the previous snapshot', async () => {
     storage.seed({
       'site.config.ts': "export default { name: 'demo' }\n",

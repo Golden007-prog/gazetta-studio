@@ -216,6 +216,13 @@ async function scanContentTree(
  * into `items` with relative-path keys. Recurses so nested dynamic
  * routes (e.g. `blog/[slug]/page.json`) are captured.
  *
+ * Each item directory is listed and every manifest matching the
+ * `localeFilename` convention is captured: the default (`page.json`)
+ * and all locale variants (`page.fr.json`, `fragment.pt-br.json`, ...).
+ * Scanning only the exact default name would leave variants out of the
+ * baseline snapshot, and restoring that baseline would then DELETE a
+ * translation instead of reverting it (#1088).
+ *
  * Cloud object stores (R2/S3/Azure Blob) have no "directory" concept —
  * `exists()` on a prefix-only path returns false. Rely on `readDir`
  * returning an empty array for missing paths instead of probing via
@@ -234,13 +241,23 @@ async function scanManifestsInto(
   } catch {
     return // Directory doesn't exist (or provider threw) — nothing to scan.
   }
+  // `page.json` + `page.<locale>.json` (locale is one dot-free segment,
+  // per localeFilename's normalizeLocale).
+  const base = manifestName.replace(/\.json$/, '')
+  const manifestPattern = new RegExp(`^${base}(\\.[^.]+)?\\.json$`)
   for (const e of entries) {
     if (!e.isDirectory) continue
     const sub = join(absDir, e.name)
     const relSub = `${relPrefix}/${e.name}`
-    const manifestPath = join(sub, manifestName)
-    if (await storage.exists(manifestPath)) {
-      items.set(`${relSub}/${manifestName}`, await storage.readFile(manifestPath))
+    let subEntries: Awaited<ReturnType<StorageProvider['readDir']>>
+    try {
+      subEntries = await storage.readDir(sub)
+    } catch {
+      subEntries = []
+    }
+    for (const f of subEntries) {
+      if (f.isDirectory || !manifestPattern.test(f.name)) continue
+      items.set(`${relSub}/${f.name}`, await storage.readFile(join(sub, f.name)))
     }
     // Recurse for nested routes (pages/blog/[slug]/page.json).
     await scanManifestsInto(storage, sub, relSub, manifestName, items)
