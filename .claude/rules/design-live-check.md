@@ -23,7 +23,7 @@ After a publish or deploy, Gazetta checks that the target's live site serves wha
 - Route planning from the target's own dependency graphs, with a request cap
 - Reports stored on the target; a `live-check` audit event; an `afterLiveCheck` hook
 - Admin: progress and results in the publish panel, a top-bar warning on failure, Re-check and Check all
-- CLI: `gazetta check`, and checks after `gazetta publish` and `gazetta deploy`
+- CLI: `gazetta check` (including `--last-publish`), and checks after `gazetta publish` and `gazetta deploy`
 
 **Out of v1:**
 - Periodic checks (waits on the scheduler; see Future directions)
@@ -53,7 +53,7 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - **Waits for propagation.** Retries until a per-target wait (`liveCheck.waitSeconds`, defaults by target type) runs out. Running out is "not live yet", not "wrong".
 - **Two views of each route.** One request bypasses caches (a fresh query value per attempt), one doesn't. If they differ, the result is "correct, but visitors still see an older copy". A CDN can ignore query strings in its cache key, so the bypass request is checked too: if its `Age` header is above 0, it came from a cache, that view is marked unavailable, only the visitor view is judged, and the report says "couldn't bypass the cache" (info).
 - **Sites behind login.** Optional `liveCheck.headers` (values from env vars in `site.config.ts`, e.g. a Cloudflare Access service token). A login redirect is "needs credentials", not "broken". The headers are sent only to `siteUrl`'s origin, and the check never follows a redirect to another origin (Q3, redirects). `siteUrl` itself isn't restricted: it comes from `site.config.ts`, which is code, so whoever can change it can already run code; blocking private addresses would add no protection and would break local targets.
-- **CLI:** the check prints after the publish result. `--no-check` skips it; the exit code is non-zero only with `--check-strict`. The standalone `gazetta check <target>` is a gate, not a report: it exits non-zero when any result has error severity (`wrong`, `unreachable`, `needs-credentials`), and with `--strict` on warnings too, so CI and cron can rely on it. CI flows that publish then deploy (like `deploy-site.yml`) pass `--no-check` to the publish and check after the deploy, so the post-publish check doesn't test the old runtime.
+- **CLI:** the check prints after the publish result. `--no-check` skips it; the exit code is non-zero only with `--check-strict`. The standalone `gazetta check <target>` is a gate, not a report: it exits non-zero when any result has error severity (`wrong`, `unreachable`, `needs-credentials`), and with `--strict` on warnings too, so CI and cron can rely on it. CI flows that publish then deploy (like `deploy-site.yml`) pass `--no-check` to the publish and run `gazetta check <target> --last-publish` after the deploy, so the post-publish check doesn't test the old runtime. `--last-publish` plans the same routes a post-publish check would, from the `items` of the target's latest publish revision in its history (`Revision.items`); no new state is stored. If the target has history turned off, it falls back to the smoke set and the report says so.
 
 | Rejected | Why |
 |---|---|
@@ -62,6 +62,8 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 | Ask at publish time | A question on every publish is noise; the answer is almost always yes. |
 | On demand only, or CLI only | Most authors would never run it; admin-only authors get nothing. |
 | `gazetta check` exiting 0 unless `--strict` | Run from CI or cron, a failing check would pass silently. |
+| Only the smoke set after a deploy that follows a `--no-check` publish | The pages the publish changed, their dependents and re-pointed aliases go unchecked. |
+| Storing the changed items for a later check | The publish's history revision already lists them. |
 | Restricting `siteUrl` to public addresses | The config is code: no protection gained, and local targets break. |
 | After deploy only | Misses content publishes, the frequent case. |
 | Periodic, or the runtime checking itself | Out of scope by Q1; a site can't see its own outage. |
@@ -77,7 +79,7 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - site files the publish wrote (`sitemap.xml`, `robots.txt`, `_redirects` behaviour);
 - always the root and one unknown URL (`404`).
 
-**Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location` is the expected alias route, and a redirect to a login page is `needs-credentials`. The check follows a redirect only to confirm the destination answers, and only on the same origin.
+**Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location` is the expected alias route, and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
 
 Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are checked through the instances published to target storage; the template route itself is skipped with an info note. The planner reads the **target's** indices after publish has rewritten them. Those indices are rebuilt from the whole source site (`rebuildDepIndex`, `publish-rendered.ts`), so they can name pages the target doesn't have. The planner therefore checks a dependent route only when the target has that page: its per-item `.{hash}.hash` sidecar exists there, the file `compareTargets` reads. Missing pages are skipped and not counted. Edges can still differ from what the target serves (the published version of a page uses `@header`, the source no longer does); the planner then misses that route, a gap rather than a false alarm. Making the target's indices describe the target is a separate publish fix ([#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077)).
 
@@ -191,7 +193,7 @@ Every failure is an `Issue` (`design-validation.md`), so severity words and draw
 | `stale-for-visitors` | Correct when bypassing the cache, older copy in the visitor view | warn |
 | `wrong` | Wrong status, wrong redirect target, or wrong version | error |
 | `unreachable` | DNS, TLS or connection failure for the site as a whole | error |
-| `needs-credentials` | A login redirect or 401/403 | error |
+| `needs-credentials` | A login redirect, a 401, or a 403 on a route expected to answer 200 | error |
 | `status-only` | Expected status, but the version couldn't be compared: no marker (published before this feature, or the host strips comments) or rendered per request | info |
 | `not-checked` | Skipped: past the cap, a dynamic template route, or a host that can't produce the expected answer (e.g. an S3 website can't redirect) | info |
 | `incomplete` | The run stopped before finishing (its `running` report passed its deadline) | warn |
@@ -255,7 +257,7 @@ A warning icon on a target (`target-live-check-warning`) appears only when its l
 | 3 | gazetta.studio: replace `deploy-site.yml`'s check step with `gazetta check production` (maintainer PR: workflow file) | 2 | (CI) | Low |
 | 4 | Route planner: affected routes from the target's `fragment-deps`, `alias-targets` and `asset-refs`; publish writes `alias-targets` to targets; removals, changed languages, dynamic-route instances, priority order, `maxRequests` | 2 | unit + api | Medium-high |
 | 5 | Reports on the target, retention, `.gitignore` line, `live-check` audit event; `--json` | 2 | api-first | Low |
-| 6 | Checks after `gazetta publish` and `gazetta deploy` (CLI layer only); `--no-check`, `--check-strict`, `--all`, `--max-requests`; plus a maintainer PR adding `--no-check` to `deploy-site.yml`'s publish step | 4, 5 | integration | Medium |
+| 6 | Checks after `gazetta publish` and `gazetta deploy` (CLI layer only); `--no-check`, `--check-strict`, `--all`, `--max-requests`, `gazetta check --last-publish`; plus a maintainer PR adding `--no-check` to `deploy-site.yml`'s publish step and `--last-publish` to its check | 4, 5 | integration | Medium |
 | 7a | CLI commands load hook contributions; changelog note and `docs/hooks.md` line (existing `afterPublish` hooks now fire for CLI publishes) | — | api-first | Medium |
 | 7b | `afterLiveCheck` phase with `outcome`, `previousOutcome`, `triggeredBy`; optional `admin.url`; Slack example in the docs; changelog note for exhaustive switches over phases | 6, 7a | api-first | Low |
 | 8a | Admin: check events in the publish stream, the check outliving the connection (#1068's pattern), panel rows and summary per the state table; Storybook stories from the table | 5, #1068 | component + e2e | Medium |
