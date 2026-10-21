@@ -101,3 +101,84 @@ describe.each(['static', 'dynamic'] as const)('nested fragment changes on a %s t
     }
   }, 60_000)
 })
+
+describe('nested fragments resolve like rendering does (#1090)', () => {
+  let dir: string
+
+  beforeEach(async () => {
+    dir = tempDir(`nested-frag-resolve-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await cp(starterTargetDir, dir, { recursive: true })
+    for (const f of ['page.json', 'page.fr.json']) {
+      await editJson(join(dir, 'pages/home', f), j => {
+        j.components = j.components.filter((c: unknown) => c !== '@footer')
+      })
+    }
+  })
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  async function publishThenCompare(items: { kind: 'page'; name: string; locale?: string }[]) {
+    const manifest = await starterManifest()
+    const sourceRoot = createContentRoot(createFilesystemProvider(dir), '')
+    const site = await loadSite({ contentRoot: sourceRoot, templatesDir: starterTemplatesDir, manifest })
+    const templateInfos = await scanTemplates(starterTemplatesDir, starterProjectRoot)
+    const target = memoryStorage()
+    await publishRun({
+      items,
+      targets: ['t'],
+      site,
+      sourceRoot,
+      siteManifest: { ...manifest, targets: { t: { storage: target, type: 'static' } } } as typeof manifest,
+      targetStorages: new Map([['t', target]]),
+      templateInfos,
+      publishAssetsBeforeItems: false,
+      publishDepIndicesAfter: false,
+      publishSiteManifestAfter: false,
+    })
+    return () =>
+      compareTargets({
+        sourceRoot: createContentRoot(createFilesystemProvider(dir), ''),
+        target,
+        templatesDir: starterTemplatesDir,
+        projectRoot: starterProjectRoot,
+        type: 'static',
+        scanTemplates: async () => templateInfos,
+        manifest,
+      })
+  }
+
+  it("a nested fragment's locale variant changes only that locale's pages", async () => {
+    // The French page renders header.fr.json, so that's where the nested ref goes.
+    await editJson(join(dir, 'fragments/header/fragment.fr.json'), j => {
+      j.components = [...(j.components ?? []), '@footer']
+    })
+    const compare = await publishThenCompare([{ kind: 'page', name: 'home', locale: 'fr' }])
+    expect((await compare()).unchanged).toContain('pages/home:fr')
+
+    await editJson(join(dir, 'fragments/footer/fragment.fr.json'), j => {
+      j.content = { ...(j.content ?? {}), copyright: `fr ${Date.now()}` }
+    })
+    expect((await compare()).modified).toContain('pages/home:fr')
+  }, 60_000)
+
+  it('a change to an alias target reaches pages that reference the archived name', async () => {
+    const footer = JSON.parse(await readFile(join(dir, 'fragments/footer/fragment.json'), 'utf8'))
+    await cp(join(dir, 'fragments/footer'), join(dir, 'fragments/oldfooter'), { recursive: true })
+    for (const f of ['fragment.json', 'fragment.fr.json', 'fragment.ar.json', 'fragment.ja.json']) {
+      await rm(join(dir, 'fragments/oldfooter', f), { force: true })
+    }
+    await writeFile(
+      join(dir, 'fragments/oldfooter/fragment.json'),
+      JSON.stringify({ template: footer.template, archived: true, aliasOf: 'footer' }),
+    )
+    await editJson(join(dir, 'fragments/header/fragment.json'), j => j.components.push('@oldfooter'))
+    const compare = await publishThenCompare([{ kind: 'page', name: 'home' }])
+    expect((await compare()).unchanged).toContain('pages/home')
+
+    await editJson(join(dir, 'fragments/footer/fragment.json'), j => {
+      j.content = { ...(j.content ?? {}), copyright: `changed ${Date.now()}` }
+    })
+    expect((await compare()).modified).toContain('pages/home')
+  }, 60_000)
+})

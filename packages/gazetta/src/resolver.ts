@@ -99,7 +99,7 @@ export async function resolveComponent(entry: ComponentEntry, ctx: ResolveContex
  * `resolveFragment` (entry-point path). Sharing the lookup keeps
  * locale + alias resolution coherent across both paths.
  */
-function lookupFragmentForLocale(
+export function lookupFragmentForLocale(
   fragmentName: string,
   ctx: { site: Site; locale?: string; resolvedLocales?: ResolvedLocales },
 ): (FragmentManifest & { dir: string }) | null {

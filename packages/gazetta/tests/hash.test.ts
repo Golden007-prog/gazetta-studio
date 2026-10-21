@@ -133,6 +133,8 @@ describe('hashManifest', () => {
 })
 
 describe('composeFragmentHashes (#1090)', () => {
+  const compose = (frags: Map<string, FragmentManifest>, th: Map<string, string>) =>
+    composeFragmentHashes(frags.keys(), n => frags.get(n), th)
   const templateHashes = new Map([
     ['p', 't1'],
     ['h', 't2'],
@@ -147,8 +149,8 @@ describe('composeFragmentHashes (#1090)', () => {
   const page: PageManifest = { route: '/', template: 'p', components: ['@header'] }
 
   it('a nested fragment change changes the outer fragment and every static page that bakes it', () => {
-    const a = composeFragmentHashes(fragments('v1'), templateHashes)
-    const b = composeFragmentHashes(fragments('v2'), templateHashes)
+    const a = compose(fragments('v1'), templateHashes)
+    const b = compose(fragments('v2'), templateHashes)
     expect(b.get('header')).not.toBe(a.get('header'))
     expect(hashManifest(page, { templateHashes, fragmentHashes: b })).not.toBe(
       hashManifest(page, { templateHashes, fragmentHashes: a }),
@@ -156,8 +158,8 @@ describe('composeFragmentHashes (#1090)', () => {
   })
 
   it('is stable when nothing changes', () => {
-    const a = composeFragmentHashes(fragments('v1'), templateHashes)
-    const b = composeFragmentHashes(fragments('v1'), templateHashes)
+    const a = compose(fragments('v1'), templateHashes)
+    const b = compose(fragments('v1'), templateHashes)
     expect([...b]).toEqual([...a])
   })
 
@@ -168,9 +170,7 @@ describe('composeFragmentHashes (#1090)', () => {
         ['b', { template: 'h', components: ['@c'] }],
         ['c', { template: 'l', content: { text: deep } }],
       ])
-    expect(composeFragmentHashes(chain('x'), templateHashes).get('a')).not.toBe(
-      composeFragmentHashes(chain('y'), templateHashes).get('a'),
-    )
+    expect(compose(chain('x'), templateHashes).get('a')).not.toBe(compose(chain('y'), templateHashes).get('a'))
   })
 
   it('follows references nested inside inline components', () => {
@@ -179,8 +179,8 @@ describe('composeFragmentHashes (#1090)', () => {
         ['header', { template: 'h', components: [{ name: 'wrap', template: 'section', components: ['@logo'] }] }],
         ['logo', { template: 'l', content: { text: logo } }],
       ])
-    expect(composeFragmentHashes(frags('v1'), templateHashes).get('header')).not.toBe(
-      composeFragmentHashes(frags('v2'), templateHashes).get('header'),
+    expect(compose(frags('v1'), templateHashes).get('header')).not.toBe(
+      compose(frags('v2'), templateHashes).get('header'),
     )
   })
 
@@ -189,14 +189,14 @@ describe('composeFragmentHashes (#1090)', () => {
       ['a', { template: 'h', components: ['@b'] }],
       ['b', { template: 'h', components: ['@a'] }],
     ])
-    const out = composeFragmentHashes(cyclic, templateHashes)
+    const out = compose(cyclic, templateHashes)
     expect(out.get('a')).toMatch(/^[0-9a-f]{8}$/)
     expect(out.get('b')).toMatch(/^[0-9a-f]{8}$/)
   })
 
   it('an ESI page ignores its top-level fragments but not ones nested in inline components', () => {
-    const a = composeFragmentHashes(fragments('v1'), templateHashes)
-    const b = composeFragmentHashes(fragments('v2'), templateHashes)
+    const a = compose(fragments('v1'), templateHashes)
+    const b = compose(fragments('v2'), templateHashes)
     const esi = { templateHashes, topLevelFragmentsComposedAtRequest: true }
     expect(hashManifest(page, { ...esi, fragmentHashes: b })).toBe(hashManifest(page, { ...esi, fragmentHashes: a }))
     const inlinePage: PageManifest = {
@@ -206,6 +206,22 @@ describe('composeFragmentHashes (#1090)', () => {
     }
     expect(hashManifest(inlinePage, { ...esi, fragmentHashes: b })).not.toBe(
       hashManifest(inlinePage, { ...esi, fragmentHashes: a }),
+    )
+  })
+})
+
+describe('hashManifest — archived items (#1090)', () => {
+  const templateHashes = new Map([['h', 't1']])
+  it("retargeting an alias changes the archived item's hash", () => {
+    const a = hashManifest({ template: 'h', archived: true, aliasOf: 'footer' } as FragmentManifest, { templateHashes })
+    const b = hashManifest({ template: 'h', archived: true, aliasOf: 'footer-v2' } as FragmentManifest, {
+      templateHashes,
+    })
+    expect(b).not.toBe(a)
+  })
+  it('a live item hashes as before', () => {
+    expect(hashManifest({ template: 'h' } as FragmentManifest, { templateHashes })).toBe(
+      hashManifest({ template: 'h', archived: false } as FragmentManifest, { templateHashes }),
     )
   })
 })

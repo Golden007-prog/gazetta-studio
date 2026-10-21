@@ -2,7 +2,8 @@ import { join } from 'node:path'
 import { memoryCache } from './cache/factories.js'
 import { forSite } from './cache/per-site.js'
 import { loadSite } from './site-loader.js'
-import { composeFragmentHashes, hashManifest } from './hash.js'
+import { fragmentHashLookup } from './fragment-hashes.js'
+import { hashManifest } from './hash.js'
 import { scanTemplates, templateHashesFrom, type TemplateInfo } from './templates-scan.js'
 import { listSidecars } from './sidecars.js'
 import type { StorageProvider } from './types.js'
@@ -111,24 +112,27 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
   //   - `loadSite` already loaded every manifest into memory; re-hashing
   //     is microsecond-scale per manifest. The cache saved nothing
   //     meaningful and introduced a real correctness hole.
-  const fragmentHashes = composeFragmentHashes(site.fragments, templateHashes)
+  // Each item bakes the fragments it references, resolved for its own
+  // locale (and through archive aliases) the way rendering resolves them.
+  const fragmentHashes = fragmentHashLookup(site, templateHashes)
 
   const local = new Map<string, string>()
   // Static pages bake every fragment; ESI pages bake only fragments nested
   // in inline components (their top-level refs are composed per request).
-  const pageHashOpts =
-    opts.type === 'static'
-      ? { templateHashes, fragmentHashes }
-      : { templateHashes, fragmentHashes, topLevelFragmentsComposedAtRequest: true }
+  const pageHashOpts = (locale?: string) => ({
+    templateHashes,
+    fragmentHashes: fragmentHashes(locale),
+    topLevelFragmentsComposedAtRequest: opts.type !== 'static',
+  })
   for (const [name, page] of site.pages) {
-    local.set(`pages/${name}`, hashManifest(page, pageHashOpts))
+    local.set(`pages/${name}`, hashManifest(page, pageHashOpts()))
 
     // Per-locale items — each locale variant is compared independently
     const localeEntry = site.pageLocales.get(name)
     if (localeEntry) {
       for (const [locale, localePage] of localeEntry.locales) {
         const localeKey = `pages/${name}:${locale}`
-        local.set(localeKey, hashManifest(localePage, pageHashOpts))
+        local.set(localeKey, hashManifest(localePage, pageHashOpts(locale)))
       }
     }
   }
@@ -136,13 +140,16 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
   // on the target, and publishing @header/@footer is a no-op server-side. Omit
   // them from local so they don't appear as perpetually "added".
   if (opts.type !== 'static') {
-    for (const [name, hash] of fragmentHashes) {
-      local.set(`fragments/${name}`, hash)
+    for (const [name, frag] of site.fragments) {
+      local.set(`fragments/${name}`, hashManifest(frag, { templateHashes, fragmentHashes: fragmentHashes() }))
     }
     // Per-locale fragment items
     for (const [name, localeEntry] of site.fragmentLocales) {
       for (const [locale, localeFrag] of localeEntry.locales) {
-        local.set(`fragments/${name}:${locale}`, hashManifest(localeFrag, { templateHashes, fragmentHashes }))
+        local.set(
+          `fragments/${name}:${locale}`,
+          hashManifest(localeFrag, { templateHashes, fragmentHashes: fragmentHashes(locale) }),
+        )
       }
     }
   }

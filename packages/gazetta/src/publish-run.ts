@@ -51,7 +51,8 @@ import { publishItems } from './publish.js'
 import type { Principal } from './auth/types.js'
 import { createContentRoot, type ContentRoot } from './content-root.js'
 import { publishFragment, resolveFragmentRenderMode } from './fragments/publish.js'
-import { composeFragmentHashes, hashManifest } from './hash.js'
+import { fragmentHashLookup } from './fragment-hashes.js'
+import { hashManifest } from './hash.js'
 import type { HistoryProvider } from './history.js'
 import { recordWrite, type WrittenItem } from './history-recorder.js'
 import { localeFilename } from './locale.js'
@@ -162,11 +163,12 @@ export interface PublishRunInput {
    */
   readonly targetStorages: ReadonlyMap<string, StorageProvider>
   /**
-   * Per-target manifest hashes for incremental publish. Caller computes
-   * via `hashManifest(item, { templateHashes, fragmentHashes? })`.
+   * Per-target manifest hashes for incremental publish. A caller that
+   * supplies them must hash like `compareTargets`: `hashManifest(item,
+   * { templateHashes, fragmentHashes: fragmentHashLookup(site, …)(locale),
+   * topLevelFragmentsComposedAtRequest })` (see fragment-hashes.ts).
    * Optional — when absent and `templateInfos` is supplied, orchestrator
-   * computes per-item hashes inline (using the canonical hashManifest
-   * with templateHashes from scan + fragmentHashes for static-mode pages).
+   * computes the same per-item hashes inline.
    */
   readonly itemHashes?: ReadonlyMap<string, string>
   /**
@@ -302,13 +304,12 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     }
   }
 
-  // Compute hash maps once: templateHashes for all items;
-  // fragmentHashes for static-mode page hash composition (so a fragment
-  // change invalidates every static page that bakes it in).
+  // Compute hash maps once: templateHashes for all items; fragment hashes
+  // per locale, covering every fragment an item bakes in (#1090).
   const templateHashes = input.templateInfos ? templateHashesFrom([...input.templateInfos]) : new Map<string, string>()
   const fragmentHashes = input.templateInfos
-    ? composeFragmentHashes(input.site.fragments, templateHashes)
-    : new Map<string, string>()
+    ? fragmentHashLookup(input.site, templateHashes)
+    : () => new Map<string, string>()
 
   // Defaults for per-target side-effects (Q5 spine steps 10-12).
   const doAssetPublish = input.publishAssetsBeforeItems ?? true
@@ -458,7 +459,7 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
           // its output counts; an ESI page's top-level refs don't.
           manifestHash = hashManifest(itemForHash, {
             templateHashes,
-            fragmentHashes,
+            fragmentHashes: fragmentHashes(ref.locale),
             topLevelFragmentsComposedAtRequest: ref.kind === 'page' && targetType !== 'static',
           })
         }

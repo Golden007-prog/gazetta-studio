@@ -98,10 +98,10 @@ export function parsePubSidecarLocale(entryName: string): string | undefined {
  * hashed forms (`"name#hash"`) using the provided maps. Returns a new
  * normalized structure — input is not mutated.
  *
- * `fragmentHashes` is only provided for static-mode targets where fragments
- * are baked into pages at publish time — a fragment content change must
- * invalidate every page that uses it. In ESI mode fragments are published
- * separately, so pages don't need fragment hashes in their own hash.
+ * `fragmentHashes` (from `composeFragmentHashes`) covers every fragment the
+ * item bakes into its output: all of them for static pages and for fragments;
+ * for ESI pages, all but their own top-level references, which the worker
+ * composes per request (`skipFragmentsAtThisLevel`).
  */
 function substituteHashes(
   components: ComponentEntry[] | undefined,
@@ -171,6 +171,12 @@ export function hashManifest(manifest: PageManifest | FragmentManifest, opts: Ha
   }
   // Only when it has a field: pages without metadata keep the hash they had
   // before metadata counted, and `{}` renders the same as no metadata.
+  // An archived item publishes as a marker naming its alias target, so a
+  // retargeted alias is a change. Live items hash as before.
+  if (manifest.archived) {
+    normalized.archived = true
+    normalized.aliasOf = manifest.aliasOf ?? null
+  }
   const metadata = 'metadata' in manifest ? manifest.metadata : undefined
   if (metadata && Object.keys(metadata).length > 0) normalized.metadata = metadata
   const json = JSON.stringify(normalized, sortedReplacer)
@@ -189,29 +195,32 @@ function sortedReplacer(_key: string, value: unknown): unknown {
 }
 
 /**
- * Hash every fragment including the fragments it bakes in, at any depth
+ * Hash every fragment together with the fragments it bakes in, at any depth
  * (#1090). A fragment's rendered output contains its nested fragments, so a
  * change to `@logo` must change the hash of `@header` that contains it, and
- * of every page that bakes either. Computed bottom-up with memoisation; a
- * reference cycle (reported elsewhere as an error) is hashed without the
- * back edge instead of looping.
+ * of every page that bakes either. `lookup` must resolve a reference the way
+ * rendering does (locale variant, archive alias); `fragmentHashLookup` in
+ * `fragment-hashes.ts` builds it from a site. Computed bottom-up with
+ * memoisation. A reference cycle is rejected by validation (`circular-fragment`)
+ * and can't render; here it is hashed without the back edge instead of looping.
  */
 export function composeFragmentHashes(
-  fragments: ReadonlyMap<string, FragmentManifest>,
+  names: Iterable<string>,
+  lookup: (name: string) => FragmentManifest | null | undefined,
   templateHashes: Map<string, string>,
 ): Map<string, string> {
   const composed = new Map<string, string>()
   const visiting = new Set<string>()
   const visit = (name: string): void => {
     if (composed.has(name) || visiting.has(name)) return
-    const frag = fragments.get(name)
+    const frag = lookup(name)
     if (!frag) return
     visiting.add(name)
     for (const ref of fragmentRefs(frag.components)) visit(ref)
     visiting.delete(name)
     composed.set(name, hashManifest(frag, { templateHashes, fragmentHashes: composed }))
   }
-  for (const name of fragments.keys()) visit(name)
+  for (const name of names) visit(name)
   return composed
 }
 

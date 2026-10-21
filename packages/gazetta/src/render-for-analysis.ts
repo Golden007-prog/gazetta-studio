@@ -32,7 +32,8 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { access, readFile } from 'node:fs/promises'
 import type { AdminCache } from './cache/types.js'
-import { composeFragmentHashes, hashManifest } from './hash.js'
+import { fragmentHashLookup } from './fragment-hashes.js'
+import { hashManifest } from './hash.js'
 import { renderPage } from './renderer.js'
 import { resolvePage } from './resolver.js'
 import type { FragmentManifest, PageManifest } from './types.js'
@@ -66,7 +67,7 @@ export async function renderPageForAnalysis(
   if (!page) return null
 
   const templateHashes = await computeTemplateHashes(site, templatesDir)
-  const fragmentHashes = composeFragmentHashes(site.fragments, templateHashes)
+  const fragmentHashes = fragmentHashLookup(site, templateHashes)(locale)
   const contentHash = hashManifest(page, { templateHashes, fragmentHashes })
   const key = cacheKey('page', pageName, locale, theme, contentHash)
 
