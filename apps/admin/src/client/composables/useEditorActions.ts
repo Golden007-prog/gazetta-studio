@@ -855,15 +855,14 @@ export function useEditorActions() {
     const result = await persistence.save(current, stashedEntries, manifestWrites)
     if (result.success) {
       markContentWritten(writtenContent)
-      structural.markWritten(structuralEntries)
-      metadata.markWritten(metadataEntries)
-      validationStore.clear()
-      // Reload the affected manifests so selection.detail reflects the saved
-      // structural and metadata changes — preview will repaint from disk on
-      // the next fetch.
+      // Reload before dropping the written pending entries: until the reload
+      // lands, the tree would fall back to the pre-save order from disk.
       if (structuralEntries.length > 0 || metadataEntries.length > 0) {
         await useSelectionStore().reload()
       }
+      structural.markWritten(structuralEntries)
+      metadata.markWritten(metadataEntries)
+      validationStore.clear()
       usePreviewStore().invalidate()
       usePublishStatusStore().refresh()
       toast.show('Saved', { action: buildUndoAction() })

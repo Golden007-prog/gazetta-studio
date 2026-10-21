@@ -132,6 +132,29 @@ describe('moves', () => {
     expect(useEditorStructuralStore().hasPendingEdits).toBe(false)
   })
 
+  // Until the reload lands, the tree reads the order on disk wherever nothing
+  // is pending, so dropping the entry first showed the pre-save order (#288).
+  it('the order written stays pending until the reload lands', async () => {
+    vi.spyOn(api, 'updatePage').mockResolvedValue({ ok: true, etag: 'v' } as never)
+    const written = [components[1], components[0], components[2]]
+    let land: (() => void) | undefined
+    vi.spyOn(api, 'getPageWithEtag').mockImplementation(
+      () =>
+        new Promise(resolve => {
+          land = () => resolve({ data: { ...structuredClone(detail), components: written }, etag: 'v' } as never)
+        }),
+    )
+    const actions = useEditorActions()
+    actions.moveComponentStructural(home, components, 0, 1)
+    const saving = actions.save()
+    await vi.waitFor(() => expect(land).toBeDefined())
+
+    expect(useEditorStructuralStore().pendingFor(home)).toEqual(written)
+    land?.()
+    expect(await saving).toBe(true)
+    expect(useEditorStructuralStore().hasPendingEdits).toBe(false)
+  })
+
   it('a first move made while the save runs stays pending', async () => {
     slowWrites()
     const actions = useEditorActions()
