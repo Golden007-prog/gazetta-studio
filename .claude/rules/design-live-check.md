@@ -51,9 +51,9 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 
 - **Report only.** A check never blocks or rolls back: the bytes are already on the target.
 - **Waits for propagation.** Retries until a per-target wait (`liveCheck.waitSeconds`, defaults by target type) runs out. Running out is "not live yet", not "wrong".
-- **Two views of each route.** One request bypasses caches (a fresh query value per attempt), one doesn't. If they differ, the result is "correct, but visitors still see an older copy".
-- **Sites behind login.** Optional `liveCheck.headers` (values from env vars in `site.config.ts`, e.g. a Cloudflare Access service token). A login redirect is "needs credentials", not "broken".
-- **CLI:** the check prints after the publish result. `--no-check` skips it; the exit code is non-zero only with `--check-strict`. CI flows that publish then deploy (like `deploy-site.yml`) pass `--no-check` to the publish and check after the deploy, so the post-publish check doesn't test the old runtime.
+- **Two views of each route.** One request bypasses caches (a fresh query value per attempt), one doesn't. If they differ, the result is "correct, but visitors still see an older copy". A CDN can ignore query strings in its cache key, so the bypass request is checked too: if its `Age` header is above 0, it came from a cache, that view is marked unavailable, only the visitor view is judged, and the report says "couldn't bypass the cache" (info).
+- **Sites behind login.** Optional `liveCheck.headers` (values from env vars in `site.config.ts`, e.g. a Cloudflare Access service token). A login redirect is "needs credentials", not "broken". The headers are sent only to `siteUrl`'s origin, and the check never follows a redirect to another origin (Q3, redirects). `siteUrl` itself isn't restricted: it comes from `site.config.ts`, which is code, so whoever can change it can already run code; blocking private addresses would add no protection and would break local targets.
+- **CLI:** the check prints after the publish result. `--no-check` skips it; the exit code is non-zero only with `--check-strict`. The standalone `gazetta check <target>` is a gate, not a report: it exits non-zero when any result has error severity (`wrong`, `unreachable`, `needs-credentials`), and with `--strict` on warnings too, so CI and cron can rely on it. CI flows that publish then deploy (like `deploy-site.yml`) pass `--no-check` to the publish and check after the deploy, so the post-publish check doesn't test the old runtime.
 
 | Rejected | Why |
 |---|---|
@@ -61,6 +61,8 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 | Production environments only | Staging is where a broken rename should be caught. The environment sets how careful to be, not whether the site is correct. |
 | Ask at publish time | A question on every publish is noise; the answer is almost always yes. |
 | On demand only, or CLI only | Most authors would never run it; admin-only authors get nothing. |
+| `gazetta check` exiting 0 unless `--strict` | Run from CI or cron, a failing check would pass silently. |
+| Restricting `siteUrl` to public addresses | The config is code: no protection gained, and local targets break. |
 | After deploy only | Misses content publishes, the frequent case. |
 | Periodic, or the runtime checking itself | Out of scope by Q1; a site can't see its own outage. |
 
@@ -75,6 +77,8 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - site files the publish wrote (`sitemap.xml`, `robots.txt`, `_redirects` behaviour);
 - always the root and one unknown URL (`404`).
 
+**Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location` is the expected alias route, and a redirect to a login page is `needs-credentials`. The check follows a redirect only to confirm the destination answers, and only on the same origin.
+
 Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are checked through the instances published to target storage; the template route itself is skipped with an info note. The planner reads the **target's** indices after publish has rewritten them, so it sees what is live.
 
 **Priority and cap.** Routes are checked in priority order (published routes, then direct dependents, then deeper ones) within `liveCheck.maxRequests` (default 1,000 HTTP requests per target per run, counting both views and redirects). Past the cap the report says so ("checked 1,000 of 4,800"). The operator can read the value from an env var in `site.config.ts` (`maxRequests: Number(process.env.LIVE_CHECK_MAX ?? 1000)`); `gazetta check --max-requests` overrides it once.
@@ -83,6 +87,7 @@ Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are
 
 | Rejected | Why |
 |---|---|
+| Following redirects automatically | The 301's `Location` and login redirects are hidden behind the destination's answer. |
 | A fixed random sample each time | Usually misses the page just changed. |
 | Only the items published | Misses fragment dependents, re-pointed redirects, changed assets. |
 | A fixed 10-page sample per fragment | The graph gives the exact set for free; sampling throws accuracy away. |
@@ -93,11 +98,12 @@ Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are
 
 Publish writes `<!-- gazetta:published hash=ab12cd34 -->` at the end of each page's `<head>`. On ESI targets each fragment body carries its own marker. The hash is of the **rendered output** (computed without the marker), so content, template and asset-URL changes all change it. Line 1 stays reserved for the cache comment and archive markers.
 
-The check reads the markers and compares them with what publish wrote: the page's, and each fragment's, so a stale `@header` on an otherwise current page is reported as exactly that. Dynamic routes have no published hash; a `200` passes there. A page without a marker was published before this feature; the report says "republish to verify", not "wrong".
+The check reads the markers and compares them with what publish wrote: the page's, and each fragment's, so a stale `@header` on an otherwise current page is reported as exactly that. A route can answer with the expected status while its version can't be compared: it carries no marker, or it's rendered per request and has no published hash. That is `status-only` (info), never `live`; `live` means the version was confirmed. If other pages in the same run carry markers, a missing one means the page was published before this feature, and the report says "republish to verify". If no page in the run carries one, the host probably strips HTML comments, the report says so, and it doesn't suggest republishing.
 
 | Rejected | Why |
 |---|---|
 | Status code only | A stale or old page passes. |
+| Counting a `200` without a version as `live` | A stale page on a dynamic route, or on a host that strips comments, reads as confirmed. |
 | Compare served bytes with storage (assembling ESI pages like the worker) | A storage read and an assembly per page; any byte a host injects fails every page; doesn't work for dynamic routes. |
 | A response header (`X-Gazetta-Published`) | Plain static hosts can't set headers. |
 | Compare ETags | Each host computes its own. |
@@ -106,7 +112,7 @@ The check reads the markers and compares them with what publish wrote: the page'
 
 ### Q5 — Where results live
 
-Each run writes `.gazetta/live-check/{timestamp}.json` on the target it checked: the trigger, every route with its expected and actual answer, counts. No personal data: who triggered the run goes only into the audit event. The newest file is the latest result. The last 20 are kept per target (configurable), pruned like history. One `live-check` audit event per run carries the trigger and counts (an additive value in the closed action list).
+Each run writes `.gazetta/live-check/{timestamp}-{random}.json` on the target it checked (the random suffix keeps two runs that start in the same second apart): the trigger, every route with its expected and actual answer, counts. The file is written when the run starts (`status: running`, with a deadline of the wait plus the request cap times the timeout) and rewritten when it ends. A reader treats a `running` report past its deadline as `incomplete`, so a crashed run is visible without a recovery job. No personal data: who triggered the run goes only into the audit event. The newest file is the latest result. If #1070 moves `.gazetta/` to separate private storage, reports move with it. The last 20 are kept per target (configurable), pruned like history. One `live-check` audit event per run carries the trigger and counts (an additive value in the closed action list).
 
 `.gitignore` gains `**/targets/**/.gazetta/live-check/`. Reading a report needs `read:pages`.
 
@@ -116,6 +122,8 @@ Each run writes `.gazetta/live-check/{timestamp}.json` on the target it checked:
 | The audit log only | Audit records actions, not 1,000-row reports; authors can't read it by default. |
 | The validation scanner's store (Site health) | In memory per instance; describes the source, not a target. |
 | One "latest" file, overwritten | Two runs at once overwrite each other; no history. |
+| Writing the report only at the end | A crash mid-run leaves no trace, and readers can't tell "interrupted" from "never ran". |
+| A recovery job that marks abandoned runs | Needs a running process to notice; the deadline in the file does the same without one. |
 | A marker file per route | Thousands of files per run, each to clean up; a report gives per-page status from one read. |
 | The publish's history revision | Written before the check finishes and never changed; deploys and on-demand runs have none. |
 | The source site's directory | State about a target kept away from it; another CMS connected to the same target wouldn't see it. |
@@ -124,7 +132,7 @@ Each run writes `.gazetta/live-check/{timestamp}.json` on the target it checked:
 
 ### Q6 — Telling someone who isn't watching
 
-A new observe-only hook phase, `afterLiveCheck`, fires once per run with the final result (after the wait): `outcome`, `previousOutcome` for that target (so a hook can alert on new failures and recoveries only), the failing issues, counts, `triggeredBy: { kind: 'publish' | 'deploy' | 'on-demand' | 'schedule', actorId? }`, and the report's path. It fires after the report is written. A failing or slow hook never blocks (after-hook rules, 5 s default timeout). The docs give an example hook that posts failures and recoveries to a Slack webhook.
+A new observe-only hook phase, `afterLiveCheck`, fires once per run with the final result (after the wait): `outcome`, `previousOutcome` for that target (so a hook can alert on new failures and recoveries only), the failing issues, counts, `triggeredBy: { kind: 'publish' | 'deploy' | 'on-demand' | 'schedule', actorId? }`, and the report's path. It fires after the report is written. The audit event is recorded before the final report write. The report carries `notified: false` until the hook phase has run, then is updated to `true`; `previousOutcome` comes from the last report with `notified: true`. So a crash between writing the report and firing the hook doesn't swallow the alert: the next run still sees the failure as new. A failing or slow hook never blocks (after-hook rules, 5 s default timeout). The docs give an example hook that posts failures and recoveries to a Slack webhook.
 
 **CLI commands load hooks.** Today only the admin servers build the hook registry (`setupCmsApi`, `setupProductionMode` in `cli/index.ts`); `gazetta publish`, `deploy` and `check` run no hooks, and `publishRun`'s hook steps are marked reserved. They will load the same `admin.hooks` contributions. This also makes existing `afterPublish` hooks fire for CLI publishes, a behaviour change that needs a changelog note and a line in `docs/hooks.md`.
 
@@ -139,6 +147,7 @@ When NotificationProvider ships (`design-collaboration.md`), the same event beco
 | A built-in webhook setting | A second way to send events out, next to hooks and #195. |
 | Built-in email | NotificationProvider's job. |
 | Rely on CI | Covers CI-driven publishes only. |
+| `previousOutcome` from the last report, notified or not | A crash before the hook fires makes the next run treat the failure as old, and the alert is never sent. |
 
 ### Q7 — How a check runs
 
@@ -147,7 +156,7 @@ One check engine, three callers:
 - **CLI:** the engine runs after `publishRun` returns, or after the deploy, and prints.
 - **On demand:** a separate route (admin) or `gazetta check` (CLI).
 
-At most 10 requests at a time per process, across all running checks; 10 s timeout per request. A restart mid-check loses that run; its report says "incomplete", and the next publish or a Re-check recovers.
+At most 10 requests at a time per process, across all running checks; 10 s timeout per request. A restart mid-check loses that run; its `running` report passes its deadline and reads as `incomplete` (Q5), and the next publish or a Re-check recovers.
 
 | Rejected | Why |
 |---|---|
@@ -182,8 +191,9 @@ Every failure is an `Issue` (`design-validation.md`), so severity words and draw
 | `wrong` | Wrong status, wrong redirect target, or wrong version | error |
 | `unreachable` | DNS, TLS or connection failure for the site as a whole | error |
 | `needs-credentials` | A login redirect or 401/403 | error |
-| `no-marker` | Page served correctly but carries no marker (published before this feature) | info |
+| `status-only` | Expected status, but the version couldn't be compared: no marker (published before this feature, or the host strips comments) or rendered per request | info |
 | `not-checked` | Skipped: past the cap, a dynamic template route, or a host that can't produce the expected answer (e.g. an S3 website can't redirect) | info |
+| `incomplete` | The run stopped before finishing (its `running` report passed its deadline) | warn |
 
 ## UX check
 
@@ -202,6 +212,8 @@ Root `data-testid="live-check-row"`, with `data-state`.
 | `wrong` | "The live site isn't serving this correctly. Your content is saved; tell your site operator." | Details |
 | `unreachable` | "We couldn't reach the live site to check it." | Details |
 | `needs-credentials` | "The live site asked for a login, so we couldn't check it." | Details |
+| `status-only` | "Published. The live site answers, but we couldn't confirm it's the new version." | Details |
+| `incomplete` | "The check stopped before it finished." | Re-check |
 | `capped` (with any of the above) | Adds "Checked 1,000 of 4,800 pages." | Check all (`live-check-all`) |
 | `skipped` | Nothing rendered (no `siteUrl`, or `liveCheck: false`) | — |
 
@@ -254,14 +266,14 @@ Each user-facing cut updates its own docs; `docs/live-check.md` grows with them,
 
 ## Migration
 
-Nothing breaks. Pages published before cut 1 have no marker and report `no-marker` until republished. Targets without a `siteUrl` are skipped. Operators with `afterPublish` hooks see them fire for CLI publishes after cut 7a (changelog).
+Nothing breaks. Pages published before cut 1 have no marker and report `status-only` until republished. Targets without a `siteUrl` are skipped. Operators with `afterPublish` hooks see them fire for CLI publishes after cut 7a (changelog).
 
 ## Open questions
 
-1. **Do hosts and CDNs keep HTML comments?** The worker does (`parseCacheComment` strips only the first-line cache comment; `assembleEsi` replaces only ESI placeholders), but a minifying CDN might not. Cut 2 tests gazetta.studio. A host that strips them degrades to status-code checks, and the report says "no marker served".
+1. **Do hosts and CDNs keep HTML comments?** The worker does (`parseCacheComment` strips only the first-line cache comment; `assembleEsi` replaces only ESI placeholders), but a minifying CDN might not. Cut 2 tests gazetta.studio. A host that strips them degrades to `status-only` results, and the report says the host may strip comments (Q4).
 2. **Default waits per target type.** Measured on gazetta.studio in cut 2; other hosts start from labelled guesses.
 3. **The check outliving the connection** depends on #1068's fix landing first, since Hono's `streamSSE` aborts when the client leaves.
-4. **Plain static hosts serve `.gazetta/`.** On GitHub Pages or an S3 website, storage is the public site, so reports (and history) are downloadable. Reports carry no personal data; keeping `.gazetta/` off such hosts is [#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070).
+4. **Plain static hosts serve `.gazetta/`.** On GitHub Pages or an S3 website, storage is the public site, so reports (and history) are downloadable. Reports carry no personal data. `gazetta serve` on a static target serves the folder too ([#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071)). Operator steps are in `docs/audit.md` ("Where Gazetta keeps its own files"); the structural fix, keeping `.gazetta/` in separate private storage, is [#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070).
 5. **`design-scheduling.md` says "no external cron integration".** That line is about scheduled content actions; running `gazetta check` from cron is a different thing, but the wording should be reconciled when the scheduler is designed.
 
 ## Future directions
