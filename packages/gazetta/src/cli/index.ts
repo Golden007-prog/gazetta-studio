@@ -19,7 +19,7 @@ import { getEnvironment, getType, isEditable } from '../types.js'
 import { buildHooksRegistry, createAdminApp } from '../admin-api/index.js'
 import { parseValidateFlags } from './validate-flags.js'
 import { parseArgs } from './args.js'
-import { resolveListenHost } from './listen-host.js'
+import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
 
 // ANSI color helpers — no dependency, suppressed when NO_COLOR or CI
 const noColor = !!process.env.NO_COLOR || !process.stdout.isTTY
@@ -283,7 +283,7 @@ function printHelp() {
 
   Options:
     --port, -p <port>               Server port (default: 3000)
-    --host <address>                Address to listen on (dev/admin: 127.0.0.1; serve: all interfaces)
+    --host <address>                Address to listen on (dev, and admin without auth: 127.0.0.1; otherwise all interfaces)
     --force, -f                     Publish all items (skip unchanged check)
     --yes, -y                       Skip confirmation prompt (required in CI
                                     for undo/rollback on production targets)
@@ -1260,13 +1260,16 @@ async function runAdmin(siteDir: string, port: number, hostFlag?: string) {
 
   const siteManifest = (await loadSiteManifestForCli(siteDir)) ?? ({ name: 'gazetta' } as SiteManifest)
 
-  const server = serve({ fetch: app.fetch, port, hostname: resolveListenHost('admin', hostFlag) }, () => {
-    console.log()
-    console.log(`  ${c.bgGreen(c.bold(' gazetta '))} ${c.green('admin')} ${c.dim(siteManifest.name)}`)
-    console.log()
-    console.log(`  ${c.dim('┃')} Admin    ${c.cyan(`http://localhost:${port}/admin`)}`)
-    console.log()
-  })
+  const server = serve(
+    { fetch: app.fetch, port, hostname: resolveListenHost('admin', hostFlag, authTrustOf(siteManifest.admin?.auth)) },
+    () => {
+      console.log()
+      console.log(`  ${c.bgGreen(c.bold(' gazetta '))} ${c.green('admin')} ${c.dim(siteManifest.name)}`)
+      console.log()
+      console.log(`  ${c.dim('┃')} Admin    ${c.cyan(`http://localhost:${port}/admin`)}`)
+      console.log()
+    },
+  )
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
@@ -2323,6 +2326,10 @@ async function main() {
   }
 
   const parsed = parseArgs(args.slice(1))
+  if (parsed.host !== undefined && !SERVER_COMMANDS.has(command)) {
+    console.error(`\n  ${c.red('Error:')} --host only applies to dev, admin and serve\n`)
+    process.exit(1)
+  }
 
   // Commands that take [target] [site] positional args
   const targetFirstCommands = new Set(['publish', 'serve', 'deploy', 'history', 'undo'])

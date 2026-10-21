@@ -248,7 +248,7 @@ gazetta dev --port 4000
 gazetta serve -p 8080
 ```
 
-`gazetta dev` and `gazetta admin` listen on `127.0.0.1` only: they serve the admin API, and with the default `admin.auth` (`trust: 'none'`) anyone who reaches them is an admin. `gazetta serve` (site only) listens on every interface, for containers. `--host <address>` overrides either, e.g. `gazetta dev --host 0.0.0.0` to preview from a phone on the same network (#1074).
+`gazetta dev` listens on `127.0.0.1` only, and so does `gazetta admin` while `admin.auth` is `trust: 'none'`: they serve the admin API, and without auth anyone who reaches them is an admin. `gazetta admin` with real auth configured listens on every interface, because it runs behind a proxy or load balancer. `gazetta serve` (site only) listens on every interface, for containers. `--host <address>` overrides either, e.g. `gazetta dev --host 0.0.0.0` to preview from a phone on the same network (#1074). `--host` on any other command is an error.
 
 ## Exit Codes
 
