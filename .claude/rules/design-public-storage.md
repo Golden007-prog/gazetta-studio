@@ -19,7 +19,7 @@ Every target keeps Gazetta's own files in a `.gazetta/` folder next to the publi
 ## Scope
 
 **In v1:**
-- A per-target `publicStorage` setting, resolved by `isPublicStorage(target)`, public by default except for a local filesystem target
+- A per-target `publicStorage` setting, resolved by `isPublicStorage(target)`, public by default except for an editable filesystem target or a target deployed by a copy adapter
 - On a public target: no history, audit or review state; audit events recorded elsewhere; no schedules
 - `isPublicSitePath(path)`: one rule, used by every server and deploy adapter, for which stored files visitors may receive
 - A registry of `.gazetta/` folders, each marked safe or not on public targets, enforced by the type system and a test
@@ -29,7 +29,6 @@ Every target keeps Gazetta's own files in a `.gazetta/` folder next to the publi
 **Out of v1:**
 - Separate private storage for a target's state (rejected in Q3; see Future directions)
 - A runtime storage guard (Q7; Future directions, triggered by plugins that write state)
-- Cleaning up state already exposed (no production users; the docs' "If it was already public" steps cover it)
 - Making a target's dependency indices describe the target ([#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077))
 
 **Non-goals:**
@@ -78,9 +77,11 @@ The normal path for static hosting is private target storage plus a deploy adapt
 
 ### Q4 — `isPublicSitePath`: which stored files visitors may receive
 
-A path is private if any segment starts with `.`, **except `/.well-known/`** (ACME challenges, `security.txt`, app association files). One function, `isPublicSitePath(path)`, checked on the decoded, normalised path, used by static `gazetta serve` (cut 1), the worker and ESI `serve` (cut 7), the static deploy adapters, and the probe.
+A path is private if any segment starts with `.`, **except a first segment of exactly `.well-known`** (ACME challenges, `security.txt`, app association files). Dot-prefixed segments below it stay private (`/.well-known/.env` is private). `isPublicSitePath` filters files that come from storage; a deploy adapter may add host marker files it creates itself (GitHub Pages' `.nojekyll`). One function, `isPublicSitePath(path)`, checked on the decoded, normalised path, used by static `gazetta serve` (cut 1), the worker and ESI `serve` (cut 7), the static deploy adapters, and the probe.
 
 **Convention (locked):** every Gazetta-internal file is dot-prefixed. Cut 3's registry test enforces it for `.gazetta/`; per-item sidecars already follow it.
+
+**Per-item sidecars on a public target are accepted.** Publish writes `.{hash}.hash` and `.pub-{ts}` next to each published page, and on direct-served storage they're reachable as soon as they're written. They hold content hashes, publish times and noindex flags for pages that are already public, and incremental publish needs them. They're private to Gazetta's servers (Q4) but not treated as sensitive: the probe ignores them.
 
 | Rejected | Why |
 |---|---|
@@ -114,13 +115,13 @@ The operator states one fact; Gazetta applies the consequences, and validation p
 | `review/` | Not written (a public target can't be editable, Q6) |
 | `publish-requests/` (designed) | Recorded on the source, so approval works for a public production target |
 | `scheduled/` (designed) | Not supported: scheduling against a public target is a validation error naming the copy-deploy setup |
-| `fragment-deps/`, `asset-refs/`, `alias-targets/` | Written. Site structure a visitor mostly sees already; archived names are public through their 301/410 |
+| `fragment-deps/`, `asset-refs/`, `alias-targets/` | Not written until [#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077) is fixed: they're rebuilt from the whole source site, so they'd reveal **unpublished** page names. The live-check planner falls back to the published items when a target has no indices |
 | `live-check/` | Written. No personal data (live-check Q5); holds the probe result |
 | `comments/`, `notifications/` (designed) | Not written |
 | `cache/`, `audit-index/`, `page-index/`, `built-config/` (designed) | Not written unless their design says otherwise |
 | Any new folder | Not written until its entry in the registry (cut 3) says it's safe |
 
-**Where audit events for a public target go,** in order: the publish's source, if private; otherwise the first private target in `site.config.ts` (usually `local`); otherwise an external audit sink (`design-audit.md` v2); otherwise nowhere, shown as info in `gazetta validate` and the capabilities view. In CI with a throwaway checkout, a durable record needs an external sink; that info shows in `gazetta validate` and at admin boot, not in `gazetta publish` output.
+**Where audit events for a public target go,** in order: the publish's source, if private; otherwise the first private target in `site.config.ts` (usually `local`); otherwise an external audit sink (`design-audit.md` v2); otherwise nowhere, shown as info in `gazetta validate` and the capabilities view, and as a one-line warning in the output of any publish that actually dropped an audit event (a failure, not a setup note). In CI with a throwaway checkout, a durable record needs an external sink; that info shows in `gazetta validate` and at admin boot, not in `gazetta publish` output.
 
 Hooks and plugins read the resolved value through `isPublicStorage(target)`. A plugin that writes its own `.gazetta/` state checks it first (docs rule; no runtime guard in v1).
 
@@ -134,15 +135,21 @@ Hooks and plugins read the resolved value through `isPublicStorage(target)`. A p
 
 ### Q6 — Defaults, visibility, and the lock
 
-**Default:** a target is private by default only when its environment is `local` **and** its storage is `filesystemStorage`. Every other target, any cloud storage whatever its environment, defaults to public until `publicStorage: false`. Basing it on `environment` alone would be unsafe: `environment` defaults to `'local'` when unset. `gazetta init`, the starter and gazetta.studio write the value explicitly. A target left on the default gets one info line in `gazetta validate` and at admin boot: "`production`: storage assumed public, so history and audit aren't kept. Set `publicStorage: false` if visitors can't reach it."
+**Default:** a target is private by default only when its storage is `filesystemStorage` **and** it is an editing target (`editable` set to `true`), or when its deploy adapter declares that it copies site files to the host (the static adapters, Q2). Every other target, including any cloud storage and any filesystem target that only receives publishes, defaults to public until `publicStorage: false`. `environment` plays no part: it defaults to `'local'` when unset, so it can't show privacy. To tell storage types apart, the built-in storage factories carry a `kind` (`'filesystem'`, `'r2'`, `'s3'`, `'azure'`).
 
-**Validation errors:** `publicStorage` resolved true together with `history: { enabled: true }`, with `editable: true` (an editing target must keep its own history: "`production` is editable, so its storage must be private (`publicStorage: false`)"), or with a schedule against it.
+**Resolution order:** `publicStorage` resolves first; a public target then defaults to `editable: false`. So a cloud target with neither `environment` nor `editable` set is public and not editable, which is valid. Only an explicit `editable: true` together with public storage is an error. `gazetta init`, the starter and gazetta.studio write the value explicitly. A target left on the default gets one info line in `gazetta validate` and at admin boot: "`production`: storage assumed public, so history and audit aren't kept. Set `publicStorage: false` if visitors can't reach it."
+
+**Validation errors:** `publicStorage` resolved true together with `history: { enabled: true }`, with an explicit `editable: true` (an editing target must keep its own history: "`production` is editable, so its storage must be private (`publicStorage: false`)"), with a schedule against it, or while sensitive state (history, audit, review) still exists in its storage: "`production` is public but still holds history; run `gazetta state remove production`."
+
+**`gazetta state remove <target>`** deletes the sensitive folders (history, audit, review) from a target's storage, after a confirmation that names what goes. It's how an operator moves a target that kept state to public storage, and how a leak (below) is cleaned up.
 
 **The capabilities view** is the one place to look, because this is a one-time setup decision: "About this target" in the admin's target menu (anyone who can see the target), and `gazetta targets` (also in `gazetta validate`). The History panel on a public target shows a short line linking to it; the boot info and audit notes point to it too.
 
-**The lock.** When the probe (below) finds private files served, publishing to that target stops until a check passes or the operator declares `publicStorage: true`. No override, in the admin or the CLI: declaring public storage is the deliberate emergency exit, made in config where it's visible and reviewed. Other targets and saves are unaffected. No new audit event: the lock and its reason live in the latest complete live-check report, and each run already records a `live-check` event.
+**The lock.** When the probe (below) finds a **sensitive** file served (history, audit, review, or any folder the registry doesn't mark safe), publishing to that target stops. It's one rule for private and public targets. The lock lifts only when a probe passes. There is no override, in the admin or the CLI. The way out is to fix the host, or to declare `publicStorage: true` **and** run `gazetta state remove`; declaring public alone doesn't lift it while sensitive files are still there (validation errors too). Other targets and saves are unaffected. Every publish path checks the lock **before its first write**: the admin route records history before calling `publishRun` today, so the check can't live only in `publishRun`. A publish already running when a lock lands finishes; the next is blocked (accepted limitation). No new audit event: each run already records a `live-check` event.
 
-**The probe** runs as part of a live check, at most once an hour per target (Re-check always runs it). It lists the target's storage for a private file that exists (a page's `.{hash}.hash` sidecar, or a file under `.gazetta/`), requests it from `siteUrl`, and compares the body with the stored bytes. A match is a leak; a `200` fallback page doesn't match and doesn't lock. No private file in storage: `not-checked`. An instance may cache the latest result for an hour; Re-check and a config change clear it.
+**The probe** runs whenever a target has a `siteUrl`, **whatever `liveCheck` says**, at most once an hour per target (Re-check always runs it). For each sensitive folder present in storage, it picks one existing file, requests it from `siteUrl` and from every URL in `liveCheck.storageUrls` (optional extra public endpoints, such as an R2 `r2.dev` URL), and compares the body with the stored bytes. Any match is a leak; a `200` fallback page doesn't match and doesn't lock. Safe folders and per-item sidecars are never probed. No sensitive file in storage: `not-checked`. Gazetta can't discover an `r2.dev` URL itself, so the docs tell operators to list it or turn it off.
+
+The result is written into the run's report **as soon as it's known**, not when the run completes, so a crash can't lose a detected leak. The lock reads the newest probe result by probe time, whether its run completed or not, so slow or out-of-order runs can't overrule a newer result. Nothing caches the lock; only the once-an-hour throttle is cached.
 
 | Rejected | Why |
 |---|---|
@@ -151,6 +158,11 @@ Hooks and plugins read the resolved value through `isPublicStorage(target)`. A p
 | Default based on `environment` alone | Unset `environment` is `local`, so a cloud bucket would be assumed private. |
 | Auto-protect instead of locking (stop writing state, keep publishing) | Easy to ignore: the leak and a history gap can go on for weeks. |
 | Lock with an override for urgent publishes | The way out should be a reviewed config decision, not a button. |
+| Declaring public lifts the lock by itself | Old history and audit stay downloadable. |
+| The probe as part of the live check only | `liveCheck: false` would turn leak detection off. |
+| Probing one sample file | A blocked sample can hide other served folders. |
+| Lock state cached per instance | Another instance could keep publishing for up to an hour after a leak is found. |
+| Default private for any filesystem target | A publish-only folder may be served by nginx. |
 | Lock every target | Punishes all targets for one host's setup. |
 | A banner on every public target; a confirmation on every publish | Noise for a deliberate, valid setup (rule 23). |
 
@@ -182,14 +194,15 @@ Root `data-testid="target-capabilities"`; one row per capability, `data-testid="
 
 | Key | Values (copy) |
 |---|---|
-| `storage` | "Public (assumed)" · "Public (declared)" · "Private (declared)" · "Private (local folder)" |
+| `storage` | "Public (assumed)" · "Public (declared)" · "Private (declared)" · "Private (editing folder)" · "Private (copied to the host by `<adapter>`)" |
 | `history` | "On" · "Off: storage is public" · "Off: turned off in config" |
 | `audit` | "Kept here" · "Kept on `local`" · "Sent to `<sink>`" · "Not kept for this target's publishes" |
 | `review` | "Available" · "Not available: storage is public" |
 | `scheduling` | "Available" · "Not available: storage is public" |
 | `redirects`, `gone` | "Yes" · "No" (from the runtime capability matrix) |
 | `live-check` | "On, last result: …" · "Off: no `siteUrl`" · "Off in config" |
-| `lock` | absent when not locked · "Publishing paused: private files reachable (checked <time>)", with Re-check (`target-capability-recheck`) |
+| `lock` | absent when not locked · "Publishing paused: Gazetta's private files are reachable (checked <time>)", with Re-check (`target-capability-recheck`) |
+| `indices` | "Kept" · "Not kept: storage is public" |
 | `deploy` | adapter name · "None" |
 
 ### History panel on a public target (cut 5)
@@ -223,11 +236,11 @@ Publish panel, `data-testid="publish-locked"`: "Publishing to `production` is pa
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | `isPublicSitePath` with the `/.well-known/` exception, used by static `gazetta serve` ([#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071)) | — | unit + api | Low |
-| 2 | `publicStorage` and `isPublicStorage(target)` with the default rule; validation errors (history on, `editable`, schedules) and info (defaulted public, audit sink); explicit `publicStorage: false` on the starter's and gazetta.studio's private targets in the same PR; `gazetta init` writes it | — | unit-first | Medium |
+| 2 | `publicStorage` and `isPublicStorage(target)` with the default rule and resolution order; storage `kind` on the built-in factories; copy adapters' declaration; validation errors (history on, explicit `editable`, schedules, sensitive state present) and info (defaulted public, audit sink); `gazetta state remove`; explicit values on the starter's and gazetta.studio's targets in the same PR; `gazetta init` writes them | — | unit-first | Medium |
 | 3 | State folder registry, `stateFolderPath`, every `.gazetta/` path builder moved to it, safe/not-safe per folder, the scan test | — | unit (structural) | Medium |
-| 4 | Gates: history, audit, review follow `isPublicStorage`; audit fallback order; publish requests on the source; the write-path integration test | 2, 3 | api-first | Medium-high |
+| 4 | Gates: history, audit, review and the dependency indices follow `isPublicStorage`; audit fallback order and the dropped-event warning; publish requests on the source; the live-check planner without indices; the write-path integration test | 2, 3 | api-first | Medium-high |
 | 5 | Capabilities view: `TargetInfo` capabilities, `gazetta targets`, "About this target", the History panel line; Storybook stories from the UX table | 2, 4 | api + component | Medium |
-| 6 | Probe and lock: byte-exact probe of an existing private file, hourly with Re-check forcing it, result in the live-check report, lock check in `publishRun`, publish-panel copy, CLI error | 2, live-check cuts 2 and 5 ([#1081](https://github.com/gazetta-studio/gazetta-studio/issues/1081)) | integration + component | Medium-high |
+| 6 | Probe and lock: one byte-exact probe per sensitive folder present, on `siteUrl` and `liveCheck.storageUrls`, independent of `liveCheck: false`, hourly with Re-check forcing it; result written into the report as soon as known; lock from the newest probe result; lock check before the first write in every publish path; publish-panel copy and CLI error | 2, 3, live-check cuts 2 and 5 ([#1081](https://github.com/gazetta-studio/gazetta-studio/issues/1081)) | integration + component | Medium-high |
 | 7 | Worker and ESI `gazetta serve` use `isPublicSitePath` (sidecars stop being served) | 1 | unit + api | Low |
 | 8 | Docs (`audit.md`, `self-hosted.md`, `deploy.md`, `runtime-capabilities.md`), **Public storage** in `CONTEXT.md`, the discipline line in `feature-design-process.md`, ADR-0017 | 2 | docs | Low |
 
@@ -235,13 +248,14 @@ Cuts 2 and 3 run in parallel; 7 any time after 1. The static deploy adapters (#2
 
 ## Migration
 
-No production users, so changes are hard cutovers (ADR-0005, ADR-0008 precedent). After cut 2, cloud targets without `publicStorage: false` stop keeping history and audit; the starter and gazetta.studio set it in the same PR. Existing `.gazetta/` files on storage are left alone.
+No production users, so changes are hard cutovers (ADR-0005, ADR-0008 precedent). After cut 2, cloud targets without `publicStorage: false` stop keeping history and audit; the starter and gazetta.studio set it in the same PR. A target moved to public storage that still holds history or audit fails validation until `gazetta state remove` runs.
 
 ## Open questions
 
 1. **Where audit events for a publish are written today** (source, destination, or both). Cut 4 checks before implementing the fallback order.
 2. **Whether gazetta.studio's R2 bucket has public access** (`r2.dev`). Its domain doesn't serve `.gazetta/`; the probe (cut 6) or the bucket settings will tell.
 3. **The worker and ESI `serve` serving sidecars** is from reading code; cut 7 confirms with a test.
+4. **Which public endpoints a storage type can have** beyond `siteUrl` (R2 `r2.dev`, S3 website endpoints, Azure static website URLs). `liveCheck.storageUrls` relies on the operator listing them; whether Gazetta can derive any of them is for cut 6.
 
 ## Future directions
 
