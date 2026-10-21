@@ -180,15 +180,14 @@ feature cut that touches the foundation in question — not as a backlog batch.
 
 Routes whose **logic** is tested via direct function calls but whose
 **HTTP handler** (status code mapping, content-type, schema validation,
-middleware ordering) has no `app.request()` test. Inventory as of 2026-05:
+middleware ordering) has no `app.request()` test. Inventory as of 2026-10-21 (#1058 covers the four left):
 
 | Route | Logic tested via | Gap |
 |---|---|---|
 | `GET /api/compare` | `compareTargets()` direct call ([compare.test.ts](../../packages/gazetta/tests/compare.test.ts)) | Route handler — target-name lookup + serialization |
-| `POST /api/fetch` | Schema only ([api-contract.test.ts](../../apps/admin/tests/api-contract.test.ts)) | Behavior test |
 | `POST /api/publish/stream` | Schema only | SSE stream contract; main publish flow |
 | `GET /api/templates/:name/impact` | `validation-template-impact.test.ts` | Route handler |
-| `GET /api/validation/issues` | Mentioned in `admin-api.test.ts` but no `app.request()` | Route handler |
+| `GET /api/validation/issues` | Only its `read:pages` gate ([auth-route-gates.test.ts](../../packages/gazetta/tests/auth-route-gates.test.ts)) | Response body |
 
 Same policy as the cross-foundation punch list: write the test alongside
 the next feature cut that touches the route. Don't backfill as a batch
