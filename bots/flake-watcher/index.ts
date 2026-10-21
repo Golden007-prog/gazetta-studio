@@ -46,7 +46,7 @@ const DRY_RUN = process.env.DRY_RUN === '1'
 // Transcripts are uploaded as a workflow artifact. One JSONL per investigated
 // run, named by the run ID + ISO date so a future agent can browse them.
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 async function main(): Promise<void> {
   printBanner({

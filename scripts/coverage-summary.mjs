@@ -19,9 +19,11 @@ try {
 const pct = n => `${n.pct}%`
 // File names come from the repo, so a contributor controls them: keep each
 // inside its table cell (no newline, column break or closing backtick).
+// Backslashes first, so a name's own `\|` can't cancel the escape.
 const cell = name =>
   name
     .replace(/[\r\n]+/g, ' ')
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .replace(/`/g, "'")
 const { total } = summary

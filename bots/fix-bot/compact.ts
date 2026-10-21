@@ -43,7 +43,7 @@ const REVIEWER_LOG_ABS = resolve(REPO_ROOT, REVIEWER_LOG_PATH)
 const LESSONS_PATH = 'bots/fix-bot/lessons-learned.md'
 const LESSONS_ABS = resolve(REPO_ROOT, LESSONS_PATH)
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 const DRY_RUN = process.env.DRY_RUN === '1'
 

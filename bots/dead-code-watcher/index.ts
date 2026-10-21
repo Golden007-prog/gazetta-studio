@@ -75,7 +75,7 @@ const LESSONS_ABS = resolve(REPO_ROOT, LESSONS_PATH)
 
 const DRY_RUN = process.env.DRY_RUN === '1'
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 /** Per-run cap on findings investigated. Backlog drains over weeks. */
 // 3, not 5: each finding is an Agent A + Agent B pair (~$8 on the 2026-10-11

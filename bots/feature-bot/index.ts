@@ -93,7 +93,7 @@ const LESSONS_ABS = resolve(REPO_ROOT, LESSONS_PATH)
 
 const DRY_RUN = process.env.DRY_RUN === '1'
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 // Per-RUN wall-clock budget, checked at the top of the candidate loop (so
 // it bounds how many CUTS a run attempts, never interrupting one in

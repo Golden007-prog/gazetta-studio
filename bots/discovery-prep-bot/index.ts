@@ -68,7 +68,7 @@ const PROMPT_PATH = resolve(HERE, 'prompt.md')
 
 const DRY_RUN = process.env.DRY_RUN === '1'
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 // Per-run budget. Discovery is expensive (~5-10 min per issue: web search,
 // fact-check, multi-doc grep). Workflow timeout is 60 min; exit gracefully

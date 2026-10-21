@@ -51,7 +51,7 @@ const REPO_ROOT = resolve(HERE, '../..')
 
 const DRY_RUN = process.env.DRY_RUN === '1'
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 // Per-run budget. Workflow timeout is 60 min; we exit gracefully at 50 min
 // to leave 10 min margin for the upload-artifacts step + any in-flight

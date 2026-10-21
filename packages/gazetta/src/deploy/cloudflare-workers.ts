@@ -230,7 +230,9 @@ export function cloudflareWorkersDeploy(opts: CloudflareWorkersDeployOptions): W
         // Resolve the gazetta package install root for --install-links.
         // import.meta.dirname is two levels above (src/deploy/).
         const gazettaRoot = resolve(import.meta.dirname, '../..')
-        execSync(`npm install --install-links ${gazettaRoot}`, { cwd: tmpDir, stdio: 'pipe' })
+        // Quoted, so a path with spaces stays one argument. Still a shell
+        // command: on Windows `npm` is `npm.cmd`, which needs a shell.
+        execSync(`npm install --install-links "${gazettaRoot}"`, { cwd: tmpDir, stdio: 'pipe' })
 
         if (signal.aborted) throw new DeployTransportError('Deploy aborted by signal', ADAPTER_NAME)
 

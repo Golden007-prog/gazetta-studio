@@ -65,7 +65,7 @@ const ARTIFACT_NAME = process.env.ARTIFACT_NAME ?? 'mutation-report'
 const DRY_RUN = process.env.DRY_RUN === '1'
 const TRANSCRIPTS_DIR = resolve(HERE, '../transcripts')
 const REPORT_STAGING_DIR = resolve(HERE, '../mutation-report-staging')
-const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')
+const RUN_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 
 /**
  * Per-run cap on how many actionable files Claude is asked to process.
