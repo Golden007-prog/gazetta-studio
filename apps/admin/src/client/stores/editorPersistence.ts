@@ -45,12 +45,14 @@ export const useEditorPersistenceStore = defineStore('editorPersistence', () => 
    * Calls writers sequentially in the order: current content edit, stashed
    * content edits, manifest writes in the order given. Returns success/error.
    * On success, the caller clears what was written and updates the saved
-   * baseline.
+   * baseline. `afterWrites` runs once every write succeeded, still inside
+   * the save (`saving` stays on); a failure there still counts as saved.
    */
   async function save(
     current: { target: EditingTarget; content: Record<string, unknown> } | null,
     stashedEdits: StashedEdit[],
     manifestWrites: ManifestWrite[] = [],
+    afterWrites?: () => Promise<void>,
   ): Promise<SaveResult> {
     if (!current && stashedEdits.length === 0 && manifestWrites.length === 0) {
       return { success: true }
@@ -61,6 +63,7 @@ export const useEditorPersistenceStore = defineStore('editorPersistence', () => 
       if (current) await current.target.save(current.content)
       for (const entry of stashedEdits) await entry.target.save(entry.editedContent)
       for (const write of manifestWrites) await write.write()
+      await afterWrites?.().catch(() => undefined)
       return { success: true }
     } catch (err) {
       const message = (err as Error).message

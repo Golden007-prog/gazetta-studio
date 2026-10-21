@@ -9,6 +9,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { api } from '../src/client/api/client.js'
 import { useEditorActions } from '../src/client/composables/useEditorActions.js'
 import { useEditorContentStore } from '../src/client/stores/editorContent.js'
+import { useEditorPersistenceStore } from '../src/client/stores/editorPersistence.js'
 import { useEditorStashStore } from '../src/client/stores/editorStash.js'
 import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
 import { usePersistedEditsStore } from '../src/client/stores/persistedEdits.js'
@@ -134,7 +135,7 @@ describe('moves', () => {
 
   // Until the reload lands, the tree reads the order on disk wherever nothing
   // is pending, so dropping the entry first showed the pre-save order (#288).
-  it('the order written stays pending until the reload lands', async () => {
+  it('the order written stays pending, and the save running, until the reload lands', async () => {
     vi.spyOn(api, 'updatePage').mockResolvedValue({ ok: true, etag: 'v' } as never)
     const written = [components[1], components[0], components[2]]
     let land: (() => void) | undefined
@@ -150,6 +151,8 @@ describe('moves', () => {
     await vi.waitFor(() => expect(land).toBeDefined())
 
     expect(useEditorStructuralStore().pendingFor(home)).toEqual(written)
+    // Still saving, so the toolbar and Ctrl/Cmd+S don't start a second save.
+    expect(useEditorPersistenceStore().saving).toBe(true)
     land?.()
     expect(await saving).toBe(true)
     expect(useEditorStructuralStore().hasPendingEdits).toBe(false)

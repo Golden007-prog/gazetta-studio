@@ -852,14 +852,14 @@ export function useEditorActions() {
       ...metadataEntries.map(([k, entry]) => buildMetadataWrite(k, entry.pending)),
     ]
     const validationStore = useValidationIssuesStore()
-    const result = await persistence.save(current, stashedEntries, manifestWrites)
+    // Reload before dropping the written pending entries: until the reload
+    // lands, the tree would fall back to the pre-save order from disk. It
+    // runs inside the save, so `saving` stays on and no second save starts.
+    const reloadWritten =
+      structuralEntries.length > 0 || metadataEntries.length > 0 ? () => useSelectionStore().reload() : undefined
+    const result = await persistence.save(current, stashedEntries, manifestWrites, reloadWritten)
     if (result.success) {
       markContentWritten(writtenContent)
-      // Reload before dropping the written pending entries: until the reload
-      // lands, the tree would fall back to the pre-save order from disk.
-      if (structuralEntries.length > 0 || metadataEntries.length > 0) {
-        await useSelectionStore().reload()
-      }
       structural.markWritten(structuralEntries)
       metadata.markWritten(metadataEntries)
       validationStore.clear()
