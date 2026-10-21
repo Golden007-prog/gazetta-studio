@@ -255,7 +255,7 @@ No production users, so changes are hard cutovers (ADR-0005, ADR-0008 precedent)
 ## Open questions
 
 1. **Where audit events for a publish are written today** (source, destination, or both). Cut 4 checks before implementing the fallback order.
-2. **Whether gazetta.studio's R2 bucket has public access** (`r2.dev`). Its domain doesn't serve `.gazetta/`; the probe (cut 6) or the bucket settings will tell.
+2. ~~**Whether gazetta.studio's R2 bucket has public access.**~~ **Resolved 2026-10-21:** `wrangler r2 bucket dev-url get gazetta-studio-site` reports public `r2.dev` access disabled, and no custom domain is connected; its site domain returns 404 for `/.gazetta/…`. Its production target should declare `publicStorage: false`.
 3. **The worker and ESI `serve` serving sidecars** is from reading code; cut 7 confirms with a test.
 4. **Which public endpoints a storage type can have** beyond `siteUrl` (R2 `r2.dev`, S3 website endpoints, Azure static website URLs). `liveCheck.storageUrls` relies on the operator listing them; whether Gazetta can derive any of them is for cut 6.
 

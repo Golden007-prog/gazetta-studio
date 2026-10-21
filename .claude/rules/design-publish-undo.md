@@ -182,7 +182,7 @@ No production users. Revisions recorded before cut 3 on CLI-published targets ha
 
 ## Open questions
 
-1. **Does deleting a page on the source and publishing leave it on the target today?** It looks so from the code (no removal step exists), but it isn't verified end to end. Check before filing; cut 2's removal step is what a fix would use.
+1. ~~**Does deleting a page on the source and publishing leave it on the target today?**~~ **Yes** (read from code, 2026-10-21): compare reports it as `deleted`, but the admin can't select it and the CLI never removes it, so a hand-deleted page stays live and the sync count stays "behind". Filed as [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094); cut 2's removal step is what a fix would use.
 2. **Where the CDN purge actually runs today:** `publishRun` lists it as step 12 but marks it reserved; the CLI and admin route purge themselves. Cut 1 settles it.
 
 ## Future directions
