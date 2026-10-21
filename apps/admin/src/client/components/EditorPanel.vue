@@ -161,7 +161,7 @@ async function handleConflictDiscard() {
         <i class="pi pi-spin pi-spinner" aria-hidden="true" />
         <span>Loading editor…</span>
       </p>
-      <div v-if="hasProperties" ref="containerRef" class="editor-container" data-testid="editor-container" :key="editing.path" />
+      <div v-if="hasProperties" ref="containerRef" class="editor-container" data-testid="editor-container" :data-path="editing.path" :key="editing.path" />
       <PageMetadataEditor v-if="selection.type === 'page' && editing.path === '_root'" />
       <p v-else-if="!hasProperties" class="editor-no-schema">No editable content. Edit its children instead.</p>
     </div>

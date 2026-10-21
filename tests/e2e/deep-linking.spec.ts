@@ -91,7 +91,7 @@ test.describe('Deep linking', () => {
 
     // Open hero editor and dirty the form.
     await page.click('[data-testid="component-hero"]')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await page.waitForSelector('[data-testid="editor-container"][data-path="hero"]')
     const input = page.locator('[data-testid="editor-container"] input').first()
     await input.fill('preview-link-dirty edit')
     await expect(page.locator('[data-testid="save-btn"]')).toBeEnabled()
@@ -120,7 +120,7 @@ test.describe('Deep linking', () => {
 test.describe('Deep linking - component hash', () => {
   test('hash #hero opens hero editor on page load', async ({ page }) => {
     await page.goto('/admin/pages/home/edit#hero')
-    await page.waitForSelector('[data-testid="editor-container"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="editor-container"][data-path="hero"]', { timeout: 10000 })
     // Breadcrumb's current segment shows the component name (#82
     // replaced the template-name jargon h3 with a user-set-name path).
     await expect(page.locator('[data-testid="breadcrumb-segment-hero"]')).toBeVisible()
@@ -133,13 +133,13 @@ test.describe('Deep linking - component hash', () => {
     await page.waitForSelector('[data-testid^="component-"]', { timeout: 10000 })
     // Click hero to set the hash
     await page.click('[data-testid="component-hero"]')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await page.waitForSelector('[data-testid="editor-container"][data-path="hero"]')
     // Verify URL has #hero
     await expect(page).toHaveURL(/#hero/)
     // Reload the page
     await page.reload()
     // After reload, hero editor should still be open
-    await page.waitForSelector('[data-testid="editor-container"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="editor-container"][data-path="hero"]', { timeout: 10000 })
     await expect(page.locator('[data-testid="breadcrumb-segment-hero"]')).toBeVisible()
   })
 
@@ -153,7 +153,7 @@ test.describe('Deep linking - component hash', () => {
 
   test('hash on fragment page #logo opens logo editor', async ({ page }) => {
     await page.goto('/admin/fragments/header/edit#logo')
-    await page.waitForSelector('[data-testid="editor-container"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="editor-container"][data-path="logo"]', { timeout: 10000 })
     await expect(page.locator('[data-testid="breadcrumb-segment-logo"]')).toBeVisible()
     await expect(page.locator('[data-testid="component-logo"].selected')).toBeVisible()
   })

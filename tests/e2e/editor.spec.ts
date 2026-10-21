@@ -9,8 +9,7 @@ test.describe('Default editor', () => {
     const tree = new ComponentTreePom(page)
 
     // Click a component without custom editor (features)
-    await tree.open('features')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('features')
 
     // Should show the default form with heading field
     const editorText = await page.locator('[data-testid="editor-panel"]').textContent()
@@ -24,8 +23,7 @@ test.describe('Custom editor', () => {
     const tree = new ComponentTreePom(page)
 
     // Click hero component (has custom editor)
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
 
     // Wait for custom editor to load and render content
     const editorPanel = page.locator('[data-testid="editor-panel"]')
@@ -37,8 +35,7 @@ test.describe('Custom editor', () => {
     const tree = new ComponentTreePom(page)
 
     // First load hero (custom editor)
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
 
     // Then switch to features (no custom editor)
     await tree.open('features')
@@ -62,8 +59,7 @@ test.describe('Custom field', () => {
     const tree = new ComponentTreePom(page)
 
     // Click banner component (uses custom brand-color field)
-    await tree.open('banner')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('banner')
 
     // Wait for the custom field to load (async import)
     await page.waitForFunction(

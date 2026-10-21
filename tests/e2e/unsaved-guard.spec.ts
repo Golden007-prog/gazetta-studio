@@ -9,8 +9,7 @@ test.describe('Unsaved changes dialog', () => {
     const tree = new ComponentTreePom(page)
 
     // Click hero component to start editing
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
 
     // Type into a field to make it dirty
     const input = page.locator('[data-testid="editor-container"] input').first()
@@ -32,8 +31,7 @@ test.describe('Unsaved changes dialog', () => {
     await openEditor(page, 'home')
     const tree = new ComponentTreePom(page)
 
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
 
     const input = page.locator('[data-testid="editor-container"] input').first()
     await input.fill('changed content')
@@ -53,8 +51,7 @@ test.describe('Unsaved changes dialog', () => {
     await openEditor(page, 'home')
     const tree = new ComponentTreePom(page)
 
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
 
     const input = page.locator('[data-testid="editor-container"] input').first()
     await input.fill('changed content')
@@ -78,14 +75,12 @@ test.describe('Component stashing', () => {
     const tree = new ComponentTreePom(page)
 
     // Edit hero
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
     const input = page.locator('[data-testid="editor-container"] input').first()
     await input.fill('stashed edit')
 
     // Switch to features — no dialog, hero should show dot
-    await tree.open('features')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('features')
 
     // Hero should have a dirty dot
     await expect(tree.dirtyDot('hero')).toBeVisible()
@@ -96,14 +91,12 @@ test.describe('Component stashing', () => {
     const tree = new ComponentTreePom(page)
 
     // Edit hero
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
     const input = page.locator('[data-testid="editor-container"] input').first()
     await input.fill('restored edit')
 
     // Switch to features
-    await tree.open('features')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('features')
 
     // Switch back to hero — click the label directly to avoid the revert
     // button. The row's `.node-label` is the click-safe target when the
@@ -111,7 +104,7 @@ test.describe('Component stashing', () => {
     // row's `.click()` resolves to and can land on the hover-revealed
     // revert button in CI timing.
     await tree.row('hero').locator('.node-label').click()
-    const restoredInput = page.locator('[data-testid="editor-container"] input').first()
+    const restoredInput = tree.editor('hero').locator('input').first()
     await expect(restoredInput).toHaveValue('restored edit', { timeout: 10000 })
   })
 
@@ -120,13 +113,11 @@ test.describe('Component stashing', () => {
     const tree = new ComponentTreePom(page)
 
     // Edit hero
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
     await page.locator('[data-testid="editor-container"] input').first().fill('hero pending')
 
     // Switch to features — hero stashed with dot
-    await tree.open('features')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('features')
 
     // Hero should have stashed dot
     const heroDot = tree.dirtyDot('hero')
@@ -150,8 +141,7 @@ test.describe('Escape key behavior', () => {
   test('Escape from unsaved dialog does not reopen it', async ({ page }) => {
     await openEditor(page, 'home')
     const tree = new ComponentTreePom(page)
-    await tree.open('hero')
-    await page.waitForSelector('[data-testid="editor-container"]')
+    await tree.openEditor('hero')
     await page.locator('[data-testid="editor-container"] input').first().fill('escape test')
 
     await page.click('[data-testid="back-to-browse"]')

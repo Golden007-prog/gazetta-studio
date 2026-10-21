@@ -36,6 +36,23 @@ export class ComponentTreePom {
     await this.row(name).click()
   }
 
+  /**
+   * The editor form for component `path` (`hero`, `features/fast`). The
+   * page row has a form too when its template has fields, so a bare
+   * `editor-container` can be the previous one, not the one just opened.
+   */
+  editor(path: string): Locator {
+    return this.page.locator(`[data-testid="editor-container"][data-path="${path}"]`)
+  }
+
+  /** Open a component with schema fields and wait until its form is shown. */
+  async openEditor(path: string): Promise<Locator> {
+    await this.open(path.split('/').pop() ?? path)
+    const editor = this.editor(path)
+    await editor.waitFor()
+    return editor
+  }
+
   // ---- Dirty + revert -------------------------------------------------
 
   /**
