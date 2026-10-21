@@ -113,7 +113,13 @@ Pick one, in this order of preference:
    curl -s -o /dev/null -w '%{http_code}\n' https://your-site/.gazetta/history/index.json
    ```
 
-   Anything but `200` means it's blocked. To also check the audit log, use one of the `events-*.jsonl` file names you see in your storage.
+   Anything but `200` means it's blocked. If you get `200`, look at what came back, since some hosts answer every missing path with their home or 404 page and status `200`:
+
+   ```bash
+   curl -s https://your-site/.gazetta/history/index.json | head -c 200
+   ```
+
+   JSON with `nextId` and `revisions` means the file is public. An HTML page means it isn't. To also check the audit log, do the same with one of the `events-*.jsonl` file names you see in your storage.
 
 2. **Don't upload it.** When you copy a filesystem target to a static host yourself, leave the folder out, for example `rsync -a --exclude '.gazetta/' ./dist/production/ host:/var/www/site/`. Gazetta still has its copy in the target folder, so undo and the audit log keep working.
 
