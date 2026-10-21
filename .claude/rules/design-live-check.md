@@ -79,7 +79,7 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 
 **Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location` is the expected alias route, and a redirect to a login page is `needs-credentials`. The check follows a redirect only to confirm the destination answers, and only on the same origin.
 
-Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are checked through the instances published to target storage; the template route itself is skipped with an info note. The planner reads the **target's** indices after publish has rewritten them, so it sees what is live.
+Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are checked through the instances published to target storage; the template route itself is skipped with an info note. The planner reads the **target's** indices after publish has rewritten them. Those indices are rebuilt from the whole source site (`rebuildDepIndex`, `publish-rendered.ts`), so they can name pages the target doesn't have. The planner therefore checks a dependent route only when the target has that page: its per-item `.{hash}.hash` sidecar exists there, the file `compareTargets` reads. Missing pages are skipped and not counted. Edges can still differ from what the target serves (the published version of a page uses `@header`, the source no longer does); the planner then misses that route, a gap rather than a false alarm. Making the target's indices describe the target is a separate publish fix ([#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077)).
 
 **Priority and cap.** Routes are checked in priority order (published routes, then direct dependents, then deeper ones) within `liveCheck.maxRequests` (default 1,000 HTTP requests per target per run, counting both views and redirects). Past the cap the report says so ("checked 1,000 of 4,800"). The operator can read the value from an env var in `site.config.ts` (`maxRequests: Number(process.env.LIVE_CHECK_MAX ?? 1000)`); `gazetta check --max-requests` overrides it once.
 
@@ -90,6 +90,7 @@ Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are
 | Following redirects automatically | The 301's `Location` and login redirects are hidden behind the destination's answer. |
 | A fixed random sample each time | Usually misses the page just changed. |
 | Only the items published | Misses fragment dependents, re-pointed redirects, changed assets. |
+| Trusting the target's indices as they are | They're rebuilt from the source, so pages the target never received would be expected to answer `200` and reported `wrong`. |
 | A fixed 10-page sample per fragment | The graph gives the exact set for free; sampling throws accuracy away. |
 | Every page, every run | Doesn't hold at 5K pages: time, and billed worker requests (Cloudflare's free plan allows 100,000 a day). |
 | A Gazetta-specific env var for the cap (`GAZETTA_LIVE_CHECK_MAX_REQUESTS`) | One value for all targets; invisible in `site.config.ts`; against `design-config.md`'s "no Gazetta-specific env wrapper". |
@@ -221,7 +222,7 @@ Large publishes show one summary line first ("28 live, 2 not live yet"); the lis
 
 ### Top-bar warning (cut 8b)
 
-A warning icon on a target (`target-live-check-warning`) appears only when its latest report has a final failure: `wrong`, `unreachable`, `needs-credentials`, or `not-live-yet` that a later check confirmed. No icon means fine. Any later passing run clears it. Clicking opens the report view (`live-check-report`).
+A warning icon on a target (`target-live-check-warning`) appears only when its latest **finished** report has a final failure: `wrong`, `unreachable`, `needs-credentials`, or `not-live-yet` that a later check confirmed. No icon means fine. A `running` or `incomplete` report neither sets nor clears it; only a later finished run that passes clears it. Clicking opens the report view (`live-check-report`).
 
 ### Buttons and capability gaps (cut 8c)
 
