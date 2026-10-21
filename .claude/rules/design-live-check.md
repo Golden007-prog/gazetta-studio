@@ -80,7 +80,9 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - site files the publish wrote (`sitemap.xml`, `robots.txt`, `_redirects` behaviour);
 - always the root and one unknown URL (`404`).
 
-**Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location` is the expected alias route, and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
+**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status`, an archive without an alias is expected to answer `404`; without `redirects`, alias routes are `not-checked`.
+
+**Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location`, resolved against the request URL, has the expected alias route as its path (the query string is ignored: a host may carry the cache-bypass value into the redirect), and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
 
 Only the languages that changed are expanded. Dynamic routes (`/blog/:slug`) are checked through the instances published to target storage; the template route itself is skipped with an info note. The planner reads the **target's** indices after publish has rewritten them. Those indices are rebuilt from the whole source site (`rebuildDepIndex`, `publish-rendered.ts`), so they can name pages the target doesn't have. The planner therefore checks a dependent route only when the target has that page: its per-item `.{hash}.hash` sidecar exists there, the file `compareTargets` reads. Missing pages are skipped and not counted. Edges can still differ from what the target serves (the published version of a page uses `@header`, the source no longer does); the planner then misses that route, a gap rather than a false alarm. Making the target's indices describe the target is a separate publish fix ([#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077)).
 
@@ -225,7 +227,7 @@ Large publishes show one summary line first ("28 live, 2 not live yet"); the lis
 
 ### Top-bar warning (cut 8b)
 
-A warning icon on a target (`target-live-check-warning`) appears only when its latest **finished** report has a final failure: `wrong`, `unreachable`, `needs-credentials`, or `not-live-yet` that a later check confirmed. No icon means fine. A `running` or `incomplete` report neither sets nor clears it; only a later finished run that passes clears it. Clicking opens the report view (`live-check-report`).
+A warning icon on a target (`target-live-check-warning`) appears only when its latest report with `status: complete` has a final failure: `wrong`, `unreachable`, `needs-credentials`, or `not-live-yet` that a later check confirmed. No icon means fine. `running`, `deferred` and `incomplete` reports neither set nor clear it; only a later complete run that passes clears it. Clicking opens the report view (`live-check-report`).
 
 ### Buttons and capability gaps (cut 8c)
 
