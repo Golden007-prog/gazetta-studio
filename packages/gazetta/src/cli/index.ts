@@ -20,6 +20,7 @@ import { buildHooksRegistry, createAdminApp } from '../admin-api/index.js'
 import { parseValidateFlags } from './validate-flags.js'
 import { parseArgs } from './args.js'
 import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
+import { viteCacheDir } from './vite-cache-dir.js'
 
 // ANSI color helpers — no dependency, suppressed when NO_COLOR or CI
 const noColor = !!process.env.NO_COLOR || !process.stdout.isTTY
@@ -1951,6 +1952,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
           configFile: join(cmsWebDir, 'vite.config.ts'),
           root: cmsWebDir,
           base: '/admin/',
+          cacheDir: viteCacheDir(siteDir),
           resolve: {
             alias: {
               '@editors': join(adminDir, 'editors'),
