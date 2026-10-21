@@ -17,6 +17,13 @@ try {
 }
 
 const pct = n => `${n.pct}%`
+// File names come from the repo, so a contributor controls them: keep each
+// inside its table cell (no newline, column break or closing backtick).
+const cell = name =>
+  name
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\|/g, '\\|')
+    .replace(/`/g, "'")
 const { total } = summary
 const files = Object.entries(summary)
   .filter(([name]) => name !== 'total')
@@ -34,7 +41,7 @@ const lines = [
   '',
   '| Uncovered lines | Lines | Branches | File |',
   '|---:|---:|---:|---|',
-  ...files.map(f => `| ${f.uncovered} | ${pct(f.lines)} | ${pct(f.branches)} | \`${f.name}\` |`),
+  ...files.map(f => `| ${f.uncovered} | ${pct(f.lines)} | ${pct(f.branches)} | \`${cell(f.name)}\` |`),
   '',
 ]
 console.log(lines.join('\n'))
