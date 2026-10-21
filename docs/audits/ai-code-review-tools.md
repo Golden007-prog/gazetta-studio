@@ -112,12 +112,15 @@ One row per PR and reviewer, using the categories in item 3. "Local first" says 
 | 10-21 | #1046 | Seer | 1 | Accepted: drag stopped working after the tree was emptied and refilled; fixed in the PR | No |
 | 10-21 | #1047 | Seer | 1 | Accepted, outside the diff: static targets miss changes to a fragment's locale variant → #1049 | No |
 | 10-21 | #1039–#1041, #1044, #1045 | both | 0 | No findings | – |
+| 10-21 | #1051 | Seer | 1 | Accepted: moving the reload before `markWritten` let a second save start during the reload; fixed in a second commit, which Seer didn't review | No |
+| 10-21 | #1051 | Sourcery | 0 | No findings | – |
 
 Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see. On 10-21, four of the six accepted findings were bugs the local review hadn't found, two of them in code the PR didn't touch.
 
 ## Unknown
 
 - Why Sourcery posted a guide but no review on #1016.
+- Why Seer didn't review #1051's second commit, when it reviews later commits on other PRs.
 - Sourcery's limits for public repos (not published; paid plans list "higher review limits"), and whether it reviews fork PRs.
 - Bot and fork-PR behaviour, training policy and quality for Codacy, Gitar, Kodus and CodeAnt.
 - How much any tool overlaps with a Claude review of the same PR.
