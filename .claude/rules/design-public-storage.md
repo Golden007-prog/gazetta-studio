@@ -77,7 +77,7 @@ The normal path for static hosting is private target storage plus a deploy adapt
 
 ### Q4 — `isPublicSitePath`: which stored files visitors may receive
 
-A path is private if any segment starts with `.`, **except a first segment of exactly `.well-known`** (ACME challenges, `security.txt`, app association files). Dot-prefixed segments below it stay private (`/.well-known/.env` is private). `isPublicSitePath` filters files that come from storage; a deploy adapter may add host marker files it creates itself (GitHub Pages' `.nojekyll`). One function, `isPublicSitePath(path)`, checked on the decoded, normalised path, used by static `gazetta serve` (cut 1), the worker and ESI `serve` (cut 7), the static deploy adapters, and the probe.
+A path is private if any segment starts with `.`, **except a first segment of exactly `.well-known`** (ACME challenges, `security.txt`, app association files). Dot-prefixed segments below it stay private (`/.well-known/.env` is private). **Gazetta's manifest files are private too**, wherever they sit: `page.json`, `page.<locale>.json`, `fragment.json`, `fragment.<locale>.json`, `<name>.asset.json` and `<name>.asset.<selector>.json`. Targets hold them: the admin route copies page and fragment manifests (`publishItems`), the CLI does too once #1082 lands, and asset manifests travel with their bytes. Visitors never need them, and they carry fields that aren't for visitors: `reviewState`, `archived`, `aliasOf`, and on asset manifests `uploadedBy`, a person's identifier. These names are reserved: a site's `public/` folder can't publish a file with one of them. `isPublicSitePath` filters files that come from storage; a deploy adapter may add host marker files it creates itself (GitHub Pages' `.nojekyll`). One function, `isPublicSitePath(path)`, checked on the decoded, normalised path, used by static `gazetta serve` (cut 1), the worker and ESI `serve` (cut 7), the static deploy adapters, and the probe.
 
 **Convention (locked):** every Gazetta-internal file is dot-prefixed. Cut 3's registry test enforces it for `.gazetta/`; per-item sidecars already follow it.
 
@@ -87,6 +87,7 @@ A path is private if any segment starts with `.`, **except a first segment of ex
 |---|---|
 | An allowlist of public file kinds | Sites publish arbitrary files from `public/` (verification files, feeds); an allowlist breaks them and must change with every new output. |
 | Hide `.gazetta/` only | Per-item sidecars (publish times, noindex flags) still leak, and any future internal file outside the folder. |
+| Dot-prefixed paths only | Manifests aren't dot-prefixed: `page.json` and asset manifests (with `uploadedBy`) would be served. Renaming them to dot names would touch every reader and the on-disk format. |
 
 ### Q5 — `publicStorage` on the target implies the rest
 
