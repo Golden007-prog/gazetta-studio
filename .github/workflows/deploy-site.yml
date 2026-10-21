@@ -49,3 +49,31 @@ jobs:
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # Nothing else checks the live site after a deploy. Fetch a few pages
+      # through the worker (the query string misses the edge cache) and fail
+      # the run if one doesn't render. /docs has code blocks, so it also
+      # checks the shiki highlighter and R2's published fragments.
+      - name: Check the live site
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          check() {
+            local path=$1 want=$2 grep_for=$3
+            for attempt in 1 2 3 4 5 6; do
+              status=$(curl -s -o page.html -w '%{http_code}' "https://gazetta.studio${path}?deploy-check=${RUN_ID}")
+              if [ "$status" = "$want" ] && { [ -z "$grep_for" ] || grep -q "$grep_for" page.html; }; then
+                echo "ok   ${path} -> ${status}"
+                return 0
+              fi
+              echo "wait ${path} -> ${status} (attempt ${attempt})"
+              sleep 10
+            done
+            echo "::error::${path} returned ${status}, expected ${want}${grep_for:+ with '${grep_for}'}"
+            return 1
+          }
+          failed=0
+          check / 200 '<title>' || failed=1
+          check /docs 200 'class="shiki' || failed=1
+          check /deploy-check-missing-page 404 '' || failed=1
+          exit $failed
