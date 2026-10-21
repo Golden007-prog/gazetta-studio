@@ -263,6 +263,43 @@ describe('renderPageWithEsi — exact output', () => {
     expect(b.indexHtml.startsWith('<!--cache:browser=5,edge=7-->\n<!DOCTYPE html>')).toBe(true)
   })
 
+  it("a locale page uses its own variant's components, metadata and cache", async () => {
+    await writeTestFile(
+      sourceDir,
+      'pages/home/page.json',
+      JSON.stringify({
+        route: '/',
+        template: 'plain-layout',
+        metadata: { title: 'Home', description: 'English' },
+        cache: { browser: 1, edge: 2 },
+        components: ['@nav', { name: 'hero', template: 'leaf' }],
+      }),
+    )
+    // Locale variants are whole files: their own order, metadata and cache.
+    await writeTestFile(
+      sourceDir,
+      'pages/home/page.fr.json',
+      JSON.stringify({
+        template: 'plain-layout',
+        metadata: { title: 'Accueil', description: 'Français' },
+        cache: { browser: 3, edge: 4 },
+        components: [{ name: 'hero', template: 'leaf' }, '@nav'],
+      }),
+    )
+    const site = await loadTestSite(['en', 'fr'])
+
+    const out = await renderPageWithEsi('home', { site, locale: 'fr' })
+
+    const leaf = scopeOf(out.indexHtml, '<leaf>')
+    expect(out.indexHtml.startsWith('<!--cache:browser=3,edge=4-->\n')).toBe(true)
+    expect(out.indexHtml).toContain('<title>Accueil</title>')
+    expect(out.indexHtml).toContain('<meta name="description" content="Français">')
+    expect(out.indexHtml).not.toContain('Home')
+    expect(out.indexHtml).toContain(
+      `<body>\n<div data-gz="${leaf}"><leaf></div>\n<!--esi:/fragments/nav/index.fr.html-->\n</body>`,
+    )
+  })
+
   it('throws with the page name when the page is missing or archived', async () => {
     await writeTestFile(
       sourceDir,

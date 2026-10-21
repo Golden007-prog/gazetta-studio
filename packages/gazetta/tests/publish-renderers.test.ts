@@ -132,6 +132,15 @@ describe('renderPageStatic — pure fn', () => {
     const out = await renderPageStatic('home', ctx)
     expect(out.indexHtml).toContain('<!DOCTYPE html>')
   })
+
+  it("a locale page uses its own variant's title and description", async () => {
+    const site = await loadStarterSite()
+    const fr = site.pageLocales.get('home')!.locales.get('fr')!
+    const out = await renderPageStatic('home', { site, locale: 'fr' })
+    expect(out.indexHtml).toContain(`<title>${fr.metadata!.title}</title>`)
+    expect(out.indexHtml).toContain(`<meta name="description" content="${fr.metadata!.description}">`)
+    expect(out.indexHtml).not.toContain(site.pages.get('home')!.metadata!.title as string)
+  })
 })
 
 describe('renderFragmentRendered — pure fn', () => {
