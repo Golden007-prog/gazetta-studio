@@ -106,8 +106,14 @@ One row per PR and reviewer, using the categories in item 3. "Local first" says 
 | 10-20 | #1018–#1021 | both | 0 | No findings | – |
 | 10-20 | #1037 | Sourcery | 1 | Rejected: said a locale variant's archive state can differ from the default page's. In our design, variants share it, and archiving only one locale is deferred | Yes |
 | 10-20 | #1037 | Seer | 0 | No findings | – |
+| 10-21 | #1042 | Sourcery | 1 | Rejected: wanted a deterministic test for a teardown race; the e2e repeat run (5 of 5) is how we check flake fixes | – |
+| 10-21 | #1043 | Sourcery | 1 | Accepted, outside the diff: translations' `noindex` comes from the default page, so the sitemap is wrong for them → #1048 | No |
+| 10-21 | #1046 | Sourcery | 2 | 2 accepted: the design doc still credited the library with keyboard reordering (fixed in the PR); a lifted row shows no target position (asked for in our review) | No |
+| 10-21 | #1046 | Seer | 1 | Accepted: drag stopped working after the tree was emptied and refilled; fixed in the PR | No |
+| 10-21 | #1047 | Seer | 1 | Accepted, outside the diff: static targets miss changes to a fragment's locale variant → #1049 | No |
+| 10-21 | #1039–#1041, #1044, #1045 | both | 0 | No findings | – |
 
-Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see.
+Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see. On 10-21, four of the six accepted findings were bugs the local review hadn't found, two of them in code the PR didn't touch.
 
 ## Unknown
 
