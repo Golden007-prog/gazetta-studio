@@ -1,7 +1,8 @@
 /**
- * Only a save sets and clears `saving`. Opening another component while
- * a save is still writing must not turn it off: the toolbar Save button
- * and Ctrl/Cmd+S both rely on it to stop a second save from starting.
+ * Only a save sets and clears `saving`. Opening another component, or
+ * discarding edits, while a save is still writing must not turn it off:
+ * the toolbar Save button and Ctrl/Cmd+S both rely on it to stop a
+ * second save from starting.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -53,6 +54,22 @@ describe('opening a component while a save is running', () => {
     expect(persistence.saving).toBe(true)
 
     await useEditorActions().openPageRoot()
+    expect(persistence.saving).toBe(true)
+
+    finish()
+    await done
+    expect(persistence.saving).toBe(false)
+  })
+})
+
+describe('discarding edits while a save is running', () => {
+  it('clear() leaves saving on until the save resolves', async () => {
+    seedPage({ template: 'page-default', content: {} })
+    const persistence = useEditorPersistenceStore()
+    const { finish, done } = startPendingSave()
+    expect(persistence.saving).toBe(true)
+
+    useEditorActions().clear()
     expect(persistence.saving).toBe(true)
 
     finish()
