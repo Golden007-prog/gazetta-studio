@@ -19,6 +19,7 @@ import {
   type PublishTargetResult,
 } from '../src/publish-run.js'
 import { compareTargets } from '../src/compare.js'
+import { createHistoryProvider } from '../src/history-provider.js'
 import { createContentRoot } from '../src/content-root.js'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { loadSite, type Site } from '../src/site-loader.js'
@@ -513,5 +514,203 @@ describe('publishRun — static target writes pages at their URL paths', () => {
     expect(files, files.join(', ')).toContain('about/index.html')
     expect(await targetStorage.readFile('about/index.html')).toContain('<!-- gazetta:archived alias=home -->')
     expect(files).not.toContain('pages/about/index.html')
+  })
+})
+
+// ─── History recording (#1079) ──────────────────────────────────────
+
+describe('publishRun — history recording (#1079)', () => {
+  async function setupHistory() {
+    const site = await loadStarterSite()
+    const manifest = await starterManifest()
+    // Source root must actually hold the starter manifests so the
+    // revision can capture their content.
+    const sourceRoot = createContentRoot(createFilesystemProvider(starterTargetDir), '')
+    const targetStorage = memoryStorage()
+    const history = createHistoryProvider({ storage: targetStorage })
+    return { site, manifest, sourceRoot, targetStorage, history }
+  }
+
+  it('records one publish revision with the published items', async () => {
+    const { site, manifest, sourceRoot, targetStorage, history } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+      history,
+      historySource: 'local',
+    })
+
+    expect(result.ok).toBe(true)
+    // First write on a fresh target records a baseline revision plus the
+    // publish revision — exactly one of them is the publish.
+    const revisions = await history.listRevisions()
+    const publishes = revisions.filter(r => r.operation === 'publish')
+    expect(publishes).toHaveLength(1)
+    expect(publishes[0]?.source).toBe('local')
+    const rev = await history.readRevision(publishes[0]!.id)
+    expect(Object.keys(rev.snapshot)).toContain(`pages/${pageName}/page.json`)
+  })
+
+  it('records locale-variant manifests for localized items', async () => {
+    const { site, manifest, sourceRoot, targetStorage, history } = await setupHistory()
+    const pageName = [...site.pageLocales.keys()][0]
+    if (!pageName) return
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName, locale: 'fr' }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+      history,
+    })
+
+    expect(result.ok).toBe(true)
+    const revisions = await history.listRevisions()
+    const publishes = revisions.filter(r => r.operation === 'publish')
+    expect(publishes).toHaveLength(1)
+    const rev = await history.readRevision(publishes[0]!.id)
+    expect(Object.keys(rev.snapshot)).toContain(`pages/${pageName}/page.fr.json`)
+  })
+
+  it('records nothing when no history provider is passed', async () => {
+    const { site, manifest, sourceRoot, targetStorage } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+    })
+
+    expect(result.ok).toBe(true)
+    const probe = createHistoryProvider({ storage: targetStorage })
+    expect(await probe.listRevisions()).toHaveLength(0)
+  })
+
+  it('a history write failure never fails the publish', async () => {
+    const { site, manifest, sourceRoot, targetStorage } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+    const brokenHistory = {
+      recordRevision: () => Promise.reject(new Error('storage exploded')),
+      listRevisions: () => Promise.resolve([]),
+      readRevision: () => Promise.reject(new Error('storage exploded')),
+      readBlob: () => Promise.reject(new Error('storage exploded')),
+      deleteRevision: () => Promise.reject(new Error('storage exploded')),
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+      history: brokenHistory,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('refuses history with multiple targets (provider is per-target)', async () => {
+    const { site, manifest, sourceRoot, targetStorage, history } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+
+    await expect(
+      publishRun({
+        items: [{ kind: 'page', name: pageName }],
+        targets: ['local', 'staging'],
+        site,
+        sourceRoot,
+        siteManifest: manifest,
+        targetStorages: new Map([
+          ['local', targetStorage],
+          ['staging', memoryStorage()],
+        ]),
+        history,
+      }),
+    ).rejects.toThrow(/history is per-target/)
+  })
+
+  it('copySourceItems copies the source manifests to the target', async () => {
+    const { site, manifest, sourceRoot, targetStorage } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+      copySourceItems: true,
+    })
+
+    expect(result.ok).toBe(true)
+    const sourceManifest = await sourceRoot.storage.readFile(sourceRoot.path(`pages/${pageName}/page.json`))
+    const onTarget = await targetStorage.readFile(`pages/${pageName}/page.json`)
+    expect(onTarget).toBe(sourceManifest)
+  })
+
+  it('without copySourceItems the target gets no source manifests (default unchanged)', async () => {
+    const { site, manifest, sourceRoot, targetStorage } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+    })
+
+    expect(result.ok).toBe(true)
+    expect([...targetStorage.dump().keys()]).not.toContain(`pages/${pageName}/page.json`)
+  })
+
+  it('copies after the history record, so the baseline stays pre-publish and undo can restore it', async () => {
+    const { site, manifest, sourceRoot, targetStorage, history } = await setupHistory()
+    const pageName = [...site.pages.keys()].find(k => !k.includes('['))!
+
+    const result = await publishRun({
+      items: [{ kind: 'page', name: pageName }],
+      targets: ['local'],
+      site,
+      sourceRoot,
+      siteManifest: manifest,
+      targetStorages: new Map([['local', targetStorage]]),
+      history,
+      historySource: 'local',
+      copySourceItems: true,
+    })
+
+    expect(result.ok).toBe(true)
+    // Baseline revision (recorded before the copy) must NOT contain the
+    // source manifest content - the fresh target did not have it yet.
+    // Otherwise undo would restore the post-publish manifest and no-op.
+    const revisions = await history.listRevisions()
+    const baseline = revisions.find(r => r.message === 'Initial baseline')
+    expect(baseline).toBeDefined()
+    const baselineRev = await history.readRevision(baseline!.id)
+    expect(Object.keys(baselineRev.snapshot)).not.toContain(`pages/${pageName}/page.json`)
+    // The publish revision describes exactly what the copy put on the target.
+    const publishes = revisions.filter(r => r.operation === 'publish')
+    expect(publishes).toHaveLength(1)
+    const publishRev = await history.readRevision(publishes[0]!.id)
+    expect(Object.keys(publishRev.snapshot)).toContain(`pages/${pageName}/page.json`)
   })
 })

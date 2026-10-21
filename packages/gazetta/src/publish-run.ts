@@ -47,11 +47,14 @@
  */
 
 import { publishAssets } from './assets/publish.js'
+import { publishItems } from './publish.js'
 import type { Principal } from './auth/types.js'
 import { createContentRoot, type ContentRoot } from './content-root.js'
 import { publishFragment, resolveFragmentRenderMode } from './fragments/publish.js'
 import { hashManifest } from './hash.js'
 import type { HistoryProvider } from './history.js'
+import { recordWrite, type WrittenItem } from './history-recorder.js'
+import { localeFilename } from './locale.js'
 import { publishPage, resolvePageRenderMode } from './pages/publish.js'
 import type { PublishItemKind, PublishItemResult, PublishRenderMode, PublishTarget } from './publish-item.js'
 import { publishDepIndices, publishSiteManifest } from './publish-rendered.js'
@@ -196,8 +199,29 @@ export interface PublishRunInput {
   readonly publishSiteManifestAfter?: boolean
   /** Authenticated principal driving this publish (reserved for capability gates + audit). */
   readonly principal?: Principal
-  /** History provider per source (reserved for revision recording — Cut 5+ extension). */
+  /**
+   * History provider for the target being published. When set, step 13
+   * records a `publish` revision before any writes to the target, so the
+   * first revision's baseline captures pre-publish state and undo
+   * restores it. Caller passes it only when history is enabled for the
+   * target. A provider is bound to one target's storage, so `history`
+   * combined with multiple `targets` is refused at boot.
+   */
   readonly history?: HistoryProvider
+  /** Source (editable target) name recorded on the publish revision. */
+  readonly historySource?: string
+
+  /**
+   * Copy the source item directories (manifests and sidecars) to the
+   * target before the render loop - the same `publishItems` step the
+   * admin route runs (`admin-api/routes/publish.ts`). Runs AFTER the
+   * step-13 history record so the recorded baseline still captures
+   * pre-publish target state. Opt-in: the admin route copies on its
+   * own before calling publishRun, so it leaves this off; the CLI
+   * passes it so CLI publishes go through the same pipeline and the
+   * revision matches what is on the target (#1079 review).
+   */
+  readonly copySourceItems?: boolean
   /** Cache purge strategy (reserved — fire-and-forget post-publish). */
   readonly purgeStrategy?: PurgeStrategy
   /**
@@ -238,7 +262,11 @@ function itemKey(ref: PublishItemRef): string {
  *   - Per-target dep indices (publishDepIndices — runs after publishRun)
  *   - Site manifest emit (publishSiteManifest — runs after publishRun)
  *   - Cache purge (purgeStrategy — runs after publishRun, reserved input)
- *   - History recording (recordWrite — runs after publishRun, reserved input)
+ *   - History recording for the admin route's source-copy step
+ *     (recordWrite before publishItems — publishRun's step 13 covers
+ *     the render-loop writes; the admin's own copy still precedes it.
+ *     Callers that do not copy themselves pass `copySourceItems` and
+ *     get the same publishItems step here, right after step 13.)
  *   - Audit events (per-item + per-run — reserved Cut 5+)
  *
  * Per Q4 fail-soft: per-target init failures fail just that target;
@@ -258,6 +286,11 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     if (!input.targetStorages.has(targetName)) {
       throw new Error(`publishRun: target "${targetName}" not in registry`)
     }
+  }
+  // A HistoryProvider is bound to one target's storage; recording several
+  // targets' publishes into one provider would corrupt that history.
+  if (input.history && input.targets.length > 1) {
+    throw new Error('publishRun: history is per-target — publish one target per run when recording history')
   }
 
   // Step 3 — template precheck. Invalid templates abort the run
@@ -329,11 +362,53 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     let targetFailureReason: string | undefined
     const targetItemResults: PublishItemResult[] = []
 
+    // Step 13 (runs first among the per-target steps) — record a
+    // `publish` history revision BEFORE any writes to this target, so
+    // the first revision's baseline captures pre-publish state and undo
+    // restores it (#1079). Best-effort: a history failure never fails
+    // the publish. Empty item runs record nothing.
+    if (input.history && input.items.length > 0) {
+      try {
+        const historyItems = await collectItemsForHistory(input.sourceRoot, input.items)
+        await recordWrite({
+          history: input.history,
+          contentRoot: targetRoot,
+          operation: 'publish',
+          source: input.historySource,
+          items: historyItems,
+        })
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `publishRun: history record failed for ${targetName}: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+    }
+
+    // Step 13b - source manifest copy (opt-in; CLI passes this, the
+    // admin route copies before calling publishRun). The target ends up
+    // with the manifests the step-13 revision describes, so `undo`
+    // restores the target's real pre-publish state. Runs after the
+    // record so the baseline still captures pre-publish state. A copy
+    // failure fails this target: publishing without it would leave the
+    // revision describing files the target does not have.
+    if (input.copySourceItems && input.items.length > 0) {
+      try {
+        const itemDirs = [
+          ...new Set(input.items.map(ref => `${ref.kind === 'page' ? 'pages' : 'fragments'}/${ref.name}`)),
+        ]
+        const { copiedFiles } = await publishItems(input.sourceRoot, targetRoot, itemDirs)
+        targetFilesWritten += copiedFiles
+      } catch (err) {
+        targetFailureReason = `source manifest copy failed: ${err instanceof Error ? err.message : String(err)}`
+      }
+    }
+
     // Step 10a — asset publish before per-item renders so static-mode
     // pages don't bake URLs to bytes that aren't on the target yet.
     // Per-target failure here marks the whole target failed (no
     // point publishing pages whose assets aren't there).
-    if (doAssetPublish) {
+    if (doAssetPublish && !targetFailureReason) {
       try {
         const itemNames = [
           ...[...input.site.pages.keys()].map(n => `pages/${n}`),
@@ -488,4 +563,29 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
   }
   input.onProgress?.({ kind: 'run-done', result })
   return result
+}
+
+/**
+ * Read the source manifests for the published items so the history
+ * revision captures the content the publish wrote. Locale variants
+ * resolve to their own manifest (`page.fr.json`). An item missing on
+ * the source is skipped — the snapshot stays as-was for it.
+ */
+async function collectItemsForHistory(
+  sourceRoot: ContentRoot,
+  items: readonly PublishItemRef[],
+): Promise<WrittenItem[]> {
+  const out: WrittenItem[] = []
+  for (const ref of items) {
+    const base = ref.kind === 'page' ? 'page' : 'fragment'
+    const key = `${ref.kind === 'page' ? 'pages' : 'fragments'}/${ref.name}/${localeFilename(base, ref.locale ?? null)}`
+    try {
+      const content = await sourceRoot.storage.readFile(sourceRoot.path(key))
+      out.push({ path: key, content })
+    } catch {
+      // Item missing on source (unusual — publish normally reads from
+      // source manifests). Skip; snapshot stays as-was for this item.
+    }
+  }
+  return out
 }

@@ -826,6 +826,26 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
       }
     }
 
+    // History (#1079): when the target has history enabled, hand
+    // publishRun a provider so it records one `publish` revision before
+    // any writes — undo can then restore pre-publish state. Best-effort:
+    // publishRun never lets a history failure break the publish.
+
+    // Source manifest copy: publishRun copies the source item
+    // directories to the target (after the history record, so the
+    // baseline stays pre-publish) - the same publishItems step the
+    // admin route runs. CLI and admin then go through one pipeline
+    // and the revision matches what is on the target (#1079 review).
+    let historyProvider
+    const { isHistoryEnabled, getHistoryRetention } = await import('../types.js')
+    if (targetConfig && isHistoryEnabled(targetConfig)) {
+      const { createHistoryProvider } = await import('../history-provider.js')
+      historyProvider = createHistoryProvider({
+        storage: targetStorage,
+        retention: getHistoryRetention(targetConfig),
+      })
+    }
+
     // Delegate the per-item × per-target render loop + asset publish +
     // dep indices + site manifest to publishRun. Single-target call;
     // CLI loops targets itself so per-target init failures (storage
@@ -833,6 +853,9 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
     const runResult = await publishRun({
       items: itemRefs,
       targets: [name],
+      history: historyProvider,
+      historySource: source.targetName,
+      copySourceItems: true,
       site,
       sourceRoot: source.contentRoot,
       siteManifest: manifest,
