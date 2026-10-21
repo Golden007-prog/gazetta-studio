@@ -54,28 +54,40 @@ Restore the previous revision's manifests and publish them through the normal pi
 ### Q2 — Undo is a publish of the snapshot
 
 `undoPublish(target, revisionId)`:
-1. Compare the target's head snapshot with the restored one: items whose hash differs are **changed**; items in the head but not in the restored snapshot are **removed**.
-2. Build an in-memory site from the target's current manifests overlaid with the restored revision's blobs. Reads run in parallel with a concurrency limit.
-3. Check (Q3).
-4. Publish through the shared target-publish function (Q4): render the changed items and their static-target dependents (computed from the in-memory site), copy the restored manifests, remove the removed items, then the post-publish steps.
-5. Check the target's history head is still the revision the undo started from; if not, record nothing and report "`<target>` changed while undoing; check History". The publish that landed wins.
-6. Record the forward revision (`operation: 'rollback'`, `restoredFrom`).
+1. Note the target's history head.
+2. Read the target's **actual** manifests (parallel reads with a concurrency limit) and compare them with the restored snapshot: items whose content differs are **changed**; items on the target but not in the restored snapshot are **removed**; an item whose route differs counts as a removal of the old route's output plus a render at the new one. Comparing with the target, not the history head, keeps undo correct when history and the target have drifted (a publish that failed after recording, or a CLI publish before #1082).
+3. Build the in-memory site: the target's manifests overlaid with the restored revision's blobs.
+4. Check (Q3).
+5. Check the history head again. If it moved, stop with nothing written: "`<target>` changed while undoing; check History." Without a lock a small window remains between this check and the first write; accepted (Future directions).
+6. Publish through the shared target-publish function (Q4): render the changed items and their static-target dependents (computed from the in-memory site), copy the restored manifests, remove the removed items, then the post-publish steps. An item whose render fails keeps its current manifest on the target and its current entry in the forward revision, so a retry still sees it as changed.
+7. Record the forward revision (`operation: 'rollback'`, `restoredFrom`).
 
-A crash midway leaves the target like a crashed publish: rerunning the undo, or publishing, fixes it. Undo and rollback create no publish request on targets that require approval: they restore content that was already approved, and they're gated by `restore:history`. The audit event is the existing `restore`.
+A crash midway leaves the target like a crashed publish: rerunning the undo, or publishing, fixes it. The audit event is the existing `restore`.
+
+**Authorization:** undo and rollback need `restore:history` **and** the target's publish capability (`publish:production` or `publish:non-production`), so a role that can't publish to production can't change it through history.
+
+**Approval:** undoing the latest publish creates no publish request on an approval-required target: it's an emergency rollback of content that was approved minutes before. Rolling back to any older revision on such a target creates a publish request like a publish would.
+
+**Undo of an undo:** when the target's latest revision is itself a rollback, `gazetta undo` refuses ("The last change was an undo; use `gazetta rollback <rev>`."), and the admin shows no Undo button. Repeated undo never toggles back and forth.
 
 Publish hooks receive `trigger: 'publish' | 'undo' | 'rollback'` and `restoredFrom`, so plugins can tell an undo from a new publish.
 
 | Option | Why rejected |
 |---|---|
 | Restore the files, then render | A crash between the two leaves old manifests next to partly new HTML. |
-| Undo waits for publish approval | Blocks an emergency rollback; the content was approved when first published. |
-| A per-target publish lock | Needs cross-instance coordination; the head check catches the conflict without it. |
+| Every undo and rollback waits for approval | Blocks an emergency rollback of the publish just made. |
+| No undo or rollback ever needs approval | An arbitrary old revision on an approval-gated target would deploy without anyone approving it now. |
+| `restore:history` alone authorizes it | A role without `publish:production` could change production. |
+| Compare with the history head | History and the target can drift; added files would be left behind or the wrong ones removed. |
+| Check the head only after writing | A concurrent publish is overwritten before the conflict is noticed. |
+| A per-target publish lock | Needs cross-instance coordination; the head checks narrow the window enough for now. |
 
 ### Q3 — Check before anything is written
 
-Before step 4, the restored manifests are validated against today's template schemas (the `schema-conformance` validator), and the revision must contain manifests at all. Either failure refuses the undo with nothing changed:
+Before any write, the restored manifests are validated against today's template schemas with the `schema-conformance` validator, called with a scope it supports (it returns nothing for the `pre-publish` stage today). The revision must contain manifests, and every asset the restored manifests reference must exist on the target or the source. Any failure refuses the undo with nothing changed:
 - "Can't undo: `pricing` doesn't match the current `hero` template any more. Nothing was changed."
 - "This publish can't be undone: it was made before Gazetta kept its content on `<target>`." (CLI publishes before #1082)
+- "Can't undo: the image `hero` that this version uses is no longer available."
 
 A render that fails after the check passes (a template that throws) is reported per item ("11 of 12 pages restored. `pricing` couldn't be rendered: <reason>."); the rest stays restored.
 
@@ -88,6 +100,8 @@ A render that fails after the check passes (a template that throws) is reported 
 The CLI, the admin route and undo are three callers of the same post-publish steps, so they move into one function (team rule 15): render loop (`publishRun`), manifest copy, removals, dependency indices, site manifest, `sitemap.xml`, `robots.txt`, `_redirects`, CDN purge.
 
 **Removal** deletes an item's rendered output (static: its route's `index.html` and locale variants; ESI: `pages/<name>/…` and fragment output), its per-item sidecars and its manifest. Dependency indices are rebuilt by the publish. The item then answers 404, as it did before the publish that added it.
+
+**Generated files are always written or deleted, never skipped:** when no URL or redirect remains, the shared function deletes `sitemap.xml` or `_redirects` instead of leaving the previous file live.
 
 | Option | Why rejected |
 |---|---|
@@ -134,13 +148,13 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 
 ## Foundational checks
 
-- **Multi-instance:** no in-memory shared state; the head check (Q2 step 5) detects a concurrent publish on another instance.
+- **Multi-instance:** no in-memory shared state; the head checks (Q2 steps 1 and 5) detect a concurrent publish on another instance before anything is written. Concurrent history writes can still lose a revision until [#1089](https://github.com/gazetta-studio/gazetta-studio/issues/1089) is fixed.
 - **Scale:** snapshot comparison is in memory (about 10–20K entries at 5K pages with locales). Building the in-memory site reads every manifest from the target: about 5K reads, 30–60 s on cloud storage. That exceeds the 5-second admin SLA, but undo runs like a publish, with progress; reads are parallel with a concurrency limit. Rendering is limited to changed items and their dependents.
-- **Locale:** locale variants are separate snapshot entries and render per locale like a publish.
+- **Locale:** locale variants are separate snapshot entries and render per locale like a publish. The first snapshot of a target misses them today, so undo can delete a translation: [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088), which cut 4 depends on.
 - **Themes:** none.
-- **Auth + RBAC:** `restore:history` (existing). No publish request on approval-required targets.
+- **Auth + RBAC:** `restore:history` plus the target's publish capability.
 - **Audit:** the existing `restore` event, with `restoredFrom` and the undone operation.
-- **Review:** undo restores already-approved content without a new request.
+- **Review:** undoing the latest publish needs no new request; rolling back further on an approval-required target creates one.
 - **Hooks:** publish hooks fire with `trigger` and `restoredFrom`.
 - **Render:** the normal publish render; templates are today's.
 - **Validation:** `schema-conformance` runs as the pre-write check.
@@ -153,10 +167,10 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
-| 1 | Extract the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, CDN purge) into one shared target-publish function called by the CLI and the admin route; behaviour unchanged | — | unit + api | Medium |
-| 2 | Removals in the shared function: delete an item's rendered output (static route `index.html` and locale variants; ESI `pages/<name>/…`), sidecars and manifest | 1 | unit + api | Medium |
+| 1 | Extract the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, CDN purge) into one shared target-publish function called by the CLI and the admin route; generated files are written or deleted, never skipped | — | unit + api | Medium |
+| 2 | Removals in the shared function: delete an item's rendered output (static route `index.html` and locale variants; ESI `pages/<name>/…`), sidecars and manifest; removal by route for route changes | 1 | unit + api | Medium |
 | 3 | Destinations hold manifests: the CLI copies them before recording history ([#1082](https://github.com/gazetta-studio/gazetta-studio/pull/1082)) | — | api | Low |
-| 4 | `undoPublish`: snapshot comparison, in-memory site with parallel reads, the Q3 check and the missing-manifests refusal, publish through the shared function with removals and dependents, head check, forward revision, hook `trigger` and `restoredFrom` | 2, 3 | api-first | High |
+| 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088) | api-first | High |
 | 5 | Admin and CLI: the publish panel flow per the UX table, History Restore through the same flow, CLI output and `--yes`, Storybook stories from the table | 4 | component + e2e | Medium |
 | 6 | Docs: "undo restores content, not templates" (History help and docs), `docs/hooks.md` trigger field, alignment note in `design-publishing.md` | 4 | docs | Low |
 
@@ -174,4 +188,4 @@ No production users. Revisions recorded before cut 3 on CLI-published targets ha
 ## Future directions
 
 - **Propagate source deletions on publish,** using cut 2's removal step (if open question 1 confirms the gap).
-- **A per-target publish lock** if concurrent publishes become common enough that the head-check conflict shows up.
+- **A per-target publish lock** to close the window between the last head check and the first write, if concurrent publishes become common.
