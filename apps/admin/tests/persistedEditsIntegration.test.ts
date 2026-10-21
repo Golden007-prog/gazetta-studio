@@ -358,4 +358,29 @@ describe('discard() drops every unsaved edit on the page', () => {
 
     expect(usePersistedEditsStore().has(other)).toBe(true)
   })
+
+  // A draft restored after a reload stays in the persisted store until its
+  // component is opened; discarding the page must drop it too.
+  it('drops restored drafts of components not opened since the reload', async () => {
+    stubSchemaFetch()
+    seedRootSelection('home')
+    const store = usePersistedEditsStore()
+    const root = persistedEditKey('page', 'home', undefined, '_root')
+    const features = persistedEditKey('page', 'home', undefined, 'features')
+    const otherPage = persistedEditKey('page', 'about', undefined, 'features')
+    const otherLocale = persistedEditKey('page', 'home', 'fr', 'features')
+    const otherKind = persistedEditKey('fragment', 'home', undefined, 'features')
+    for (const k of [root, features, otherPage, otherLocale, otherKind]) store.set(k, { title: k })
+    const actions = useEditorActions()
+    await actions.openPageRoot()
+    expect(useEditorContentStore().content).toEqual({ title: root })
+
+    actions.discard()
+
+    expect(store.has(root)).toBe(false)
+    expect(store.has(features)).toBe(false)
+    expect(store.has(otherPage)).toBe(true)
+    expect(store.has(otherLocale)).toBe(true)
+    expect(store.has(otherKind)).toBe(true)
+  })
 })
