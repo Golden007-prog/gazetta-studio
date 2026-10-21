@@ -32,7 +32,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { access, readFile } from 'node:fs/promises'
 import type { AdminCache } from './cache/types.js'
-import { hashManifest } from './hash.js'
+import { composeFragmentHashes, hashManifest } from './hash.js'
 import { renderPage } from './renderer.js'
 import { resolvePage } from './resolver.js'
 import type { FragmentManifest, PageManifest } from './types.js'
@@ -66,7 +66,7 @@ export async function renderPageForAnalysis(
   if (!page) return null
 
   const templateHashes = await computeTemplateHashes(site, templatesDir)
-  const fragmentHashes = computeFragmentHashes(site)
+  const fragmentHashes = composeFragmentHashes(site.fragments, templateHashes)
   const contentHash = hashManifest(page, { templateHashes, fragmentHashes })
   const key = cacheKey('page', pageName, locale, theme, contentHash)
 
@@ -162,16 +162,4 @@ async function tryHashTemplate(templatesDir: string, name: string): Promise<stri
     }
   }
   return null
-}
-
-function computeFragmentHashes(site: Site): Map<string, string> {
-  const out = new Map<string, string>()
-  for (const [name, frag] of site.fragments) {
-    const json = JSON.stringify(
-      { template: frag.template, content: frag.content ?? null, components: frag.components ?? null },
-      Object.keys(frag).sort(),
-    )
-    out.set(name, createHash('md5').update(json).digest('hex').slice(0, 8))
-  }
-  return out
 }

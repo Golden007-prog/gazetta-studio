@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { memoryCache } from './cache/factories.js'
 import { forSite } from './cache/per-site.js'
 import { loadSite } from './site-loader.js'
-import { hashManifest } from './hash.js'
+import { composeFragmentHashes, hashManifest } from './hash.js'
 import { scanTemplates, templateHashesFrom, type TemplateInfo } from './templates-scan.js'
 import { listSidecars } from './sidecars.js'
 import type { StorageProvider } from './types.js'
@@ -111,13 +111,15 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
   //   - `loadSite` already loaded every manifest into memory; re-hashing
   //     is microsecond-scale per manifest. The cache saved nothing
   //     meaningful and introduced a real correctness hole.
-  const fragmentHashes = new Map<string, string>()
-  for (const [name, frag] of site.fragments) {
-    fragmentHashes.set(name, hashManifest(frag, { templateHashes }))
-  }
+  const fragmentHashes = composeFragmentHashes(site.fragments, templateHashes)
 
   const local = new Map<string, string>()
-  const pageHashOpts = opts.type === 'static' ? { templateHashes, fragmentHashes } : { templateHashes }
+  // Static pages bake every fragment; ESI pages bake only fragments nested
+  // in inline components (their top-level refs are composed per request).
+  const pageHashOpts =
+    opts.type === 'static'
+      ? { templateHashes, fragmentHashes }
+      : { templateHashes, fragmentHashes, topLevelFragmentsComposedAtRequest: true }
   for (const [name, page] of site.pages) {
     local.set(`pages/${name}`, hashManifest(page, pageHashOpts))
 
@@ -140,7 +142,7 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
     // Per-locale fragment items
     for (const [name, localeEntry] of site.fragmentLocales) {
       for (const [locale, localeFrag] of localeEntry.locales) {
-        local.set(`fragments/${name}:${locale}`, hashManifest(localeFrag, { templateHashes }))
+        local.set(`fragments/${name}:${locale}`, hashManifest(localeFrag, { templateHashes, fragmentHashes }))
       }
     }
   }

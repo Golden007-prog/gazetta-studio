@@ -51,7 +51,7 @@ import { publishItems } from './publish.js'
 import type { Principal } from './auth/types.js'
 import { createContentRoot, type ContentRoot } from './content-root.js'
 import { publishFragment, resolveFragmentRenderMode } from './fragments/publish.js'
-import { hashManifest } from './hash.js'
+import { composeFragmentHashes, hashManifest } from './hash.js'
 import type { HistoryProvider } from './history.js'
 import { recordWrite, type WrittenItem } from './history-recorder.js'
 import { localeFilename } from './locale.js'
@@ -306,12 +306,9 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
   // fragmentHashes for static-mode page hash composition (so a fragment
   // change invalidates every static page that bakes it in).
   const templateHashes = input.templateInfos ? templateHashesFrom([...input.templateInfos]) : new Map<string, string>()
-  const fragmentHashes = new Map<string, string>()
-  if (input.templateInfos) {
-    for (const [fragName, frag] of input.site.fragments) {
-      fragmentHashes.set(fragName, hashManifest(frag, { templateHashes }))
-    }
-  }
+  const fragmentHashes = input.templateInfos
+    ? composeFragmentHashes(input.site.fragments, templateHashes)
+    : new Map<string, string>()
 
   // Defaults for per-target side-effects (Q5 spine steps 10-12).
   const doAssetPublish = input.publishAssetsBeforeItems ?? true
@@ -457,13 +454,12 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
         const itemForHash =
           localizedItem ?? (ref.kind === 'page' ? input.site.pages : input.site.fragments).get(ref.name)
         if (itemForHash) {
-          // Static-mode pages need fragmentHashes folded in so a
-          // fragment change invalidates every page that bakes it.
-          // ESI pages + fragments don't (compare doesn't track that).
-          const useFragmentHashes = ref.kind === 'page' && targetType === 'static'
+          // Must match compareTargets: every fragment an item bakes into
+          // its output counts; an ESI page's top-level refs don't.
           manifestHash = hashManifest(itemForHash, {
             templateHashes,
-            fragmentHashes: useFragmentHashes ? fragmentHashes : undefined,
+            fragmentHashes,
+            topLevelFragmentsComposedAtRequest: ref.kind === 'page' && targetType !== 'static',
           })
         }
       }

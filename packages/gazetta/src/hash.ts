@@ -107,11 +107,12 @@ function substituteHashes(
   components: ComponentEntry[] | undefined,
   templateHashes: Map<string, string>,
   fragmentHashes?: Map<string, string>,
+  skipFragmentsAtThisLevel = false,
 ): ComponentEntry[] | undefined {
   if (!components) return undefined
   return components.map(entry => {
     if (typeof entry === 'string') {
-      if (!fragmentHashes || !entry.startsWith('@')) return entry
+      if (!fragmentHashes || skipFragmentsAtThisLevel || !entry.startsWith('@')) return entry
       const name = entry.slice(1)
       const h = fragmentHashes.get(name)
       return h ? `@${name}#${h}` : entry
@@ -128,8 +129,17 @@ function substituteHashes(
 
 export interface HashManifestOptions {
   templateHashes: Map<string, string>
-  /** Fragment content hashes — include only for static-mode page hashing. */
+  /**
+   * Hashes of the fragments this item bakes into its output, from
+   * `composeFragmentHashes`. Omit to hash the manifest alone.
+   */
   fragmentHashes?: Map<string, string>
+  /**
+   * The item's own top-level `@fragment` references aren't baked in: an
+   * ESI page emits placeholders for them and the worker composes them per
+   * request. References nested inside its inline components are still baked.
+   */
+  topLevelFragmentsComposedAtRequest?: boolean
 }
 
 /**
@@ -151,7 +161,13 @@ export function hashManifest(manifest: PageManifest | FragmentManifest, opts: Ha
   const normalized: Record<string, unknown> = {
     template: template !== undefined ? (rootHash ? `${template}#${rootHash}` : template) : null,
     content: manifest.content ?? null,
-    components: substituteHashes(manifest.components, opts.templateHashes, opts.fragmentHashes) ?? null,
+    components:
+      substituteHashes(
+        manifest.components,
+        opts.templateHashes,
+        opts.fragmentHashes,
+        opts.topLevelFragmentsComposedAtRequest,
+      ) ?? null,
   }
   // Only when it has a field: pages without metadata keep the hash they had
   // before metadata counted, and `{}` renders the same as no metadata.
@@ -170,4 +186,44 @@ function sortedReplacer(_key: string, value: unknown): unknown {
     return out
   }
   return value
+}
+
+/**
+ * Hash every fragment including the fragments it bakes in, at any depth
+ * (#1090). A fragment's rendered output contains its nested fragments, so a
+ * change to `@logo` must change the hash of `@header` that contains it, and
+ * of every page that bakes either. Computed bottom-up with memoisation; a
+ * reference cycle (reported elsewhere as an error) is hashed without the
+ * back edge instead of looping.
+ */
+export function composeFragmentHashes(
+  fragments: ReadonlyMap<string, FragmentManifest>,
+  templateHashes: Map<string, string>,
+): Map<string, string> {
+  const composed = new Map<string, string>()
+  const visiting = new Set<string>()
+  const visit = (name: string): void => {
+    if (composed.has(name) || visiting.has(name)) return
+    const frag = fragments.get(name)
+    if (!frag) return
+    visiting.add(name)
+    for (const ref of fragmentRefs(frag.components)) visit(ref)
+    visiting.delete(name)
+    composed.set(name, hashManifest(frag, { templateHashes, fragmentHashes: composed }))
+  }
+  for (const name of fragments.keys()) visit(name)
+  return composed
+}
+
+function fragmentRefs(components: ComponentEntry[] | undefined): string[] {
+  if (!components) return []
+  const out: string[] = []
+  for (const entry of components) {
+    if (typeof entry === 'string') {
+      if (entry.startsWith('@')) out.push(entry.slice(1))
+    } else {
+      out.push(...fragmentRefs(entry.components))
+    }
+  }
+  return out
 }

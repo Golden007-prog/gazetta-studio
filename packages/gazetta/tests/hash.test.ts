@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { hashManifest, parseSidecarName, sidecarNameFor } from '../src/hash.js'
-import type { PageManifest } from '../src/types.js'
+import { composeFragmentHashes, hashManifest, parseSidecarName, sidecarNameFor } from '../src/hash.js'
+import type { FragmentManifest, PageManifest } from '../src/types.js'
 
 describe('sidecarNameFor / parseSidecarName', () => {
   it('roundtrips a hash', () => {
@@ -129,5 +129,83 @@ describe('hashManifest', () => {
       ['page-default', 'p1'],
     ])
     expect(hashManifest(nested, { templateHashes: t1 })).not.toBe(hashManifest(nested, { templateHashes: t2 }))
+  })
+})
+
+describe('composeFragmentHashes (#1090)', () => {
+  const templateHashes = new Map([
+    ['p', 't1'],
+    ['h', 't2'],
+    ['l', 't3'],
+    ['section', 't4'],
+  ])
+  const fragments = (logo: string) =>
+    new Map<string, FragmentManifest>([
+      ['header', { template: 'h', components: ['@logo'] }],
+      ['logo', { template: 'l', content: { text: logo } }],
+    ])
+  const page: PageManifest = { route: '/', template: 'p', components: ['@header'] }
+
+  it('a nested fragment change changes the outer fragment and every static page that bakes it', () => {
+    const a = composeFragmentHashes(fragments('v1'), templateHashes)
+    const b = composeFragmentHashes(fragments('v2'), templateHashes)
+    expect(b.get('header')).not.toBe(a.get('header'))
+    expect(hashManifest(page, { templateHashes, fragmentHashes: b })).not.toBe(
+      hashManifest(page, { templateHashes, fragmentHashes: a }),
+    )
+  })
+
+  it('is stable when nothing changes', () => {
+    const a = composeFragmentHashes(fragments('v1'), templateHashes)
+    const b = composeFragmentHashes(fragments('v1'), templateHashes)
+    expect([...b]).toEqual([...a])
+  })
+
+  it('follows three levels of nesting', () => {
+    const chain = (deep: string) =>
+      new Map<string, FragmentManifest>([
+        ['a', { template: 'h', components: ['@b'] }],
+        ['b', { template: 'h', components: ['@c'] }],
+        ['c', { template: 'l', content: { text: deep } }],
+      ])
+    expect(composeFragmentHashes(chain('x'), templateHashes).get('a')).not.toBe(
+      composeFragmentHashes(chain('y'), templateHashes).get('a'),
+    )
+  })
+
+  it('follows references nested inside inline components', () => {
+    const frags = (logo: string) =>
+      new Map<string, FragmentManifest>([
+        ['header', { template: 'h', components: [{ name: 'wrap', template: 'section', components: ['@logo'] }] }],
+        ['logo', { template: 'l', content: { text: logo } }],
+      ])
+    expect(composeFragmentHashes(frags('v1'), templateHashes).get('header')).not.toBe(
+      composeFragmentHashes(frags('v2'), templateHashes).get('header'),
+    )
+  })
+
+  it('terminates on a reference cycle', () => {
+    const cyclic = new Map<string, FragmentManifest>([
+      ['a', { template: 'h', components: ['@b'] }],
+      ['b', { template: 'h', components: ['@a'] }],
+    ])
+    const out = composeFragmentHashes(cyclic, templateHashes)
+    expect(out.get('a')).toMatch(/^[0-9a-f]{8}$/)
+    expect(out.get('b')).toMatch(/^[0-9a-f]{8}$/)
+  })
+
+  it('an ESI page ignores its top-level fragments but not ones nested in inline components', () => {
+    const a = composeFragmentHashes(fragments('v1'), templateHashes)
+    const b = composeFragmentHashes(fragments('v2'), templateHashes)
+    const esi = { templateHashes, topLevelFragmentsComposedAtRequest: true }
+    expect(hashManifest(page, { ...esi, fragmentHashes: b })).toBe(hashManifest(page, { ...esi, fragmentHashes: a }))
+    const inlinePage: PageManifest = {
+      route: '/x',
+      template: 'p',
+      components: [{ name: 'promo', template: 'section', components: ['@header'] }],
+    }
+    expect(hashManifest(inlinePage, { ...esi, fragmentHashes: b })).not.toBe(
+      hashManifest(inlinePage, { ...esi, fragmentHashes: a }),
+    )
   })
 })
