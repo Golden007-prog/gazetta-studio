@@ -91,7 +91,10 @@ gazetta serve                      # first target, port 3000
 gazetta serve production           # specific target
 gazetta serve -p 8080              # custom port
 gazetta serve staging -p 3001     # combine
+gazetta serve --host 127.0.0.1     # listen on loopback only (default: every interface)
 ```
+
+`gazetta dev` and `gazetta admin` listen on `127.0.0.1` by default, because they serve the admin API; pass `--host 0.0.0.0` to reach them from another machine, and configure `admin.auth` first ([auth.md](auth.md)).
 
 ## Cache headers
 

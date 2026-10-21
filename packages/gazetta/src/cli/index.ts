@@ -18,6 +18,8 @@ import type { SiteManifest } from '../types.js'
 import { getEnvironment, getType, isEditable } from '../types.js'
 import { buildHooksRegistry, createAdminApp } from '../admin-api/index.js'
 import { parseValidateFlags } from './validate-flags.js'
+import { parseArgs } from './args.js'
+import { resolveListenHost } from './listen-host.js'
 
 // ANSI color helpers — no dependency, suppressed when NO_COLOR or CI
 const noColor = !!process.env.NO_COLOR || !process.stdout.isTTY
@@ -281,6 +283,7 @@ function printHelp() {
 
   Options:
     --port, -p <port>               Server port (default: 3000)
+    --host <address>                Address to listen on (dev/admin: 127.0.0.1; serve: all interfaces)
     --force, -f                     Publish all items (skip unchanged check)
     --yes, -y                       Skip confirmation prompt (required in CI
                                     for undo/rollback on production targets)
@@ -305,40 +308,6 @@ function printHelp() {
     gazetta undo production --yes       # undo last write on production (CI-safe)
     gazetta rollback rev-1776337441608  # roll back to a specific revision
 `)
-}
-
-interface ParsedArgs {
-  positional: string[]
-  port?: number
-  force?: boolean
-  yes?: boolean
-  limit?: number
-}
-
-function parseArgs(input: string[]): ParsedArgs {
-  const positional: string[] = []
-  let port: number | undefined
-  let force = false
-  let yes = false
-  let limit: number | undefined
-  for (let i = 0; i < input.length; i++) {
-    if (input[i] === '--port' || input[i] === '-p') {
-      port = parseInt(input[++i], 10)
-    } else if (input[i] === '--force' || input[i] === '-f') {
-      force = true
-    } else if (input[i] === '--yes' || input[i] === '-y') {
-      yes = true
-    } else if (input[i] === '--limit') {
-      limit = parseInt(input[++i], 10)
-    } else if (input[i] === '--to') {
-      i++ // consume the locale value — translate command reads it from raw args
-    } else if (input[i].startsWith('--to=')) {
-      // consumed by translate command directly
-    } else if (!input[i].startsWith('-')) {
-      positional.push(input[i])
-    }
-  }
-  return { positional, port, force, yes, limit }
 }
 
 /**
@@ -1251,7 +1220,7 @@ async function runBuild(siteDir: string) {
   console.log()
 }
 
-async function runAdmin(siteDir: string, port: number) {
+async function runAdmin(siteDir: string, port: number, hostFlag?: string) {
   const projectRoot = detectProjectRoot(siteDir)
   const templatesDir = join(projectRoot, 'templates')
   const adminDir = join(projectRoot, 'admin')
@@ -1291,7 +1260,7 @@ async function runAdmin(siteDir: string, port: number) {
 
   const siteManifest = (await loadSiteManifestForCli(siteDir)) ?? ({ name: 'gazetta' } as SiteManifest)
 
-  const server = serve({ fetch: app.fetch, port }, () => {
+  const server = serve({ fetch: app.fetch, port, hostname: resolveListenHost('admin', hostFlag) }, () => {
     console.log()
     console.log(`  ${c.bgGreen(c.bold(' gazetta '))} ${c.green('admin')} ${c.dim(siteManifest.name)}`)
     console.log()
@@ -1307,7 +1276,7 @@ async function runAdmin(siteDir: string, port: number) {
   }
 }
 
-async function runServe(siteDir: string, port: number, targetName?: string) {
+async function runServe(siteDir: string, port: number, targetName?: string, hostFlag?: string) {
   const siteYaml = await loadSiteManifestForCli(siteDir)
   if (!siteYaml) {
     console.error(`\n  Error: no site config found in ${siteDir} (looked for site.config.ts)\n`)
@@ -1332,7 +1301,7 @@ async function runServe(siteDir: string, port: number, targetName?: string) {
   const { createServer } = await import('../serve.js')
   const app = createServer({ storage, type: getType(config) })
 
-  const server = serve({ fetch: app.fetch, port }, () => {
+  const server = serve({ fetch: app.fetch, port, hostname: resolveListenHost('serve', hostFlag) }, () => {
     console.log()
     console.log(`  ${c.bgGreen(c.bold(' gazetta '))} ${c.green('serve')} ${c.dim(siteYaml.name)} ${c.dim(`(${name})`)}`)
     console.log()
@@ -1676,7 +1645,7 @@ function renderErrorOverlay(err: Error): string {
 </html>`
 }
 
-async function runDev(siteDir: string, port: number) {
+async function runDev(siteDir: string, port: number, hostFlag?: string) {
   const projectRoot = detectProjectRoot(siteDir)
   const templatesDir = join(projectRoot, 'templates')
   const adminDir = join(projectRoot, 'admin')
@@ -1854,7 +1823,7 @@ async function runDev(siteDir: string, port: number) {
 
   // ---- Start server ----
   const startTime = performance.now()
-  const nodeServer = serve({ fetch: app.fetch, port }, async () => {
+  const nodeServer = serve({ fetch: app.fetch, port, hostname: resolveListenHost('dev', hostFlag) }, async () => {
     const elapsed = Math.round(performance.now() - startTime)
     console.log()
     console.log(`  ${c.bgGreen(c.bold(' gazetta '))} ${c.green(site.manifest.name)} ${c.dim(`ready in ${elapsed} ms`)}`)
@@ -1865,6 +1834,7 @@ async function runDev(siteDir: string, port: number) {
       console.log(`  ${c.dim('┃')} Dev      ${c.cyan(`http://localhost:${port}/admin/dev`)}`)
     }
     console.log()
+
     console.log(
       `  ${c.dim('┃')} Pages    ${[...site.pages.entries()].map(([n, p]) => `${c.dim(p.route)} ${c.dim('→')} ${n}`).join(c.dim(', '))}`,
     )
@@ -2449,7 +2419,7 @@ async function main() {
       await runPublish(siteDir, targetName, { force: parsed.force })
       break
     case 'serve':
-      await runServe(siteDir, parsed.port ?? 3000, targetName)
+      await runServe(siteDir, parsed.port ?? 3000, targetName, parsed.host)
       break
     case 'deploy':
       await runDeploy(siteDir, targetName)
@@ -2458,10 +2428,10 @@ async function main() {
       await runValidate(siteDir, args.slice(1))
       break
     case 'dev':
-      await runDev(siteDir, parsed.port ?? 3000)
+      await runDev(siteDir, parsed.port ?? 3000, parsed.host)
       break
     case 'admin':
-      await runAdmin(siteDir, parsed.port ?? 3000)
+      await runAdmin(siteDir, parsed.port ?? 3000, parsed.host)
       break
     case 'translate': {
       const itemArg = args[1]

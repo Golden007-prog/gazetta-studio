@@ -4,7 +4,7 @@
  * Layout per target (inside `.gazetta/history/` under the target's
  * storage root):
  *
- *   index.json                     { nextId: N, revisions: ['rev-0001', ...] }
+ *   index.json                     { revisions: ['rev-0001', ...] }
  *   revisions/rev-NNNN.json        one manifest per revision — metadata +
  *                                  items map (itemPath → blob hash)
  *   objects/<hh>/<rest>            content-addressed blobs (SHA-256, sharded

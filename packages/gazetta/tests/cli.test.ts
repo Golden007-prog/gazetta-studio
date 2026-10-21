@@ -4,24 +4,12 @@ import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile, readdir } from 'node:fs/promises'
 import { REQUIRED_NODE_FLOOR } from '../src/node-floor.js'
 import { tempDir } from './_helpers/temp.js'
+import { parseArgs } from '../src/cli/args.js'
 
 // Test the helper functions from the CLI by extracting the logic
 // Since the CLI is a script with side effects, we test the pure functions
 
 describe('parseArgs', () => {
-  function parseArgs(input: string[]): { positional: string[]; port?: number } {
-    const positional: string[] = []
-    let port: number | undefined
-    for (let i = 0; i < input.length; i++) {
-      if (input[i] === '--port' || input[i] === '-p') {
-        port = parseInt(input[++i], 10)
-      } else if (!input[i].startsWith('-')) {
-        positional.push(input[i])
-      }
-    }
-    return { positional, port }
-  }
-
   it('defaults to empty positional', () => {
     const { positional, port } = parseArgs([])
     expect(positional).toEqual([])
@@ -47,6 +35,17 @@ describe('parseArgs', () => {
     const { positional, port } = parseArgs(['production', '-p', '9000', 'my-site'])
     expect(positional).toEqual(['production', 'my-site'])
     expect(port).toBe(9000)
+  })
+
+  it.each([
+    [['--host', '0.0.0.0'], '0.0.0.0'],
+    [['--host=192.168.1.20'], '192.168.1.20'],
+    [['dev', '--host', '127.0.0.1', '-p', '4000'], '127.0.0.1'],
+    [['dev'], undefined],
+  ])('parses --host in %j', (input, expected) => {
+    const parsed = parseArgs(input)
+    expect(parsed.host).toBe(expected)
+    expect(parsed.positional).not.toContain(expected)
   })
 })
 

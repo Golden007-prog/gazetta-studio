@@ -248,6 +248,8 @@ gazetta dev --port 4000
 gazetta serve -p 8080
 ```
 
+`gazetta dev` and `gazetta admin` listen on `127.0.0.1` only: they serve the admin API, and with the default `admin.auth` (`trust: 'none'`) anyone who reaches them is an admin. `gazetta serve` (site only) listens on every interface, for containers. `--host <address>` overrides either, e.g. `gazetta dev --host 0.0.0.0` to preview from a phone on the same network (#1074).
+
 ## Exit Codes
 
 All CLI commands use standard exit codes:
