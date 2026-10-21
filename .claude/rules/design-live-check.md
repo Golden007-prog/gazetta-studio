@@ -261,7 +261,7 @@ Nothing breaks. Pages published before cut 1 have no marker and report `no-marke
 1. **Do hosts and CDNs keep HTML comments?** The worker does (`parseCacheComment` strips only the first-line cache comment; `assembleEsi` replaces only ESI placeholders), but a minifying CDN might not. Cut 2 tests gazetta.studio. A host that strips them degrades to status-code checks, and the report says "no marker served".
 2. **Default waits per target type.** Measured on gazetta.studio in cut 2; other hosts start from labelled guesses.
 3. **The check outliving the connection** depends on #1068's fix landing first, since Hono's `streamSSE` aborts when the client leaves.
-4. **Plain static hosts serve `.gazetta/`.** On GitHub Pages or an S3 website, storage is the public site, so reports (and history) are downloadable. Reports carry no personal data; whether to keep `.gazetta/` off such hosts entirely is a separate issue.
+4. **Plain static hosts serve `.gazetta/`.** On GitHub Pages or an S3 website, storage is the public site, so reports (and history) are downloadable. Reports carry no personal data; keeping `.gazetta/` off such hosts is [#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070).
 5. **`design-scheduling.md` says "no external cron integration".** That line is about scheduled content actions; running `gazetta check` from cron is a different thing, but the wording should be reconciled when the scheduler is designed.
 
 ## Future directions
