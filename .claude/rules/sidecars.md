@@ -67,11 +67,19 @@ work for either source or target storage:
 
 **Problem.** `publishDepIndices` wipes a target's indices and rebuilds them from the whole **source** site (`rebuildDepIndex`, `publish-rendered.ts`). The target's index then names pages the target never received, and edges from source manifests the target doesn't serve. Readers that rely on it: `/api/dependents?target=…` (the publish panel's "affects N pages", `admin-api/routes/publish.ts:262`), the live-check route planner (`design-live-check.md` Q3), and any later use of the target as a source. Restoring history on a target rebuilds from the target's own manifests, which is correct until the next publish overwrites it.
 
-**Decision: update target indices per published item.** For each item a publish writes, compare the target's previous manifest (one read per item) with the manifest being written, and add or remove only that item's edges (`rebuildItemDeps` / `applyDepDiff`, as source saves already do), for `fragment-deps`, `asset-refs` and `alias-targets`, per locale. An item removed from the target (publish undo, `design-publish-undo.md` Q4) has its edges deleted. Cost is proportional to the publish, not the site.
+**Decision: replace each published item's edges, using the index's own record.** Every item on a target gets a forward record, `.gazetta/deps-of/{relation}/{item}`, listing the edges the index holds for it. For each item a publish writes, per relation (`fragment-deps`, `asset-refs`, `alias-targets`) and per locale:
+1. read the item's record;
+2. delete those edges;
+3. write the new edges, computed from the manifest being published (in memory);
+4. write the new record last.
 
-**Static targets get flattened edges.** On a static target only pages are rendered and fragments are baked in, and fragment manifests are on the target only if the fragment itself was published there. So a page published to a static target gets an edge to **every** fragment it bakes, direct or nested, from a walk of the in-memory site's fragment references. That is the graph a static page really has, and `/api/dependents` needs one directory listing per fragment, no transitive walk. ESI targets keep direct edges; fragments are published separately there and `findDependentsFromSidecars` walks them transitively.
+No target manifest is read, so the order of the manifest copy and missing manifests on static targets don't matter. A crashed run is safe to retry: it deletes and rewrites the same edges. Two concurrent publishes of the same item can leave a stray edge, which the next publish of that item clears. An item removed from the target (publish undo, `design-publish-undo.md` Q4) has its edges and record deleted. Cost is a few small operations per published item, proportional to the publish, not the site.
 
-**Existing targets** hold source-built indices, and per-item updates only fix the items they touch, so each existing target needs one rebuild from its own manifests: `gazetta reindex <target>` (slow at 5K pages on cloud storage, fine once).
+**Static targets get flattened edges.** On a static target only pages are rendered and fragments are baked in, and fragment manifests are on the target only if the fragment itself was published there. So a page published to a static target gets an edge to **every** fragment it bakes, direct or nested, and an `asset-refs` edge to every asset those fragments use, from a walk of the in-memory site's fragment references. That is the graph a static page really has, and `/api/dependents` needs one directory listing per fragment, no transitive walk. ESI targets keep direct edges; fragments are published separately there and `findDependentsFromSidecars` walks them transitively.
+
+**Existing targets** hold source-built indices and no forward records. A full `gazetta publish <target> --force` wipes the target's indices and rebuilds them through the per-item path; with no production users, that runs once per existing target (gazetta.studio's production included). A separate target reindex was rejected: static targets don't hold every fragment manifest, so a rebuild from the target couldn't recover nested edges, and it would race concurrent publishes.
+
+**Restoring history on a target** (`history-restorer.ts`) rebuilds all three relations; today it skips `alias-targets`.
 
 **Public targets** keep no indices (`design-public-storage.md` Q5); nothing here applies to them.
 
@@ -82,14 +90,16 @@ work for either source or target storage:
 | Keep source-built indices, filter on read | Every reader has to remember to filter, and wrong edges stay wrong. (The live check's filter stays as a cheap safety check.) |
 | Copy fragment manifests to static targets too | More files nobody renders, still needing a transitive walk at read time. |
 | Direct edges on static targets | Misses pages that use a fragment through another fragment. |
+| Diff the target's previous manifest against the new one | Breaks when the manifest copy runs first, when static targets lack the manifest, on retries after a crash, and with concurrent publishes. |
+| `gazetta reindex <target>` from the target's manifests | Can't recover nested edges on static targets; races publishes. A forced full publish does the job. |
 
 **Found alongside:** static pages don't update when a nested fragment changes, because fragment hashes leave out their own nested fragments ([#1090](https://github.com/gazetta-studio/gazetta-studio/issues/1090)).
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
-| 1 | Per-item target index updates on publish (all three relations, per locale, removals), replacing the whole-source rebuild in `publishDepIndices` | — | api-first | Medium |
-| 2 | Static targets: flattened page → fragment edges from the in-memory site's fragment references | 1 | unit + api | Medium |
-| 3 | `gazetta reindex <target>`: rebuild a target's indices from its own manifests; run once for gazetta.studio | 1 | api | Low |
+| 1 | Per-item edge replacement with forward records on publish (all three relations, per locale, removals), replacing the whole-source rebuild in `publishDepIndices`; a full `--force` publish wipes and rebuilds; history restore rebuilds all three relations | — | api-first | Medium |
+| 2 | Static targets: flattened page → fragment and page → asset edges from the in-memory site's fragment references | 1 | unit + api | Medium |
+| 3 | Run `gazetta publish production --force` for gazetta.studio once cuts 1–2 ship (maintainer step) | 1, 2 | (manual) | Low |
 | 4 | Update this section and the "Where sidecars live" table to the shipped state | 1–3 | docs | Low |
 
 ## Hash input
