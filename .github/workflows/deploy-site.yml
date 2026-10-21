@@ -57,11 +57,14 @@ jobs:
       - name: Check the live site
         env:
           RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           check() {
             local path=$1 want=$2 grep_for=$3
             for attempt in 1 2 3 4 5 6; do
-              status=$(curl -s -o page.html -w '%{http_code}' "https://gazetta.studio${path}?deploy-check=${RUN_ID}")
+              # A fresh query value per attempt, so a retry never gets a
+              # response cached by an earlier one.
+              status=$(curl -s -o page.html -w '%{http_code}' "https://gazetta.studio${path}?deploy-check=${RUN_ID}-${RUN_ATTEMPT}-${attempt}")
               if [ "$status" = "$want" ] && { [ -z "$grep_for" ] || grep -q "$grep_for" page.html; }; then
                 echo "ok   ${path} -> ${status}"
                 return 0
@@ -69,7 +72,9 @@ jobs:
               echo "wait ${path} -> ${status} (attempt ${attempt})"
               sleep 10
             done
-            echo "::error::${path} returned ${status}, expected ${want}${grep_for:+ with '${grep_for}'}"
+            local expected="$want"
+            [ -n "$grep_for" ] && expected="$want containing $grep_for"
+            echo "::error::${path} returned ${status}, expected ${expected}"
             return 1
           }
           failed=0
