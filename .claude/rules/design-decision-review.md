@@ -9,7 +9,7 @@ paths:
 
 A skill, `review-decisions`, reviews PRs that record the maintainer's design decisions, in the maintainer's place, and merges them when they pass. The maintainer still makes every decision, usually by answering grilling questions. The skill checks that a PR locks only what the maintainer answered, records it faithfully, and rests on true facts. Whatever only the maintainer can decide comes back as a picker question; the author fixes its own recording errors (Q4).
 
-**Status**: design pass complete (2026-10-22), grilled Q1–Q12. The lookup script, its tests and the skill shipped in #1132; this doc and the rule 33 clause were the skill's first review (#1133), which also settled the amendments to Q2, Q3a, Q5, Q7, Q9 and Q10. The code changes those need are tracked in #1136.
+**Status**: design pass complete (2026-10-22), grilled Q1–Q12. The lookup script, its tests and the skill shipped in #1132; this doc and the rule 33 clause were the skill's first review (#1133), which also settled the amendments to Q2, Q3a, Q5, Q7, Q8, Q9 and Q10. The code changes those need are tracked in #1136.
 
 **Roles** used below:
 - **The maintainer** makes the decisions.
@@ -116,7 +116,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 ### Q3a — The second opinion
 
-The maintainer wants a second opinion on their decisions as well, and meant the AI reviewers' comments on the PR: Seer's, and Sourcery's while its free budget lasts. That doesn't undo Q1, as long as the second opinion can only raise concerns and the decision stays the maintainer's.
+The maintainer wants a second opinion on their decisions as well, and meant the AI reviewers' comments on the PR: Seer's, and Sourcery's while its free budget lasts. Only comments by those two accounts (`sentry[bot]`, `sourcery-ai[bot]`) count. The checker doesn't read anyone else's, and the verdict lists them: anyone can comment on this public repo, so another account's comment could carry instructions to the agent that decides what the maintainer is asked and what merges. That doesn't undo Q1, as long as the second opinion can only raise concerns and the decision stays the maintainer's.
 
 The checker verifies each comment against the code (Q5). One that holds and raises a **concrete** problem the maintainer wasn't shown when deciding comes to the maintainer as a picker question with the evidence (keep or change), and the PR waits for the answer. With no such comment, there's nothing to answer. A Fable pass, when the maintainer wants one (Q5), raises concerns the same way. A concrete problem is one of these:
 - an alternative or failure mode that's missing from the decision's Rejected table;
@@ -131,6 +131,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 | A short assessment of each decision in the verdict comment; nothing waits on it | The maintainer doesn't read verdict comments, so a note nobody reads changes nothing |
 | Any doubt becomes a question, including "are you sure?" with no new evidence | Noise: once "keep" is clicked without reading, the real concerns get lost too |
 | The second opinion can refuse a decision it thinks is wrong | That's the skill deciding, which Q1 ruled out |
+| Every comment on the PR goes to the checker | A stranger's comment could carry instructions to the agent that decides what the maintainer is asked and what merges: the hole Q8 closed for the approval marker, one layer up (Fable on #1133) |
 
 ### Q4 — Who handles a failed check
 
@@ -164,7 +165,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 A fresh Opus 5.5 agent runs the checks, which are lookups and re-reads. The second opinion is Seer's and Sourcery's comments on the PR: the checker verifies each against the code and turns the ones that hold into questions (Q3a); one pointing at a recording error is fixed by the author instead (Q4). Since it reads Seer's review, the checker starts once Seer has reacted, commented or reviewed, or after 15 minutes, whichever comes first. On a docs PR with nothing to report, Seer adds a 🎉 reaction within a few minutes and posts nothing else. Seer usually reviews only the commit a PR opens with: on #1133 it checked d9e403ff, the commit it opened with, and none of the three later pushes (f26f1b75, ef36226f, 81cf756c), and [`ai-code-review-tools.md`](../../docs/audits/ai-code-review-tools.md) records later pushes skipped on #1051 and #1069. So after each fix round or answered question the author asks again with `@sentry review`, and the checker starts once Seer's check on the new head finishes (success means nothing to say), or after 15 minutes.
 
-A fresh Fable 5.1 agent adds a second opinion of its own only when the maintainer asks for one on a PR ("second opinion #N"), or says yes when the checker recommends one. The checker says whether a Fable pass would help the PR and why, for example a new design doc, a decision that's hard to reverse or touches production, or many new decisions with silent AI reviewers; the PR's batch of questions then asks the maintainer to run it or skip. Fable 5.1 is the model with both independence from the author (who runs on Opus 5.5) and at least the author's capability. On a later round it runs again only on the decisions whose text changed, and its earlier result stands for the rest. If Fable isn't available, a fresh Opus agent runs instead.
+A fresh Fable 5.1 agent adds a second opinion of its own only when the maintainer asks for one on a PR ("second opinion #N"), or says yes to a run-or-skip question in the PR's batch. A PR that adds a design doc or an ADR always gets that question. For other PRs, the checker says whether a Fable pass would help and why, for example a decision that's hard to reverse or touches production, or many new decisions with silent AI reviewers, and the question comes when it would. The floor is there because the checker runs on Opus, the author's model, so the PRs where its blind spots matter are the ones it's least likely to flag. Fable 5.1 is the model with both independence from the author (who runs on Opus 5.5) and at least the author's capability. On a later round it runs again only on the decisions whose text changed, and its earlier result stands for the rest. If Fable isn't available, a fresh Opus agent runs instead.
 
 The AI reviewers cost nothing but a wait for Seer, about 4 minutes a round (#1137's review took 3.5), but they mainly look for factual and code problems, can't be asked about a decision, and Sourcery's free budget can run out: on 2026-10-22 the maintainer's account had none left until about 2026-10-26. A Fable pass took about 13 minutes and 500–550K tokens on #1133 (two passes: 13.5 minutes and 503K tokens, 12.4 minutes and 549K), at 2.5 times Opus's price per token, and the session limit stopped the third round's agents. (Prices from the bundled model reference dated 2026-10-06: Fable 5.1 $10 / $50 per million tokens in / out, Opus 5.5 $4 / $20.)
 
@@ -177,6 +178,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 | AI reviewers only, never Fable | Fable's first pass on #1133 found three things nothing else caught: transcripts expiring after 30 days, the skill reviewing changes to itself, and Q10's wrong cut-planner reason |
 | Recommend a Fable pass on fixed triggers only: a PR that adds a design doc or an ADR | No judgement: a decision that's hard to reverse or touches production, in an existing doc, wouldn't get one |
 | Ask about a Fable pass on every PR | A question on every PR, including ones a Fable pass wouldn't help |
+| The checker's call alone, with no floor (the 14:46 answer) | The checker runs on Opus, the model Q5 rejects as a second opinion for sharing the author's blind spots (Fable on #1133) |
 | Start the checker as soon as the PR opens | Seer finishes a review within a few minutes of a PR opening, so its findings would be missed |
 | Ask Seer again only after a round that changed a decision's text | A mechanical fix can be wrong too, and Seer checks facts; asking every time costs about 4 minutes |
 | Rely on Seer's review of the PR's first version | Nothing from the AI reviewers would cover what later rounds change, such as #1133's own Q3a and Q5 |
@@ -228,9 +230,10 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 Right after the author opens an in-scope PR, in the same session, so escalations arrive while the decisions are fresh and the maintainer is still there. And `/review-prs` runs it on any in-scope PR still open without a passing verdict for its latest commit, which picks up PRs from a session that ended and ones that changed after their verdict.
 
-Three rules:
+Four rules:
 - **Each verdict names the commit it checked.** If anything is pushed afterwards, the skill runs again before merge, so an approval of an older version doesn't count: the "check against the PR's head" lesson from #1122.
-- **Only the skill's own verdict counts.** `/review-prs` counts a verdict only in a comment posted by the account the session posts as, on a PR that account opened; otherwise it runs the skill in full. The repo is public, so anyone can post the marker, and a forged one would get a PR merged unreviewed (Seer on #1133). Merged rule files load into every later session, including the bots, which run with `--dangerously-skip-permissions` (`bots/_lib/claude.ts`).
+- **Only the skill's own verdict counts.** `/review-prs` counts a verdict only in a comment posted by the account the session posts as, on a PR that account opened; otherwise it runs the skill in full. The skill counts verdicts the same way (#1136). The repo is public, so anyone can post the marker, and a forged one would get a PR merged unreviewed (Seer on #1133). Merged rule files load into every later session, including the bots, which run with `--dangerously-skip-permissions` (`bots/_lib/claude.ts`).
+- **A verdict also names `main`'s commit, and stops counting when `main` changed under the PR.** If a file the PR changes has changed on `main` since that commit (`git diff --name-only <commit>..origin/main`), `/review-prs` and the merge step run the skill again. GitHub stops only textual conflicts, so a PR checked against a doc another PR then changed would otherwise merge unchecked against it: #1120 and #1124 both edit `design-live-check.md` and `design-redirects.md` (Fable on #1133).
 - **The maintainer can ask for a run at any time** ("review #1120").
 
 Decided: maintainer, 2026-10-22 (#1133)
@@ -243,6 +246,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 | On a schedule, from a bot | Not possible: the transcripts are on this machine (Q2) |
 | Any comment carrying the approval marker for the head counts | Anyone can post one: a contributor's PR, or the maintainer's PR still waiting for answers, would be merged unreviewed |
 | `/review-prs` never trusts a verdict and always runs the skill in full | About 25 minutes each time it meets a PR that already has a passing verdict for its head |
+| A verdict counts while the head is unchanged, whatever merged to `main` since | GitHub stops only textual conflicts, so a decision is never re-read against a doc another PR changed meanwhile |
 
 ### Q9 — How the lookup works
 
@@ -328,15 +332,17 @@ checker (fresh Opus 5.5), once Seer has reacted, commented or reviewed,
   provenance, fidelity, edits around decisions, soundness, transcript writes,
   and the AI reviewers' comments as the second opinion; says whether a
   Fable pass would help (Q3, Q3a, Q5)
-Fable 5.1 pass: only when the maintainer asks, or says yes to the
-  checker's recommendation (Q5)
+Fable 5.1 pass: only when the maintainer asks, or says yes to the run-or-skip
+  question, which always comes for a new design doc or ADR and otherwise
+  on the checker's recommendation (Q5)
   ▼
 mechanical findings → the author fixes them, asks Seer again and re-runs,
   at most 3 rounds; a Fable pass re-runs only on decisions that changed (Q4, Q5)
 decision findings and concerns → picker questions, one batch per PR (Q3a, Q4)
   ▼
-verdict comment naming the commit it checked (Q8)
-  → merge if the head is unchanged and there's no hold (Q6, Q9)
+verdict comment naming the commit it checked and main's (Q8)
+  → merge if the head is unchanged, main didn't change the PR's files,
+    and there's no hold (Q6, Q8, Q9)
   → one line to the maintainer (Q6)
 ```
 
@@ -353,9 +359,9 @@ A dev-process skill: it reads docs and a transcript, and writes PR comments. Lik
 
 ## UX check
 
-Rule 23: a clean PR is silent until it's merged, apart from a run-or-skip question when the checker recommends a Fable pass (Q5), and the maintainer sees only what needs a decision.
-- A clean PR costs the maintainer nothing but one line after the merge (Q6), plus that run-or-skip question when the checker recommends a Fable pass (Q5).
-- Questions come only when something needs the maintainer: an unanswered or changed decision, a wrong fact a decision rests on, a contradiction, a concrete concern from the second opinion (Q3a, Q4), or, when the checker recommends one, whether to run a Fable pass (Q5).
+Rule 23: a clean PR is silent until it's merged, apart from a run-or-skip question when a Fable pass is offered (Q5), and the maintainer sees only what needs a decision.
+- A clean PR costs the maintainer nothing but one line after the merge (Q6), plus that run-or-skip question for a PR that adds a design doc or an ADR, or when the checker recommends a Fable pass (Q5).
+- Questions come only when something needs the maintainer: an unanswered or changed decision, a wrong fact a decision rests on, a contradiction, a concrete concern from the second opinion (Q3a, Q4), or whether to run a Fable pass: always for a new design doc or ADR, otherwise when the checker recommends one (Q5).
 - Questions arrive as pickers, one batch per PR, each with options and a recommendation (Q1, Q4).
 - The verdict comment is for spot-checks, not for reading (Q1).
 - "hold #N" is the only command the maintainer needs to know (Q9).
@@ -370,7 +376,7 @@ Follows from Q12.
 | 2 | `SKILL.md`: scope, hold, decision list, lookup, checker, second opinion, fix-and-recheck loop, questions, verdict, merge (#1132) | 1 | (first runs) | Medium |
 | 3 | This doc, the rule 33 clause, `feature-design-process.md` lines, the `review-prs` hook, glossary entries, and the `hold` label; reviewed by the skill as its first run | 2 | (docs) | Low |
 | 4 | First runs on #1120 and #1124, after adding a decision list to each PR body | 3 | (manual) | Low |
-| 5 | Changes from the first run (#1136): the lookup's tamper checks and `process.exitCode`; in `SKILL.md`, the Q7 scope and author check, the AI reviewers as the second opinion, with Seer asked again after each push and Fable on request or recommendation (Q3a, Q5), and `--match-head-commit` | 2 | unit-first | Low |
+| 5 | Changes from the first run (#1136): the lookup's tamper checks and `process.exitCode`; in `SKILL.md`, the Q7 scope and author check, the AI reviewers as the second opinion (only Seer's and Sourcery's accounts), with Seer asked again after each push and the Fable run-or-skip question (Q3a, Q5), and the Q8 verdict checks (only this account's verdict, `main`'s commit, `--match-head-commit`) | 2 | unit-first | Low |
 
 ## Migration
 
@@ -407,4 +413,4 @@ Choices made while building #1132, each carrying out a decision above.
 Until #1136 lands, #1132's code does less than the decisions above. The author applies the missing rules by hand on each run and says so in the verdict, since Q9 stays as written and Q12 has the skill finish #1133 and cut 4's runs before #1136 lands.
 - **The lookup (Q9)** accepts four fakes the first run's checker built: an answer appended later with an earlier timestamp, a second result for one picker question, an entry with no parent in the middle of the file, and a script run without naming the transcript. It doesn't scan sub-agent transcripts or the content of Write and Edit calls.
 - **Its output** can be cut at 64 KB when piped to a slow reader, because the script calls `process.exit` right after writing; `transcriptWrites` is the last field.
-- **`SKILL.md`** doesn't put `CLAUDE.md` or `bots/README.md` in scope, take the skill's own files out, or check the PR's author (Q7); it runs a Fable second opinion on every PR, without waiting for Seer, and re-runs it every round, while Q5 now has the checker read the AI reviewers' comments as the second opinion, with Seer asked again after each push, recommend a Fable pass when one would help, and run one only when the maintainer asks; and its merge doesn't pass `--match-head-commit` (Q8).
+- **`SKILL.md`** doesn't put `CLAUDE.md` or `bots/README.md` in scope, take the skill's own files out, or check the PR's author (Q7); it runs a Fable second opinion on every PR, without waiting for Seer, and re-runs it every round, while Q5 now has the checker read the AI reviewers' comments as the second opinion, with Seer asked again after each push, offer a Fable pass for every new design doc or ADR and otherwise when one would help, and run one only when the maintainer asks; it gives the checker every comment, not only Seer's and Sourcery's (Q3a); and its verdict doesn't name `main`'s commit, nor does its merge pass `--match-head-commit` or check whether `main` changed the PR's files (Q8).
