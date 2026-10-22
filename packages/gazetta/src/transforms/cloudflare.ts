@@ -38,6 +38,7 @@
  */
 import { buildAssetUrl } from '../assets/url.js'
 import type { AssetUrlInput, CachePolicy, TransformAdapter } from './adapter.js'
+import { trimTrailingSlashes } from '../url.js'
 
 /** Widths the srcset ladder generates. Same as sharp's `VARIANT_WIDTHS`. */
 const LADDER_WIDTHS: readonly number[] = [400, 800, 1200, 1600]
@@ -68,7 +69,7 @@ export function createCloudflareAdapter(opts: CloudflareAdapterOptions): Transfo
   if (!opts.zone || typeof opts.zone !== 'string') {
     throw new Error('cloudflareAdapter requires a `zone` (e.g. "cdn.example.com")')
   }
-  const zone = opts.zone.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  const zone = trimTrailingSlashes(opts.zone.replace(/^https?:\/\//, ''))
 
   return {
     name: 'cloudflare',

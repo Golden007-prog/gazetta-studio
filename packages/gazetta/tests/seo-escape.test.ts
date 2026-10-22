@@ -17,7 +17,22 @@
  * discipline.
  */
 import { describe, expect, it } from 'vitest'
-import { escapeAttr } from '../src/seo.js'
+import { escapeAttr, resolveSeoTags, type SeoContext } from '../src/seo.js'
+
+describe('resolveSeoTags with a non-string siteUrl (#1110 review)', () => {
+  it('a null siteUrl omits the canonical URL instead of throwing mid-render', async () => {
+    // siteUrl crosses a loosely-validated boundary (target config is a
+    // z.unknown passthrough; resolveSeoTags is also a public export), so
+    // null is reachable at runtime even though the TS type forbids it.
+    // The pre-helper `?.` chain tolerated it; the typeof guard keeps that.
+    const seo = { siteUrl: null } as unknown as SeoContext
+    let head: string | undefined
+    expect(() => {
+      head = resolveSeoTags({ seo, route: '/about' })
+    }).not.toThrow()
+    expect(head).not.toContain('rel="canonical"')
+  })
+})
 
 describe('escapeAttr', () => {
   it('escapes < to &lt; (prevents tag-breakout in attribute value)', () => {

@@ -11,6 +11,7 @@
  * `resolveSeoTags()`, not a change to the renderer.
  */
 import type { PageMetadata } from './types.js'
+import { trimTrailingSlashes } from './url.js'
 
 /** Escape HTML attribute values — prevents XSS in generated meta tags. */
 export function escapeAttr(s: string): string {
@@ -76,7 +77,11 @@ export function resolveSeoTags(input: ResolveSeoTagsInput): string {
   }
 
   // Canonical: metadata.canonical → siteUrl + route → omit
-  const base = seo.siteUrl?.replace(/\/+$/, '')
+  // siteUrl arrives from loosely-validated operator config (targets are a
+  // z.unknown passthrough) and from public-API callers: treat anything
+  // that is not a string as absent - the old `?.` tolerated null the same
+  // way - rather than throwing on `.length` mid-render (#1110 review).
+  const base = typeof seo.siteUrl === 'string' ? trimTrailingSlashes(seo.siteUrl) : undefined
   const canonical = meta?.canonical || (base && route ? `${base}${route}` : undefined)
   if (canonical) {
     parts.push(`<link rel="canonical" href="${escapeAttr(canonical)}">`)

@@ -10,6 +10,7 @@
  *   2. Otherwise, generate a permissive default with a Sitemap
  *      reference (when siteUrl is available).
  */
+import { trimTrailingSlashes } from './url.js'
 
 export interface GenerateRobotsOptions {
   /** Absolute base URL — used for the Sitemap directive. Optional. */
@@ -23,7 +24,7 @@ export interface GenerateRobotsOptions {
 export function generateRobotsTxt(opts: GenerateRobotsOptions): string {
   const lines = ['User-agent: *', 'Allow: /']
   if (opts.siteUrl) {
-    const base = opts.siteUrl.replace(/\/+$/, '')
+    const base = trimTrailingSlashes(opts.siteUrl)
     lines.push('', `Sitemap: ${base}/sitemap.xml`)
   }
   return lines.join('\n') + '\n'

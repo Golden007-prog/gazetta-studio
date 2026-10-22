@@ -21,6 +21,7 @@ import { parseValidateFlags } from './validate-flags.js'
 import { parseArgs } from './args.js'
 import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
 import { viteCacheDir } from './vite-cache-dir.js'
+import { trimTrailingSlashes } from '../url.js'
 
 // ANSI color helpers — no dependency, suppressed when NO_COLOR or CI
 const noColor = !!process.env.NO_COLOR || !process.stdout.isTTY
@@ -959,7 +960,7 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
       // robots.txt: only at the domain root — Google ignores robots.txt at
       // subpaths. If siteUrl has a path component, the domain root belongs
       // to someone else (host, reverse proxy, another app).
-      const isRootDeploy = !new URL(siteUrl).pathname.replace(/\/+$/, '')
+      const isRootDeploy = !trimTrailingSlashes(new URL(siteUrl).pathname)
       if (isRootDeploy) {
         let robotsTxt: string
         try {

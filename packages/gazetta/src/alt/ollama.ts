@@ -38,6 +38,7 @@ import { AIAdapterFailedError, AIInvalidResponseError } from '../ai/errors.js'
 import type { AIProvider, AltTextTaskConfig } from '../ai/provider.js'
 import { buildAltAdapterFromScaffold } from '../ai/adapter-scaffold.js'
 import type { AltTextAdapter } from './adapter.js'
+import { trimTrailingSlashes } from '../url.js'
 
 const OLLAMA_REFUSAL_MARKERS: readonly string[] = [
   // llama3.2-vision tends to refuse with these patterns more than
@@ -91,7 +92,7 @@ interface OllamaChatResponse {
  * `ollamaProvider(transport).altText(taskConfig)` (Path X).
  */
 export function createOllamaAltAdapter(opts: OllamaAltAdapterOptions = {}): AltTextAdapter {
-  const baseUrl = (opts.baseUrl ?? OLLAMA_DEFAULT_BASE_URL).replace(/\/+$/, '')
+  const baseUrl = trimTrailingSlashes(opts.baseUrl ?? OLLAMA_DEFAULT_BASE_URL)
   const model = opts.model ?? OLLAMA_DEFAULT_MODEL
   const endpoint = `${baseUrl}/api/chat`
 

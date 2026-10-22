@@ -30,6 +30,7 @@ import {
 import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
 import { runPublishAudit } from '../../validation/publish-audit.js'
 import type { Issue } from '../../validation/types.js'
+import { trimTrailingSlashes } from '../../url.js'
 
 /**
  * Progress events streamed by runPublish. Consumed both by the SSE route
@@ -528,7 +529,7 @@ export function publishRoutes(
             totalFiles++
           }
           // robots.txt only at domain root — Google ignores it at subpaths.
-          const isRootDeploy = !new URL(siteUrl).pathname.replace(/\/+$/, '')
+          const isRootDeploy = !trimTrailingSlashes(new URL(siteUrl).pathname)
           if (isRootDeploy) {
             let robotsTxt: string
             try {

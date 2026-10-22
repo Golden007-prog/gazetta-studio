@@ -17,6 +17,7 @@
  */
 import type { SidecarState } from './sidecars.js'
 import { deriveRoute } from './site-loader.js'
+import { trimTrailingSlashes } from './url.js'
 
 /** hreflang alternate for a single page — locale code + absolute URL. */
 interface HreflangAlternate {
@@ -56,7 +57,7 @@ function escapeXml(s: string): string {
  */
 export function generateSitemap(opts: GenerateSitemapOptions): string | null {
   const systemSet = new Set(opts.systemPages ?? [])
-  const base = opts.siteUrl.replace(/\/+$/, '')
+  const base = trimTrailingSlashes(opts.siteUrl)
   const urls: string[] = []
 
   // Sort by page name for deterministic output across runs.
