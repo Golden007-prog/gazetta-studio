@@ -227,10 +227,11 @@ function escapeRegExp(value: string): string {
  * baseline snapshot, and restoring that baseline would then DELETE a
  * translation instead of reverting it (#1088).
  *
- * Cloud object stores (R2/S3/Azure Blob) have no "directory" concept —
- * `exists()` on a prefix-only path returns false. Rely on `readDir`
- * returning an empty array for missing paths instead of probing via
- * `exists` first.
+ * Cloud object stores (R2/S3/Azure Blob) have no real "directory"
+ * concept, but `exists()` on a prefix lists it: a location holding
+ * content returns true, a genuinely missing one false. The root probe
+ * below relies on that to tell a missing location apart from a listing
+ * failure.
  */
 async function scanManifestsInto(
   storage: StorageProvider,
