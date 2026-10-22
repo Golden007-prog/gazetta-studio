@@ -58,10 +58,13 @@ carrying a comment marker:
 Worker-served target types (static-with-worker, ESI, dynamic) read the
 first 200 bytes of `pages/landing/index.html`, see the marker, and
 emit `301 Moved Permanently` to `/welcome` in the request's language
-(`/fr/landing` → `/fr/welcome`, or, once #1138 lands, `/welcome` on a
-static target where `welcome` has no French version; follows from
-`design-soft-delete.md` Q10) — no
-composition, no body served. Cache headers on the 301 response strip
+(`/fr/landing` → `/fr/welcome`, or `/welcome` on a static target where
+`welcome` has no French version; follows from `design-soft-delete.md`
+Q10) — no composition, no body served. Both need the site's languages,
+which `gazetta serve` and the generated worker get with
+[#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138).
+Until then `gazetta serve` sends every language to `/welcome`, and on
+an ESI target `/fr/landing` answers 404. Cache headers on the 301 response strip
 strong caching (`Cache-Control: max-age=300`) so unarchive propagates
 quickly.
 
