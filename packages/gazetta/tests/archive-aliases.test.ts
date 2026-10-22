@@ -14,12 +14,7 @@
  * 5K-envelope check lives in Cut 5c's purge-route integration test.
  */
 import { describe, it, expect } from 'vitest'
-import {
-  ARCHIVE_ALIASES,
-  applyArchiveAliasesDiff,
-  readArchivesAliasing,
-  rebuildArchiveAliases,
-} from '../src/archive-aliases.js'
+import { ARCHIVE_ALIASES, applyArchiveAliasesDiff, rebuildArchiveAliases } from '../src/archive-aliases.js'
 import { createContentRoot } from '../src/content-root.js'
 import type { ItemRef } from '../src/dep-sidecars.js'
 import { memoryStorage } from './_helpers/memory-storage.js'
@@ -124,53 +119,6 @@ describe('rebuildArchiveAliases lifecycle', () => {
     const item: ItemRef = { source: 'page', name: 'landing', locale: 'fr' }
     await rebuildArchiveAliases(contentRoot, item, null, archiveAlias('welcome'))
     expect(await storage.exists('.gazetta/alias-targets/welcome/pages.landing:fr')).toBe(true)
-  })
-})
-
-describe('readArchivesAliasing', () => {
-  it('returns empty array when no archives point at the target', async () => {
-    const storage = memoryStorage()
-    const contentRoot = createContentRoot(storage, '')
-    expect(await readArchivesAliasing(contentRoot, 'welcome')).toEqual([])
-  })
-
-  it('returns one ItemRef per archive aliasing the target', async () => {
-    const storage = memoryStorage()
-    const contentRoot = createContentRoot(storage, '')
-
-    // Two pages aliasing 'welcome', one fragment aliasing 'top-bar'
-    await rebuildArchiveAliases(contentRoot, { source: 'page', name: 'landing' }, null, archiveAlias('welcome'))
-    await rebuildArchiveAliases(contentRoot, { source: 'page', name: 'home-old' }, null, archiveAlias('welcome'))
-    await rebuildArchiveAliases(contentRoot, { source: 'fragment', name: 'header-v1' }, null, archiveAlias('top-bar'))
-
-    const aliasingWelcome = await readArchivesAliasing(contentRoot, 'welcome')
-    expect(aliasingWelcome).toHaveLength(2)
-    expect(aliasingWelcome.map(r => `${r.source}:${r.name}`).sort()).toEqual(['page:home-old', 'page:landing'])
-
-    const aliasingTopBar = await readArchivesAliasing(contentRoot, 'top-bar')
-    expect(aliasingTopBar).toHaveLength(1)
-    expect(aliasingTopBar[0]).toEqual({ source: 'fragment', name: 'header-v1' })
-  })
-
-  it('returns locale-variant ItemRefs distinctly', async () => {
-    const storage = memoryStorage()
-    const contentRoot = createContentRoot(storage, '')
-    await rebuildArchiveAliases(
-      contentRoot,
-      { source: 'page', name: 'landing', locale: 'fr' },
-      null,
-      archiveAlias('welcome'),
-    )
-    await rebuildArchiveAliases(
-      contentRoot,
-      { source: 'page', name: 'landing', locale: 'es' },
-      null,
-      archiveAlias('welcome'),
-    )
-
-    const refs = await readArchivesAliasing(contentRoot, 'welcome')
-    expect(refs).toHaveLength(2)
-    expect(refs.map(r => r.locale).sort()).toEqual(['es', 'fr'])
   })
 })
 

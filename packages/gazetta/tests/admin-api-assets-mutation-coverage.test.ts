@@ -81,7 +81,7 @@ afterEach(async () => {
 
 function buildApp() {
   const storage = createFilesystemProvider(testDir)
-  const source = createSourceContext({ storage, siteDir: '' })
+  const source = createSourceContext({ storage, siteDir: '', manifest: { name: 'test-site' } })
   const resolve = staticSourceResolver(source)
   const app = new Hono()
   app.use('/api/*', principalMiddleware())
@@ -424,7 +424,7 @@ const anonymousProvider: AuthIdentityProvider = {
 
 function buildAppWith(provider: AuthIdentityProvider) {
   const storage = createFilesystemProvider(testDir)
-  const source = createSourceContext({ storage, siteDir: '' })
+  const source = createSourceContext({ storage, siteDir: '', manifest: { name: 'test-site' } })
   const resolve = staticSourceResolver(source)
   const app = new Hono()
   app.use('/api/*', principalMiddleware(provider))
@@ -448,7 +448,7 @@ function buildAppWithThrowingStorage() {
       return real.readDir(path)
     },
   }
-  const source = createSourceContext({ storage: throwing, siteDir: '' })
+  const source = createSourceContext({ storage: throwing, siteDir: '', manifest: { name: 'test-site' } })
   const resolve = staticSourceResolver(source)
   const app = new Hono()
   app.use('/api/*', principalMiddleware())

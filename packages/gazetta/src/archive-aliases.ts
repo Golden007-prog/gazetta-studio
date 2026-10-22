@@ -38,14 +38,7 @@
  */
 import type { ContentRoot } from './content-root.js'
 import type { ComponentManifest } from './types.js'
-import {
-  type DepRelation,
-  type ItemRef,
-  type ManifestLike,
-  applyDepDiff,
-  rebuildItemDeps,
-  readDepsFor,
-} from './dep-sidecars.js'
+import { type DepRelation, type ItemRef, type ManifestLike, applyDepDiff, rebuildItemDeps } from './dep-sidecars.js'
 
 /**
  * The archive-aliases relation.
@@ -67,16 +60,6 @@ export const ARCHIVE_ALIASES: DepRelation = {
     if (typeof m.aliasOf !== 'string' || m.aliasOf.length === 0) return new Set<string>()
     return new Set<string>([m.aliasOf])
   },
-}
-
-/**
- * Read every archived item that aliases this target. Returns
- * `ItemRef[]`; the caller maps to `(kind, name)` for error bodies
- * (e.g. the purge-blocked 409 response from `design-soft-delete.md`
- * Q4).
- */
-export function readArchivesAliasing(contentRoot: ContentRoot, targetName: string): Promise<ItemRef[]> {
-  return readDepsFor(ARCHIVE_ALIASES, contentRoot, targetName)
 }
 
 /**

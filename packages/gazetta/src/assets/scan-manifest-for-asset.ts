@@ -5,11 +5,13 @@
  * nested inline components, emitting an `AssetRef` per match. No I/O,
  * no site-wide knowledge — this is the inner kernel.
  *
- * Two consumers:
- *   - `find-refs.ts` — loads the whole site and runs this walker over
- *     every page/fragment manifest (including locale variants)
- *   - future `.refs/` index writer — on every manifest save, runs this
- *     walker over the just-saved manifest to update the index incrementally
+ * Consumers:
+ *   - `delete.ts` — `scanManifestForAsset` over the loaded site for
+ *     the delete-block usage list (carries `componentPath` detail)
+ *   - `asset-deps.ts` — `collectAssetRefs` feeds the `asset-refs`
+ *     index builder's `extract`
+ *   - `publish-plan.ts` — `collectAssetRefs` resolves each published
+ *     manifest's asset dependencies
  *
  * Splitting the walker from the site loader lets both use the same
  * matching logic — the index writer can't call the site-wide scanner

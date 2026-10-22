@@ -14,7 +14,7 @@
  * cleanly, or refuse with a structured reason." This module owns:
  *   - read both manifests (404 if either missing)
  *   - verify kind/MIME compatibility (409 if not)
- *   - scan refs (delegates to `find-refs.ts`)
+ *   - scan refs (via `scan-manifest-for-asset.ts` over the site)
  *   - rewrite manifests in memory (delegates to
  *     `rewrite-manifest-asset-ref.ts`)
  *   - write updated manifests + delete old asset as a batch

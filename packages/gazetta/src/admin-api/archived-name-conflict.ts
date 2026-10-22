@@ -28,7 +28,9 @@
 import { join } from 'node:path'
 import type { ContentRoot } from '../content-root.js'
 import type { ComponentManifest, FragmentManifest, PageManifest } from '../types.js'
-import { rebuildArchiveAliases, readArchivesAliasing } from '../archive-aliases.js'
+import { rebuildArchiveAliases } from '../archive-aliases.js'
+import { loadSiteFromSource } from './source-context.js'
+import { findArchivesAliasingInSite } from '../site-users.js'
 import { rebuildAssetRefs } from '../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../fragment-deps.js'
 import type { ItemRef } from '../dep-sidecars.js'
@@ -101,8 +103,11 @@ async function runRestore(opts: ResolveOptions): Promise<ArchivedNameConflictRes
 
 async function runReplace(opts: ResolveOptions): Promise<ArchivedNameConflictResult> {
   // Step 1 — collect alias-pointers BEFORE purge so the flatten cascade
-  // can rewrite them after the new manifest exists.
-  const aliasingArchives = await readArchivesAliasing(opts.source.contentRoot, opts.name)
+  // can rewrite them after the new manifest exists. Read from the loaded
+  // site, not the `.gazetta/alias-targets/` index: derived state isn't
+  // committed, so a fresh clone or `git pull` can leave it missing or
+  // stale (#1139).
+  const aliasingArchives = findArchivesAliasingInSite(await loadSiteFromSource(opts.source), opts.name)
 
   // Step 2 — purge the existing archive entirely (manifest dir + sidecars).
   const itemRef: ItemRef = { source: opts.kind, name: opts.name }
@@ -142,12 +147,13 @@ async function runReplace(opts: ResolveOptions): Promise<ArchivedNameConflictRes
     if (!raw) continue
     const oldManifest = JSON.parse(raw) as ComponentManifest
     if (oldManifest.aliasOf !== opts.name) continue // no longer points here
-    const updatedManifest: ComponentManifest = { ...oldManifest, aliasOf: opts.name }
     // The `aliasOf` value is the same string (opts.name), but the
     // target is a different physical item now (live, not archived).
     // The sidecar update is therefore a no-op for the archive-aliases
-    // index — same source ref, same target name. No write needed.
-    void updatedManifest
+    // index — same source ref, same target name. No write needed; only
+    // report the cascade, once per archive (locale variants share the
+    // bare name).
+    if (!flattenedAliases.includes(ref.name)) flattenedAliases.push(ref.name)
   }
 
   return { kind: 'replaced', flattenedAliases }
@@ -193,11 +199,15 @@ async function runMoveAside(opts: ResolveOptions): Promise<ArchivedNameConflictR
   // need their aliasOf rewritten to point at... the new live item we're
   // about to create at the original name. Read each aliasing archive
   // and rewrite if needed. Q3 G1 invariant: archive aliases never chain.
-  const aliasingArchives = await readArchivesAliasing(opts.source.contentRoot, opts.name)
+  // Read from the loaded site, not the `.gazetta/alias-targets/` index:
+  // derived state isn't committed, so a fresh clone or `git pull` can
+  // leave it missing or stale (#1139).
+  const aliasingArchives = findArchivesAliasingInSite(await loadSiteFromSource(opts.source), opts.name)
   const flattenedAliases: string[] = []
   for (const ref of aliasingArchives) {
     if (ref.source !== opts.kind) continue
-    flattenedAliases.push(ref.name)
+    // Locale variants share the bare name — report each archive once.
+    if (!flattenedAliases.includes(ref.name)) flattenedAliases.push(ref.name)
   }
 
   // Step 5 — create the new live manifest at the original name.

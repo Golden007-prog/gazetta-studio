@@ -41,11 +41,11 @@
  *
  * Cut 5a shipped `archive-aliases.ts` — a per-edge sidecar at
  * `.gazetta/alias-targets/{aliasTarget}/{encoded-source-item}`. The
- * archive route writes it on archive-with-aliasOf; the purge route
- * reads it (via `readArchivesAliasing`) for the alias-pointers part of
- * the purge-blocked check. Per `team-preferences.md` rule 24: at the
- * 5K-page envelope, walking every manifest to find aliases is ~30s on
- * cloud; the sidecar is ~5ms `readDir`. Same pattern as `asset-refs`.
+ * archive route writes it on archive-with-aliasOf. The purge route no
+ * longer reads it: the index is derived state and isn't committed, so
+ * a fresh clone or a `git pull` can leave it missing or stale (#1139).
+ * The purge-blocked check finds aliasing archives from the loaded site
+ * instead — an in-memory pass with no storage reads.
  *
  * # Purge-blocked: one 409 with both arrays (Q4 lock D1)
  *
@@ -82,9 +82,11 @@ import { requireCapability } from '../middleware/capability.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import type { ItemRef } from '../../dep-sidecars.js'
-import { readArchivesAliasing, rebuildArchiveAliases } from '../../archive-aliases.js'
+import type { Site } from '../../site-loader.js'
+import { findArchivesAliasingInSite, findFragmentUsersInSite } from '../../site-users.js'
+import { rebuildArchiveAliases } from '../../archive-aliases.js'
 import { rebuildAssetRefs } from '../../assets/asset-deps.js'
-import { rebuildFragmentDeps, readDepsForFragment } from '../../fragment-deps.js'
+import { rebuildFragmentDeps } from '../../fragment-deps.js'
 import {
   type AliasPointer,
   type ArchiveHasLiveRefs,
@@ -250,7 +252,7 @@ export async function handleArchive(
   // Only fragments can be referenced from other items today (pages
   // can't be embedded). Pages get the check trivially-pass.
   if (!aliasOf && !force && manifest.archived !== true) {
-    const liveRefs = await collectLiveRefs(source, handle, site, name)
+    const liveRefs = collectLiveRefs(handle, site, name)
     if (liveRefs.length > 0) {
       const blocked: ArchiveHasLiveRefs = { code: 'ARCHIVE_HAS_LIVE_REFS', liveRefs }
       return c.json(blocked, 409)
@@ -309,7 +311,7 @@ export async function handleArchive(
   if (aliasOf) archiveMetadata.aliasOf = aliasOf
   if (force) {
     archiveMetadata.forced = true
-    const bypassedRefs = await collectLiveRefs(source, handle, site, name)
+    const bypassedRefs = collectLiveRefs(handle, site, name)
     if (bypassedRefs.length > 0) archiveMetadata.bypassedRefs = bypassedRefs
   }
   // Cut 14: when archiving an item in `pending-review`, emit the
@@ -500,8 +502,8 @@ export async function handlePurge(
   // both arrays). `?force=true` bypasses both per Q5 lock E1; admin
   // role gate is enforced by `requireCapability('delete:*')` paired
   // with the audit metadata recording what was bypassed.
-  const aliases = await collectAliases(source, name)
-  const liveRefs = await collectLiveRefs(source, handle, site, name)
+  const aliases = collectAliases(site, name)
+  const liveRefs = collectLiveRefs(handle, site, name)
 
   if (!force && (aliases.length > 0 || liveRefs.length > 0)) {
     const blocked: PurgeBlocked = { code: 'DELETE_BLOCKED', aliases, liveRefs }
@@ -580,7 +582,7 @@ export async function handlePurge(
 // ─── Helpers ──────────────────────────────────────────────────────────
 
 function collectLocaleVariants(
-  site: import('../../site-loader.js').Site,
+  site: Site,
   handle: ItemHandle,
   name: string,
 ): Array<[string, PageManifest | FragmentManifest]> {
@@ -642,47 +644,34 @@ function stripArchiveFields(manifest: ComponentManifest): ComponentManifest {
 }
 
 /**
- * Read every archive whose `aliasOf` points at `name`. Per Cut 5a's
- * sidecar pattern this is one `readDir`; at the 5K-page envelope
- * that's sub-millisecond on filesystem and ~5ms on cloud — well
- * under the admin SLA per `team-preferences.md` rule 24.
+ * Read every archive whose `aliasOf` points at `name` from the loaded
+ * site, with the same extraction as the `alias-targets` index builder.
+ * The index is derived state and isn't committed, so a fresh clone or
+ * a `git pull` can leave it missing or stale (#1139); an in-memory
+ * pass over the site has no storage reads and is milliseconds at the
+ * 5K-page envelope. Locale variants share their parent's archive
+ * state, so results are deduped to bare names.
  */
-async function collectAliases(
-  source: import('../source-context.js').SourceContext,
-  name: string,
-): Promise<AliasPointer[]> {
-  const refs = await readArchivesAliasing(source.contentRoot, name)
-  // ItemRef.source is `'page' | 'fragment'`; both are valid kinds
-  // for the AliasPointer. Locale variants don't show up in this
-  // index because the alias-aware renderer resolves at the bare
-  // name — locale variants share their parent's archive state.
-  return refs
-    .filter(r => r.source === 'page' || r.source === 'fragment')
-    .map(r => ({ kind: r.source as 'page' | 'fragment', name: r.name }))
+function collectAliases(site: Site, name: string): AliasPointer[] {
+  const aliases: AliasPointer[] = []
+  const seen = new Set<string>()
+  for (const ref of findArchivesAliasingInSite(site, name)) {
+    const key = `${ref.source}:${ref.name}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    aliases.push({ kind: ref.source, name: ref.name })
+  }
+  return aliases
 }
 
 /**
- * Collect live (non-archived) page/fragment refs for the target name.
- * Fragment scope: walk `fragment-deps` reverse-dep sidecars; discard
- * any referencing item that is itself archived (those are aliased,
- * not live). Page scope: pages aren't fragment-referenced, but pages
- * CAN be aliased by other archives (collected separately above).
+ * Collect live (non-archived) page/fragment refs for the target name
+ * from the loaded site, with the same `@fragment` extraction as the
+ * `fragment-deps` index builder. The index is derived state and isn't
+ * committed, so a fresh clone or a `git pull` can leave it missing or
+ * stale (#1139). Only fragments have referrers tracked this way.
  */
-async function collectLiveRefs(
-  source: import('../source-context.js').SourceContext,
-  handle: ItemHandle,
-  site: import('../../site-loader.js').Site,
-  name: string,
-): Promise<LiveRef[]> {
+function collectLiveRefs(handle: ItemHandle, site: Site, name: string): LiveRef[] {
   if (handle.scopeKind !== 'fragment') return []
-  const refs = await readDepsForFragment(source.contentRoot, name)
-  const live: LiveRef[] = []
-  for (const ref of refs) {
-    if (ref.source !== 'page' && ref.source !== 'fragment') continue
-    const referrer = ref.source === 'page' ? site.pages.get(ref.name) : site.fragments.get(ref.name)
-    if (!referrer) continue
-    if (referrer.archived === true) continue
-    live.push({ kind: ref.source, name: ref.name })
-  }
-  return live
+  return findFragmentUsersInSite(site, name).map(ref => ({ kind: ref.source, name: ref.name }))
 }

@@ -44,8 +44,13 @@ relations.
 Used by:
 - `findDependentsFromSidecars` — "publishing `@header` affects pages.home,
   pages.about, fragments.layout" via BFS on `.gazetta/fragment-deps/`.
-- Asset library delete-block check — refuses to delete an asset while any
-  `.gazetta/asset-refs/{asset}/*` entry exists.
+
+These indices are derived state and are **not committed** — a fresh clone or a
+`git pull` can leave them missing or stale. Checks that refuse or rewrite data
+(purge blocked-by-aliases/live-refs, rename + name-conflict flatten cascades,
+asset delete's in-use check) therefore never read them; they scan the loaded
+site in memory via [site-users.ts](../packages/gazetta/src/site-users.ts) with
+the same extraction as the index builders (#1139).
 
 Why per-edge rather than aggregated `index/fragments.json`: per-edge files give
 multi-instance write correctness (concurrent admins on different items don't

@@ -15,7 +15,7 @@
  * Single responsibility: policy — "either delete cleanly or refuse with a
  * reason." Owns the three-step flow and nothing else:
  *   - reads manifest (via `manifest.ts`)
- *   - scans refs (via `find-refs.ts`)
+ *   - scans refs (via `site-users.ts` over the loaded site)
  *   - enumerates paths (via `asset-paths.ts`) and removes them
  *     idempotently (via `providers/_rm-ignore-missing.ts`)
  *
@@ -40,9 +40,10 @@ import { createContentRoot } from '../content-root.js'
 import { rmIgnoreMissing } from '../providers/_rm-ignore-missing.js'
 import { assetPathsInRemovalOrder, enumerateAssetStoragePaths } from './asset-paths.js'
 import { AssetInUseError, AssetStorageError } from './errors.js'
-import { findAssetRefs } from './find-refs.js'
 import { readManifest } from './manifest.js'
-import { itemRefToAssetRef, readRefsForAsset } from './asset-deps.js'
+import { scanManifestForAsset } from './scan-manifest-for-asset.js'
+import { allFragmentEntries, allPageEntries, loadSite, type Site } from '../site-loader.js'
+import type { AssetRef } from './refs.js'
 
 export interface DeleteAssetInput {
   /** Storage holding both the asset and the content tree. */
@@ -73,6 +74,22 @@ export interface DeleteAssetInput {
    * with other operations.
    */
   contentRoot?: ContentRoot
+  /**
+   * Optional already-loaded site for the ref scan. The admin route
+   * passes the source's cached site; when omitted, the site is loaded
+   * here (the path tests and other direct callers take).
+   */
+  site?: Site
+}
+
+function manifestPath(
+  root: 'pages' | 'fragments',
+  itemName: string,
+  baseName: 'page' | 'fragment',
+  locale: string | undefined,
+): string {
+  const file = locale ? `${baseName}.${locale}.json` : `${baseName}.json`
+  return `${root}/${itemName}/${file}`
 }
 
 /**
@@ -85,32 +102,34 @@ export async function deleteAsset(input: DeleteAssetInput): Promise<void> {
   // Step 1 — read manifest. Throws AssetManifestNotFoundError when missing.
   const manifest = await readManifest(input.storage, input.assetsRoot, input.assetName)
 
-  // Step 2 — scan for refs.
-  //
-  // Fast path: read the per-edge asset-refs sidecars. O(1) directory
-  // listing under the asset's `.gazetta/asset-refs/{name}/` dir.
-  // Sidecars are populated by save handlers + publish + reindex CLI.
-  //
-  // Fallback: if the sidecar dir is empty AND we suspect drift (e.g.,
-  // freshly-cloned source where backfill hasn't run), fall through to
-  // the manifest walk for safety. The walk catches refs that the
-  // sidecar index would have missed for any reason — high-stakes
-  // operation (delete loses data), worth the extra ~30s on cloud at
-  // N=1000.
+  // Step 2 — scan for refs in the loaded site. The `.gazetta/
+  // asset-refs/` index is derived state and isn't committed, so a
+  // fresh clone or a `git pull` can leave it missing or stale (#1139);
+  // the scan walks the in-memory manifests with the same `_asset`
+  // extraction as the index builder — no storage reads beyond the
+  // site load, milliseconds at the 5K-page envelope.
   const contentRoot = input.contentRoot ?? createContentRoot(input.storage, input.siteDir)
-  const sidecarRefs = await readRefsForAsset(contentRoot, input.assetName)
-  let refs
-  if (sidecarRefs.length > 0) {
-    refs = sidecarRefs.map(itemRefToAssetRef)
-  } else {
-    // Sidecar dir empty or missing — could mean truly zero refs OR
-    // index drift / not-yet-backfilled. Walk to confirm; safe-on-doubt.
-    refs = await findAssetRefs({
-      storage: input.storage,
-      siteDir: input.siteDir,
-      assetName: input.assetName,
-      manifest: input.manifest,
-    })
+  const site = input.site ?? (await loadSite({ contentRoot, manifest: input.manifest ?? { name: '(refs-scan)' } }))
+  const refs: AssetRef[] = []
+  for (const { name, page, locale } of allPageEntries(site)) {
+    refs.push(
+      ...scanManifestForAsset({
+        manifest: page,
+        manifestPath: manifestPath('pages', name, 'page', locale),
+        source: 'page',
+        assetName: input.assetName,
+      }),
+    )
+  }
+  for (const { name, fragment, locale } of allFragmentEntries(site)) {
+    refs.push(
+      ...scanManifestForAsset({
+        manifest: fragment,
+        manifestPath: manifestPath('fragments', name, 'fragment', locale),
+        source: 'fragment',
+        assetName: input.assetName,
+      }),
+    )
   }
 
   // Step 3 — refuse if in use.

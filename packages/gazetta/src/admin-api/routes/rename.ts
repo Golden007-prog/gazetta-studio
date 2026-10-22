@@ -52,13 +52,15 @@
  *   - SRP: this module owns rename's three-step composition. Doesn't
  *     reuse archive routes' HTTP handlers (they audit independently);
  *     does reuse the `archive-aliases` sidecar primitives.
- *   - DIP: depends on `rebuildArchiveAliases` + `readArchivesAliasing`
+ *   - DIP: depends on `rebuildArchiveAliases` + `findArchivesAliasingInSite`
  *     primitives, not their per-edge sidecar implementation details.
  */
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { join } from 'node:path'
 import type { SourceContextResolver } from '../source-context.js'
+import type { Site } from '../../site-loader.js'
+import { findArchivesAliasingInSite } from '../../site-users.js'
 import { loadSiteFromSource } from '../source-context.js'
 import type { SourceContext } from '../source-context.js'
 import { recordWrite } from '../../history-recorder.js'
@@ -66,7 +68,7 @@ import { requireCapability } from '../middleware/capability.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import type { ItemRef } from '../../dep-sidecars.js'
-import { readArchivesAliasing, rebuildArchiveAliases } from '../../archive-aliases.js'
+import { rebuildArchiveAliases } from '../../archive-aliases.js'
 import { rebuildAssetRefs } from '../../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../../fragment-deps.js'
 import {
@@ -201,7 +203,7 @@ async function handleRename(c: Context<AuditEnv>, resolve: SourceContextResolver
     // Q3 G1 invariant: any archive whose aliasOf was fromName now
     // points at toName instead. Parallel rewrites — each touches a
     // distinct manifest; no contention.
-    const flattened = await flattenAliasChain(source, handle, fromName, toName)
+    const flattened = await flattenAliasChain(source, site, handle, fromName, toName)
     completed.push('flatten-cascade')
 
     // ─── Cache invalidation ─────────────────────────────────────────
@@ -379,18 +381,22 @@ async function archiveOld(
 /**
  * Walk archives where aliasOf === fromName; rewrite each to
  * aliasOf: toName. Returns the names of rewritten archives for the
- * audit trail.
+ * audit trail. The aliasing archives come from the loaded site, not
+ * the `.gazetta/alias-targets/` index: derived state isn't committed,
+ * so a fresh clone or `git pull` can leave it missing or stale
+ * (#1139).
  *
  * Per Q4 D1+D5: synchronous parallel rewrites. Each rewrite touches
  * a distinct manifest; no contention.
  */
 async function flattenAliasChain(
   source: SourceContext,
+  site: Site,
   handle: ItemHandle,
   fromName: string,
   toName: string,
 ): Promise<string[]> {
-  const aliasingArchives = await readArchivesAliasing(source.contentRoot, fromName)
+  const aliasingArchives = findArchivesAliasingInSite(site, fromName)
   if (aliasingArchives.length === 0) return []
 
   // Read each archive's current manifest, rewrite its aliasOf, write
