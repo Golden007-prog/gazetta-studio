@@ -132,10 +132,15 @@ Archive state lives on the manifest itself, as additive optional fields:
 
 | State | Behavior at render time |
 |---|---|
-| Archived, `aliasOf: 'newname'` | Renderer transparently follows the alias. `@oldname` resolves as `@newname`. Page route `/oldname` emits 301. On ESI targets, serving also follows a fragment's alias marker, for pages published before the fragment was archived. |
+| Archived, `aliasOf: 'newname'` | Renderer transparently follows the alias. `@oldname` resolves as `@newname`. Page route `/oldname` emits 301. On ESI targets, a page's placeholder names the fragment it references, so serving follows the archived fragment's alias marker. |
 | Archived, no `aliasOf` (pure soft-delete) | Validator warning at save + scanner; render-time emits 410 (page) or render-time error (fragment). An ESI page that still uses such a fragment is served without it (200, with a comment in its place, as for a missing fragment), not 410: the page isn't gone, only one part of it. |
 
 Decided: maintainer, 2026-10-22 (#1124): an ESI page that uses a fragment archived without an alias is served without it. Serving that follows a fragment's alias marker follows from F1.
+
+| Rejected | Why |
+|---|---|
+| 410 for the whole page | Every page that uses the fragment would answer "Gone", and search engines would drop pages that still exist |
+| An error page (500) | Visitors see an error on a page that still exists, and search engines retry it later |
 
 **Auxiliary validators** (Q11):
 - `referenced-archived-without-alias` (warn) — manifest references `@oldname`, `@oldname` archived without alias
@@ -364,14 +369,19 @@ dropped — it would have doubled the surface for no real gain.
 
 | Target type | Archive with `aliasOf` | Archive without `aliasOf` |
 |---|---|---|
-| **`static`** with worker | HTML carries `<!-- gazetta:archived alias=X -->` marker. Worker reads first 200 bytes; emits 301 to X's route in the request's language (`/fr/about` with alias `home` → `/fr`). | HTML carries `<!-- gazetta:archived gone -->` marker. Worker emits 410. |
-| **`static`** without worker | `_redirects` regenerated at publish from walked archived manifests (host-glue), one row per language the target publishes (`/fr/landing  /fr/welcome  301`; default-language rows only until #1130). Plain static can't emit 410; falls to host's natural 404. Operator-config opt-in: emit a 200 "Gone" placeholder page. |
+| **`static`** with worker | HTML carries `<!-- gazetta:archived alias=X -->` marker. Worker reads first 200 bytes; emits 301 to X's route in the request's language (`/fr/about` with alias `home` → `/fr`), or to X's default-language route when X has no version in that language. | HTML carries `<!-- gazetta:archived gone -->` marker. Worker emits 410. |
+| **`static`** without worker | `_redirects` regenerated at publish from walked archived manifests (host-glue), one row per language the target publishes (`/fr/landing  /fr/welcome  301`). Plain static can't emit 410; falls to host's natural 404. Operator-config opt-in: emit a 200 "Gone" placeholder page. |
 | **`esi`** | Same HTML marker as static — worker reads first 200 bytes of `pages/{name}/index.html` BEFORE composing. Marker present → emit 301 without composing. | Same — marker present → emit 410 without composing. |
 | **`dynamic`** | Origin emits HTML marker OR returns 301 directly. Same marker grammar as static / ESI. | Same — 410. |
 
 Decided: maintainer, 2026-10-22 (#1124): an alias redirect keeps the request's language, and `_redirects` has one row per language the target publishes.
 
-On a plain-static target, when the alias's destination has no version in a language, that language's row points at the destination's default-language page (`/fr/landing  /welcome  301`). Static publish writes a language only where the page has it, so `/fr/welcome` doesn't exist; a worker target shows the default-language page there, and this row gives the same content.
+| Rejected | Why |
+|---|---|
+| Redirect in the default language (`/fr/about` → `/`) | The French visitor lands on the English page, and nothing sends them back: the worker has no Accept-Language redirect |
+| `_redirects` rows for the default language only | `/fr/landing` on a plain-static site serves its blank archive marker, or a 404 |
+
+On a plain-static target, when the alias's destination has no version in a language, that language's row points at the destination's default-language page (`/fr/landing  /welcome  301`). Static publish writes a language only where the page has it, so `/fr/welcome` doesn't exist there. (An ESI target serves the default-language page at `/fr/welcome`, so its redirects keep the language.)
 
 Decided: maintainer, 2026-10-22 (#1124)
 
@@ -379,6 +389,14 @@ Decided: maintainer, 2026-10-22 (#1124)
 |---|---|
 | Keep the row at the destination in that language (`/fr/landing  /fr/welcome  301`) | Static publish writes no `/fr/welcome`, so the redirect lands on a 404 |
 | No row for that language | `/fr/landing` then serves its blank archive marker, or a 404 |
+
+On a static target served by `gazetta serve` or a worker, the archive's 301 does the same: when the destination has no version in the request's language, it goes to the destination's default-language page. Today the CLI starts `gazetta serve` without the site's languages, so its redirects send every language to the default page; [#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138) passes them, and this rule keeps that fix from sending `/fr/landing` to a 404 at `/fr/welcome`.
+
+Decided: maintainer, 2026-10-22 (#1124)
+
+| Rejected | Why |
+|---|---|
+| Keep the request's language when serving | Once #1138 passes the languages, `/fr/landing` → `/fr/welcome` answers 404 on a static target served by `gazetta serve`, while the same target on a plain host redirects to `/welcome` |
 
 **Archived page HTML body content:**
 
@@ -399,7 +417,7 @@ page is dead weight regardless.
 ```
 
 - Must be the first line of the file (worker reads first 200 bytes; absence falls through to normal serve)
-- `<bare-name>` is the target name. The worker resolves it with `deriveRoute()` plus the request's locale prefix, the way the site loader builds locale routes, so visitors stay in their language (follows from the Q10 table's static-with-worker row)
+- `<bare-name>` is the target name. The worker resolves it with `deriveRoute()` plus the request's locale prefix, the way the site loader builds locale routes, so visitors stay in their language. On a static target it adds the prefix only when the destination has a version in that language (follows from the Q10 table's static-with-worker row)
 - Single-line; no nested HTML; no whitespace games
 
 Storage providers' `readBytes` supports range reads (per `design-media.md`); first-200-bytes is one cheap read, an order of magnitude smaller than a typical HTML file.
