@@ -133,7 +133,9 @@ Archive state lives on the manifest itself, as additive optional fields:
 | State | Behavior at render time |
 |---|---|
 | Archived, `aliasOf: 'newname'` | Renderer transparently follows the alias. `@oldname` resolves as `@newname`. Page route `/oldname` emits 301. On ESI targets, serving also follows a fragment's alias marker, for pages published before the fragment was archived. |
-| Archived, no `aliasOf` (pure soft-delete) | Validator warning at save + scanner; render-time emits 410 (page) or render-time error (fragment). An ESI page that still uses such a fragment is served without it (200, with a comment in its place, as for a missing fragment), not 410: the page isn't gone, only one part of it (decided 2026-10-22, #1118). |
+| Archived, no `aliasOf` (pure soft-delete) | Validator warning at save + scanner; render-time emits 410 (page) or render-time error (fragment). An ESI page that still uses such a fragment is served without it (200, with a comment in its place, as for a missing fragment), not 410: the page isn't gone, only one part of it. |
+
+Decided: maintainer, 2026-10-22 (#1124): an ESI page that uses a fragment archived without an alias is served without it. Serving that follows a fragment's alias marker follows from F1.
 
 **Auxiliary validators** (Q11):
 - `referenced-archived-without-alias` (warn) — manifest references `@oldname`, `@oldname` archived without alias
@@ -367,6 +369,8 @@ dropped — it would have doubled the surface for no real gain.
 | **`esi`** | Same HTML marker as static — worker reads first 200 bytes of `pages/{name}/index.html` BEFORE composing. Marker present → emit 301 without composing. | Same — marker present → emit 410 without composing. |
 | **`dynamic`** | Origin emits HTML marker OR returns 301 directly. Same marker grammar as static / ESI. | Same — 410. |
 
+Decided: maintainer, 2026-10-22 (#1124): an alias redirect keeps the request's language, and `_redirects` has one row per language the target publishes.
+
 **Archived page HTML body content:**
 
 When a page is archived, the publish flow writes ONLY the marker line to
@@ -386,7 +390,7 @@ page is dead weight regardless.
 ```
 
 - Must be the first line of the file (worker reads first 200 bytes; absence falls through to normal serve)
-- `<bare-name>` is the target name. The worker resolves it with `deriveRoute()` plus the request's locale prefix, the way the site loader builds locale routes, so visitors stay in their language (decided 2026-10-22, #1118)
+- `<bare-name>` is the target name. The worker resolves it with `deriveRoute()` plus the request's locale prefix, the way the site loader builds locale routes, so visitors stay in their language (follows from the Q10 table's static-with-worker row)
 - Single-line; no nested HTML; no whitespace games
 
 Storage providers' `readBytes` supports range reads (per `design-media.md`); first-200-bytes is one cheap read, an order of magnitude smaller than a typical HTML file.
