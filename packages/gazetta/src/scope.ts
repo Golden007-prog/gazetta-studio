@@ -1,5 +1,4 @@
 import postcss from 'postcss'
-// @ts-expect-error no type declarations available
 import prefixer from 'postcss-prefix-selector'
 
 /**

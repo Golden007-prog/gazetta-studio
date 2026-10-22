@@ -65,17 +65,15 @@ describe('archiveResponse', () => {
     expect(res.headers.get('cache-control')).toBe('max-age=300')
   })
 
-  it.each([
-    '/evil.example',
-    '//evil.example',
-    '\\evil.example',
-    'docs\\page',
-  ])('fails closed for an unsafe alias target %j', target => {
-    const res = archiveResponse(SAFE_MARKER(target))!
-    expect(res.status).toBe(410)
-    expect(res.headers.get('location')).toBeNull()
-    expect(res.headers.get('cache-control')).toBe('max-age=300')
-  })
+  it.each(['/evil.example', '//evil.example', '\\evil.example', 'docs\\page'])(
+    'fails closed for an unsafe alias target %j',
+    target => {
+      const res = archiveResponse(SAFE_MARKER(target))!
+      expect(res.status).toBe(410)
+      expect(res.headers.get('location')).toBeNull()
+      expect(res.headers.get('cache-control')).toBe('max-age=300')
+    },
+  )
 
   it('encodes malformed UTF-16 instead of throwing', () => {
     const res = archiveResponse(SAFE_MARKER('\uD800'))!

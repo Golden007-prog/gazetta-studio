@@ -29,20 +29,18 @@ import {
 
 describe('Cut #516 — review-workflow capability vocabulary', () => {
   describe('config-load validation accepts the four new capabilities', () => {
-    it.each([
-      ['review:submit'],
-      ['review:approve'],
-      ['publish:request'],
-      ['publish:approve'],
-    ])('AuthConfigSchema accepts a custom role declaring %s', cap => {
-      const parsed = AuthConfigSchema.safeParse({
-        trust: 'none',
-        roles: {
-          opCustom: { capabilities: [cap] },
-        },
-      })
-      expect(parsed.success).toBe(true)
-    })
+    it.each([['review:submit'], ['review:approve'], ['publish:request'], ['publish:approve']])(
+      'AuthConfigSchema accepts a custom role declaring %s',
+      cap => {
+        const parsed = AuthConfigSchema.safeParse({
+          trust: 'none',
+          roles: {
+            opCustom: { capabilities: [cap] },
+          },
+        })
+        expect(parsed.success).toBe(true)
+      },
+    )
 
     it('validateCustomRoles passes with all four capabilities declared together', () => {
       const issues = validateCustomRoles({
@@ -56,18 +54,15 @@ describe('Cut #516 — review-workflow capability vocabulary', () => {
     // would sneak through and silently grant nothing while the
     // operator believes it does. Same for every other reserved
     // prefix (`publish:foo`, `edit:nonsense`, etc.).
-    it.each([
-      ['review:foo'],
-      ['publish:foo'],
-      ['review:bar'],
-      ['edit:nonsense'],
-      ['read:made-up'],
-    ])('rejects %s as unknown via validateCustomRoles', cap => {
-      const issues = validateCustomRoles({ broken: [cap] })
-      expect(issues).toHaveLength(1)
-      expect(issues[0]).toContain(cap)
-      expect(issues[0]).toContain('unknown capability')
-    })
+    it.each([['review:foo'], ['publish:foo'], ['review:bar'], ['edit:nonsense'], ['read:made-up']])(
+      'rejects %s as unknown via validateCustomRoles',
+      cap => {
+        const issues = validateCustomRoles({ broken: [cap] })
+        expect(issues).toHaveLength(1)
+        expect(issues[0]).toContain(cap)
+        expect(issues[0]).toContain('unknown capability')
+      },
+    )
 
     it('reports one issue per unknown capability when a role declares several', () => {
       // Each bad cap surfaces separately so operators see every

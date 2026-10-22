@@ -97,19 +97,18 @@ describe('the noindex checkbox', () => {
     expect(store.pendingFor(home)).toStrictEqual({ robots: 'noindex, nofollow' })
   })
 
-  it.each([
-    'nofollow,noindex',
-    'nofollow',
-    undefined,
-  ])('ticked and unticked again on robots %j clears the entry', robots => {
-    const store = useEditorMetadataStore()
-    const loaded = robots === undefined ? {} : { robots }
-    const startsOn = robots?.includes('noindex') ?? false
-    store.setNoindex(home, loaded, !startsOn)
-    expect(store.hasPendingFor(home)).toBe(true)
-    store.setNoindex(home, loaded, startsOn)
-    expect(store.hasPendingFor(home)).toBe(false)
-  })
+  it.each(['nofollow,noindex', 'nofollow', undefined])(
+    'ticked and unticked again on robots %j clears the entry',
+    robots => {
+      const store = useEditorMetadataStore()
+      const loaded = robots === undefined ? {} : { robots }
+      const startsOn = robots?.includes('noindex') ?? false
+      store.setNoindex(home, loaded, !startsOn)
+      expect(store.hasPendingFor(home)).toBe(true)
+      store.setNoindex(home, loaded, startsOn)
+      expect(store.hasPendingFor(home)).toBe(false)
+    },
+  )
 })
 
 describe('restored drafts', () => {

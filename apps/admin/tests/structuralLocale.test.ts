@@ -24,13 +24,12 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('structural keys carry the locale', () => {
-  it.each([
-    { ...home },
-    { ...home, locale: 'fr' },
-    { kind: 'fragment' as const, name: 'a:b/c' },
-  ])('round-trips %o', key => {
-    expect(manifestFileKeyFromString(manifestFileKeyToString(key))).toEqual(key)
-  })
+  it.each([{ ...home }, { ...home, locale: 'fr' }, { kind: 'fragment' as const, name: 'a:b/c' }])(
+    'round-trips %o',
+    key => {
+      expect(manifestFileKeyFromString(manifestFileKeyToString(key))).toEqual(key)
+    },
+  )
 
   it.each(['page:home', '["page"]', '["blog","x",""]', '["page",1,""]'])('rejects %s', bad => {
     expect(() => manifestFileKeyFromString(bad)).toThrow()

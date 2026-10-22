@@ -53,18 +53,18 @@ describe('site store reads', () => {
     expect(useSiteStore().error).toBeNull()
   })
 
-  it.each([
-    'Failed to fetch',
-    '500 Internal Server Error',
-  ])('fetch fails (%s): shows the last answer, no error', async message => {
-    serve(['home', 'about'])
-    await useSiteStore().load(0)
-    vi.restoreAllMocks()
-    fail(message)
-    await useSiteStore().load(0)
-    expect(names()).toEqual(['home', 'about'])
-    expect(useSiteStore().error).toBeNull()
-  })
+  it.each(['Failed to fetch', '500 Internal Server Error'])(
+    'fetch fails (%s): shows the last answer, no error',
+    async message => {
+      serve(['home', 'about'])
+      await useSiteStore().load(0)
+      vi.restoreAllMocks()
+      fail(message)
+      await useSiteStore().load(0)
+      expect(names()).toEqual(['home', 'about'])
+      expect(useSiteStore().error).toBeNull()
+    },
+  )
 
   it('offline: answers from the cache without calling the API', async () => {
     serve(['home'])
