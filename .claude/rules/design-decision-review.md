@@ -233,7 +233,7 @@ Right after the author opens an in-scope PR, in the same session, so escalations
 Four rules:
 - **Each verdict names the commit it checked.** If anything is pushed afterwards, the skill runs again before merge, so an approval of an older version doesn't count: the "check against the PR's head" lesson from #1122.
 - **Only the skill's own verdict counts.** `/review-prs` counts a verdict only in a comment posted by the account the session posts as, on a PR that account opened; otherwise it runs the skill in full. The skill counts verdicts the same way (#1136). The repo is public, so anyone can post the marker, and a forged one would get a PR merged unreviewed (Seer on #1133). Merged rule files load into every later session, including the bots, which run with `--dangerously-skip-permissions` (`bots/_lib/claude.ts`).
-- **A verdict also names `main`'s commit, and stops counting when `main` changed under the PR.** If a file the PR changes has changed on `main` since that commit (`git diff --name-only <commit>..origin/main`), `/review-prs` and the merge step run the skill again. GitHub stops only textual conflicts, so a PR checked against a doc another PR then changed would otherwise merge unchecked against it: #1120 and #1124 both edit `design-live-check.md` and `design-redirects.md` (Fable on #1133).
+- **A verdict also names the PR's base, and stops counting when `main` changed under the PR.** The base is the `main` commit the PR's files were checked against (`git merge-base <head> origin/main`). Before the checks, and again before merging, if a file the PR changes has changed on `main` since the base (`git diff --name-only <base>..origin/main`), the author rebases the PR onto `main` and pushes. The push voids the verdict (the first rule), so the skill checks `main`'s text, which is what the merge produces. GitHub stops only textual conflicts: when two PRs edit different parts of one doc, the second would otherwise merge without being checked against the first's text. Edits that conflict already force a rebase and a push.
 - **The maintainer can ask for a run at any time** ("review #1120").
 
 Decided: maintainer, 2026-10-22 (#1133)
@@ -246,7 +246,9 @@ Decided: maintainer, 2026-10-22 (#1133)
 | On a schedule, from a bot | Not possible: the transcripts are on this machine (Q2) |
 | Any comment carrying the approval marker for the head counts | Anyone can post one: a contributor's PR, or the maintainer's PR still waiting for answers, would be merged unreviewed |
 | `/review-prs` never trusts a verdict and always runs the skill in full | About 25 minutes each time it meets a PR that already has a passing verdict for its head |
-| A verdict counts while the head is unchanged, whatever merged to `main` since | GitHub stops only textual conflicts, so a decision is never re-read against a doc another PR changed meanwhile |
+| A verdict counts while the head is unchanged, whatever merged to `main` since | GitHub stops only textual conflicts, so a decision isn't re-read against a doc another PR changed meanwhile, unless the edits conflict |
+| The verdict names `main`'s commit when the checks ran, and a later change to the PR's files runs the skill again without a rebase (the 16:03 answer) | The checks read the PR's own files, which are `main`'s as of the PR's base: changes `main` made before the check are never read, and a re-run reads the same files and passes |
+| No rebase: a re-run also gives the checker `main`'s changes to the PR's files, as a diff next to the PR's | The checker doesn't read the text the merge produces |
 
 ### Q9 — How the lookup works
 
@@ -323,6 +325,7 @@ Follows from Q1–Q12; [`SKILL.md`](../skills/review-decisions/SKILL.md) has the
 ```
 in-scope PR, opened in a session with the maintainer (Q7, Q8)
   │  held? → stop (Q9)
+  │  main changed the PR's files since its base? → rebase onto main and push (Q8)
   ▼
 lookup: bots/_lib/decision-answers.ts --at <each listed timestamp> (Q2, Q9)
   ▼
@@ -340,9 +343,10 @@ mechanical findings → the author fixes them, asks Seer again and re-runs,
   at most 3 rounds; a Fable pass re-runs only on decisions that changed (Q4, Q5)
 decision findings and concerns → picker questions, one batch per PR (Q3a, Q4)
   ▼
-verdict comment naming the commit it checked and main's (Q8)
-  → merge if the head is unchanged, main didn't change the PR's files,
-    and there's no hold (Q6, Q8, Q9)
+verdict comment naming the commit it checked and the PR's base (Q8)
+  → merge if the head is unchanged, main hasn't changed the PR's files since
+    the base (otherwise rebase, push and run again), and there's no hold
+    (Q6, Q8, Q9)
   → one line to the maintainer (Q6)
 ```
 
@@ -413,4 +417,4 @@ Choices made while building #1132, each carrying out a decision above.
 Until #1136 lands, #1132's code does less than the decisions above. The author applies the missing rules by hand on each run and says so in the verdict, since Q9 stays as written and Q12 has the skill finish #1133 and cut 4's runs before #1136 lands.
 - **The lookup (Q9)** accepts four fakes the first run's checker built: an answer appended later with an earlier timestamp, a second result for one picker question, an entry with no parent in the middle of the file, and a script run without naming the transcript. It doesn't scan sub-agent transcripts or the content of Write and Edit calls.
 - **Its output** can be cut at 64 KB when piped to a slow reader, because the script calls `process.exit` right after writing; `transcriptWrites` is the last field.
-- **`SKILL.md`** doesn't put `CLAUDE.md` or `bots/README.md` in scope, take the skill's own files out, or check the PR's author (Q7); it runs a Fable second opinion on every PR, without waiting for Seer, and re-runs it every round, while Q5 now has the checker read the AI reviewers' comments as the second opinion, with Seer asked again after each push, offer a Fable pass for every new design doc or ADR and otherwise when one would help, and run one only when the maintainer asks; it gives the checker every comment, not only Seer's and Sourcery's (Q3a); and its verdict doesn't name `main`'s commit, nor does its merge pass `--match-head-commit` or check whether `main` changed the PR's files (Q8).
+- **`SKILL.md`** doesn't put `CLAUDE.md` or `bots/README.md` in scope, take the skill's own files out, or check the PR's author (Q7); it runs a Fable second opinion on every PR, without waiting for Seer, and re-runs it every round, while Q5 now has the checker read the AI reviewers' comments as the second opinion, with Seer asked again after each push, and recommend a Fable pass when one would help, with the question always asked for a new design doc or ADR, and a pass run only when the maintainer asks; its Fable agent gets the PR's comments and reviews from unfiltered endpoints, not only Seer's and Sourcery's (Q3a); and its verdict doesn't name the PR's base, it doesn't rebase a PR whose files `main` changed, and its merge doesn't pass `--match-head-commit` (Q8).
