@@ -58,7 +58,8 @@ carrying a comment marker:
 Worker-served target types (static-with-worker, ESI, dynamic) read the
 first 200 bytes of `pages/landing/index.html`, see the marker, and
 emit `301 Moved Permanently` to `/welcome` in the request's language
-(`/fr/landing` → `/fr/welcome`; follows from `design-soft-delete.md` Q10) — no
+(`/fr/landing` → `/fr/welcome`, or `/welcome` on a static target where
+`welcome` has no French version; follows from `design-soft-delete.md` Q10) — no
 composition, no body served. Cache headers on the 301 response strip
 strong caching (`Cache-Control: max-age=300`) so unarchive propagates
 quickly.
@@ -77,9 +78,23 @@ prefixes its routes use (`/landing  /welcome  301` and
 same way worker sites do (follows from `design-soft-delete.md` Q10).
 When the destination has no version in a language, that row points at
 its default-language page (`/fr/landing  /welcome  301`), since static
-publish writes no `/fr/welcome` then (same Q10). Today's code
-writes default-language rows only
-([#1130](https://github.com/gazetta-studio/gazetta-studio/issues/1130)).
+publish writes no `/fr/welcome` then (same Q10).
+
+**Cloudflare Pages limits.** Pages takes at most 2,000 static rows
+(plus 100 dynamic ones), and its documented status codes are 301, 302,
+303, 307 and 308, plus 200 for proxying, so not 410
+([Cloudflare docs](https://developers.cloudflare.com/pages/configuration/redirects/)).
+With a row per language, a four-language target reaches 2,000 rows at
+500 archived pages; publish warns past the limit. `format: 'cloudflare'`
+writes no 410 rows, so on Pages an archive without an alias gets the
+host's 404, as `design-soft-delete.md` Q10 says for plain-static
+targets ([#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149)).
+
+Decided: maintainer, 2026-10-22 (#1124)
+
+| Rejected | Why |
+|---|---|
+| Keep writing 410 rows, and don't warn past 2,000 rows | Pages lists no 410 and takes at most 2,000 rows, so rows it can't use would go unnoticed until visitors hit them |
 
 ### 410 Gone for archived items without aliasOf
 
@@ -90,11 +105,14 @@ permanently retired (drop from index), 404 implies "we couldn't find
 it but maybe it'll come back" (keep the URL in the crawl queue).
 
 Same mechanism: HTML marker `<!-- gazetta:archived gone -->` on
-worker-served targets; `_redirects` 410 row on plain-static targets
-that support it (Cloudflare Pages and Netlify both do).
+worker-served targets, and a `_redirects` 410 row for
+`format: 'netlify'` (whether Netlify honours it isn't verified).
+Cloudflare Pages can't return 410 from `_redirects`, so
+`format: 'cloudflare'` writes no such row (Cloudflare Pages limits,
+above).
 
-Plain-static hosts that don't support 410 status codes (basic S3
-static website, etc.) fall to natural 404 behavior. The capability
+Plain-static hosts that don't support 410 status codes (Cloudflare
+Pages, basic S3 static website, etc.) fall to natural 404 behavior. The capability
 gap is surfaced at four points (per `design-soft-delete.md` Q10):
 boot validate, author-time modal, validator scanner, publish gate.
 
@@ -213,6 +231,9 @@ Cloudflare Pages / Netlify (`format: 'cloudflare'` or `'netlify'`):
 /old-page    /new-page    301
 /retired     /            410
 ```
+
+`format: 'cloudflare'` leaves out the `410` rows (Cloudflare Pages
+limits, above).
 
 Sorted alphabetically by source for determinism (same input → same
 file → host CDN cache hits when republishing).

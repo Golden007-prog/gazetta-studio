@@ -72,7 +72,7 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 ### Q3 — What gets checked
 
 **Publish** — every route the publish could have changed, each with an expected answer:
-- published pages, per published language: `200` with the new version (Q4); archived with an alias: `301` to the alias route in the same language (follows from `design-soft-delete.md` Q10); archived without one: `410`;
+- published pages, per published language: `200` with the new version (Q4); archived with an alias: `301` to the alias route in the same language, or, on a static target whose alias destination has no version in that language, to the destination's default-language route (follows from `design-soft-delete.md` Q10); archived without one: `410`;
 - removed pages: `404` (or `410` if archived);
 - pages using a published fragment, from the target's `fragment-deps` index (walked transitively);
 - archives aliasing a renamed or archived page, from the target's `alias-targets` index (publish must start writing it to targets; today only `asset-refs` and `fragment-deps` are written, `publishDepIndices` in `publish-rendered.ts`);
