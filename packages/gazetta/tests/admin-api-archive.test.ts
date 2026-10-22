@@ -430,3 +430,31 @@ describe('Purge-blocked: live refs from page → fragment', () => {
     expect(body.liveRefs).toEqual([{ kind: 'page', name: 'home' }])
   })
 })
+
+describe('archive-blocked without the derived fragment-deps index', () => {
+  beforeEach(() => {
+    // The archive live-refs check scans the loaded site; the
+    // `.gazetta/fragment-deps/` index is derived state and is not
+    // required for the refusal. Seed the page ref WITHOUT any sidecar.
+    setup({
+      'pages/home/page.json': JSON.stringify({
+        template: 'page-default',
+        content: {},
+        components: ['@header'],
+      }),
+    })
+  })
+
+  it('refuses archive without aliasOf when a live page references the fragment (no sidecar)', async () => {
+    expect(await storage.exists('.gazetta/fragment-deps/header/pages.home')).toBe(false)
+
+    const res = await app.request('/api/fragments/header/archive', { method: 'POST' })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { code: string; liveRefs: Array<{ kind: string; name: string }> }
+    expect(body.code).toBe('ARCHIVE_HAS_LIVE_REFS')
+    expect(body.liveRefs).toEqual([{ kind: 'page', name: 'home' }])
+    // Manifest unchanged — the refusal preserved live state.
+    const manifest = await readJson('fragments/header/fragment.json')
+    expect(manifest.archived).toBeUndefined()
+  })
+})

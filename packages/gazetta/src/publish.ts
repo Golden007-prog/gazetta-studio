@@ -250,9 +250,9 @@ async function findFragmentDependentsImpl(
  * readDir; for transitive "X → Y → Z", BFS of 3 readDirs total.
  *
  * Compares to the legacy walk, which did one listSidecars per item
- * directory across the whole site (~N readDirs). Bench shows
- * 100×–200× speedup on cloud at N=1000. See the `perf-refs.bench.ts`
- * bench data and design-media-implementation.md for the rationale.
+ * directory across the whole site (~N readDirs). Measurements are
+ * recorded in design-media-implementation.md ("Asset refs — per-edge
+ * sidecar index").
  *
  * Handles transitive fragment→fragment dependencies via BFS: if
  * @inner is referenced by @outer which is referenced by pages/home,

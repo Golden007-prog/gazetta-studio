@@ -15,7 +15,7 @@
  * Single responsibility: policy — "either delete cleanly or refuse with a
  * reason." Owns the three-step flow and nothing else:
  *   - reads manifest (via `manifest.ts`)
- *   - scans refs (via `site-users.ts` over the loaded site)
+ *   - scans refs (`scanManifestForAsset` over the loaded site's pages and fragments)
  *   - enumerates paths (via `asset-paths.ts`) and removes them
  *     idempotently (via `providers/_rm-ignore-missing.ts`)
  *
