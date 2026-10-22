@@ -24,7 +24,7 @@ export interface SyncStatus {
 }
 
 export type CompareFn = (target: string, options?: RequestInit) => Promise<CompareResult>
-export type ListTargetsFn = () => TargetInfo[]
+type ListTargetsFn = () => TargetInfo[]
 export type ActiveTargetFn = () => string | null
 
 export interface SyncStatusStoreOptions {
