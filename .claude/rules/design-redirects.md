@@ -57,8 +57,14 @@ carrying a comment marker:
 
 Worker-served target types (static-with-worker, ESI, dynamic) read the
 first 200 bytes of `pages/landing/index.html`, see the marker, and
-emit `301 Moved Permanently` to `deriveRoute('welcome')` — no
-composition, no body served. Cache headers on the 301 response strip
+emit `301 Moved Permanently` to `/welcome` in the request's language
+(`/fr/landing` → `/fr/welcome`, or `/welcome` on a static target where
+`welcome` has no French version; follows from `design-soft-delete.md`
+Q10) — no composition, no body served. Both need the site's languages,
+which `gazetta serve` and the generated worker get with
+[#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138).
+Until then `gazetta serve` sends every language to `/welcome`, and on
+an ESI target `/fr/landing` answers 404. Cache headers on the 301 response strip
 strong caching (`Cache-Control: max-age=300`) so unarchive propagates
 quickly.
 
@@ -70,6 +76,35 @@ which the publish flow emits at the target root by walking archived
 manifests. Cloudflare Pages and Netlify both honor the file at the
 site root; the `json` format is for custom integrations.
 
+The file has one row per language the target publishes, with the
+prefixes its routes use (`/landing  /welcome  301` and
+`/fr/landing  /fr/welcome  301`), so plain-static sites redirect the
+same way worker sites do (follows from `design-soft-delete.md` Q10).
+When the destination has no version in a language, that row points at
+its default-language page (`/fr/landing  /welcome  301`), since static
+publish writes no `/fr/welcome` then (same Q10). On Netlify, the
+archived page's marker file at its route blocks these rows today
+([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)).
+
+**Cloudflare Pages limits.** Pages takes at most 2,000 static rows
+(plus 100 dynamic ones), and its documented status codes are 301, 302,
+303, 307 and 308, plus 200 for proxying, so not 410
+([Cloudflare docs](https://developers.cloudflare.com/pages/configuration/redirects/)).
+With a row per language, a four-language target reaches 2,000 rows at
+500 archived pages. Publish is to warn past the limit, and
+`format: 'cloudflare'` to write no 410 rows
+([#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149));
+until then it writes them and doesn't warn. Without a 410 row, Pages
+serves an archive without an alias from its marker file, a blank page
+with status 200; what publish should write there is
+[#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152).
+
+Decided: maintainer, 2026-10-22 (#1124)
+
+| Rejected | Why |
+|---|---|
+| Keep writing 410 rows, and don't warn past 2,000 rows | Pages lists no 410 and takes at most 2,000 rows, so rows it can't use would go unnoticed until visitors hit them |
+
 ### 410 Gone for archived items without aliasOf
 
 A page archived without `aliasOf` is a pure soft-delete — the URL
@@ -79,11 +114,16 @@ permanently retired (drop from index), 404 implies "we couldn't find
 it but maybe it'll come back" (keep the URL in the crawl queue).
 
 Same mechanism: HTML marker `<!-- gazetta:archived gone -->` on
-worker-served targets; `_redirects` 410 row on plain-static targets
-that support it (Cloudflare Pages and Netlify both do).
+worker-served targets, and a `_redirects` 410 row for
+`format: 'netlify'` (whether Netlify honours it isn't verified, and the
+marker file at the route blocks it today, #1152). Cloudflare Pages
+can't return 410 from `_redirects`, so `format: 'cloudflare'` is to
+write no such row (Cloudflare Pages limits, above).
 
-Plain-static hosts that don't support 410 status codes (basic S3
-static website, etc.) fall to natural 404 behavior. The capability
+Plain-static hosts that don't support 410 status codes (Cloudflare
+Pages, basic S3 static website, etc.) fall to natural 404 behavior.
+Today they serve the archived page's marker file instead, a blank page
+with status 200 ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)). The capability
 gap is surfaced at four points (per `design-soft-delete.md` Q10):
 boot validate, author-time modal, validator scanner, publish gate.
 
@@ -202,6 +242,9 @@ Cloudflare Pages / Netlify (`format: 'cloudflare'` or `'netlify'`):
 /old-page    /new-page    301
 /retired     /            410
 ```
+
+Once #1149 lands, `format: 'cloudflare'` leaves out the `410` rows
+(Cloudflare Pages limits, above).
 
 Sorted alphabetically by source for determinism (same input → same
 file → host CDN cache hits when republishing).
