@@ -1,5 +1,17 @@
-import { describe, expect, it } from 'vitest'
-import { findTranscriptWrites, indexLines, listInputs, lookupAnswer, projectDirFor } from '../decision-answers.js'
+import { spawn } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  findSubagentWrites,
+  findTranscriptWrites,
+  indexLines,
+  listInputs,
+  lookupAnswer,
+  projectDirFor,
+} from '../decision-answers.js'
 
 // Tests are derived from design-decision-review.md (Q2, Q9): only the
 // maintainer's own input counts as evidence, each answer comes back with
@@ -197,6 +209,32 @@ describe('lookupAnswer — answers that do not link up', () => {
     const result = lookupAnswer(indexLines([...session(), ...lines(early, late)]), '2026-10-22T10:06:00.000Z')
     expect(result.status).toBe('broken-link')
   })
+
+  // The fakes below each link to a real question, so only Q9's other
+  // checks can tell them apart from the maintainer's answers.
+  it('rejects an answer appended later with an earlier timestamp', () => {
+    const later = assistantText('a5', 'u3', '2026-10-22T10:10:00.000Z', 'Anything else?')
+    // Pretends to answer a3's question, at a time inside that turn.
+    const backdated = typed('f5', 'a3', '2026-10-22T10:00:30.000Z', 'agree')
+    const result = lookupAnswer(indexLines([...session(), ...lines(later, backdated)]), '2026-10-22T10:00:30.000Z')
+    expect(result.status).toBe('broken-link')
+  })
+
+  it('rejects both answers when one picker question has two', () => {
+    const second = pickerAnswer('f6', 'u3', '2026-10-22T10:06:00.000Z', 'ask-1', 'a4', {
+      'Q1: Which PRs may the skill approve?': 'Any design PR',
+    })
+    const index = indexLines([...session(), ...lines(second)])
+    expect(lookupAnswer(index, '2026-10-22T10:06:00.000Z').status).toBe('broken-link')
+    expect(lookupAnswer(index, '2026-10-22T10:02:00.000Z').status).toBe('broken-link')
+  })
+
+  it("accepts a missing parent only on the session's first entry", () => {
+    const orphan = typed('f7', null, '2026-10-22T10:06:00.000Z', 'agree')
+    const index = indexLines([...session(), ...lines(orphan)])
+    expect(lookupAnswer(index, '2026-10-22T10:06:00.000Z').status).toBe('broken-link')
+    expect(lookupAnswer(index, '2026-10-22T10:00:00.000Z').status).toBe('ok')
+  })
 })
 
 describe('findTranscriptWrites', () => {
@@ -239,6 +277,130 @@ describe('findTranscriptWrites', () => {
     expect(findTranscriptWrites(tool('Edit', '/Users/me/.claude/projects/-x/abc.jsonl'))).toHaveLength(1)
     expect(findTranscriptWrites(tool('Write', '/Users/me/.claude/projects/-x/memory/note.md'))).toEqual([])
   })
+
+  it('ignores a Read of a transcript file', () => {
+    expect(findTranscriptWrites(tool('Read', '/Users/me/.claude/projects/-x/abc.jsonl'))).toEqual([])
+  })
+
+  // A script written with Write or Edit and then run without naming the
+  // transcript leaves the write only in the script's content.
+  const writing = (name: string, input: Record<string, unknown>) =>
+    indexLines(lines(assistantTool('w1', null, at, 'tool-8', name, input)))
+
+  it.each([
+    [
+      'Write, a script that appends to a transcript',
+      'Write',
+      { file_path: '/tmp/s/x.py', content: "open('/Users/me/.claude/projects/-x/abc.jsonl', 'a').write('{}')" },
+    ],
+    [
+      'Write, a shell script that appends to a transcript',
+      'Write',
+      { file_path: '/tmp/s/x.sh', content: 'echo "{}" >> ~/.claude/projects/-x/abc.jsonl' },
+    ],
+    [
+      'Edit, a change that adds a transcript write',
+      'Edit',
+      {
+        file_path: '/tmp/s/x.py',
+        old_string: 'pass',
+        new_string: "open('/Users/me/.claude/projects/-x/abc.jsonl', 'a').write('{}')",
+      },
+    ],
+  ])('flags %s', (_label, name, input) => {
+    expect(findTranscriptWrites(writing(name, input))).toHaveLength(1)
+  })
+
+  it('ignores a document that only mentions a transcript path', () => {
+    const doc = {
+      file_path: '/tmp/s/notes.md',
+      content: 'Transcripts live in ~/.claude/projects/-x/abc.jsonl -> keep them.',
+    }
+    expect(findTranscriptWrites(writing('Write', doc))).toEqual([])
+  })
+})
+
+describe('findSubagentWrites', () => {
+  const dirs: string[] = []
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("flags a sub-agent's write to the session transcript, naming the sub-agent's file", async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'decision-answers-'))
+    dirs.push(projectDir)
+    const subagents = join(projectDir, 'abc', 'subagents')
+    mkdirSync(subagents, { recursive: true })
+    const command = 'echo "{}" >> ~/.claude/projects/-x/abc.jsonl'
+    writeFileSync(
+      join(subagents, 'agent-1.jsonl'),
+      lines(assistantTool('s1', null, '2026-10-22T10:08:00.000Z', 'bash-7', 'Bash', { command })).join('\n'),
+    )
+    writeFileSync(
+      join(subagents, 'agent-2.jsonl'),
+      lines(assistantText('s2', null, '2026-10-22T10:08:00.000Z', 'hi')).join('\n'),
+    )
+
+    const writes = await findSubagentWrites(projectDir, 'abc')
+    expect(writes).toEqual([{ at: '2026-10-22T10:08:00.000Z', tool: 'Bash', detail: command, source: 'agent-1.jsonl' }])
+  })
+
+  it('finds nothing when the session has no sub-agents', async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'decision-answers-'))
+    dirs.push(projectDir)
+    expect(await findSubagentWrites(projectDir, 'abc')).toEqual([])
+  })
+})
+
+describe('the script', () => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+  const dirs: string[] = []
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  // A pipe holds about 64 KB. Exiting while the reader is behind drops the
+  // rest, and transcriptWrites, the tamper evidence, is the last field.
+  it('writes all of its output to a pipe whose reader is slow', async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'decision-answers-'))
+    dirs.push(projectDir)
+    const entries: Entry[] = []
+    let parent: string | null = null
+    for (let i = 0; i < 1500; i++) {
+      const time = new Date(Date.UTC(2026, 9, 22, 10, 0, i)).toISOString()
+      entries.push(assistantText(`a${i}`, parent, time, 'Next question?'))
+      entries.push(typed(`u${i}`, `a${i}`, time, `answer number ${i} `.padEnd(150, 'x')))
+      parent = `u${i}`
+    }
+    writeFileSync(join(projectDir, 'abc.jsonl'), lines(...entries).join('\n'))
+
+    const child = spawn(
+      join(repoRoot, 'node_modules', '.bin', 'tsx'),
+      [
+        join(repoRoot, 'bots', '_lib', 'decision-answers.ts'),
+        '--project-dir',
+        projectDir,
+        '--session',
+        'abc',
+        '--list',
+      ],
+      { stdio: ['ignore', 'pipe', 'inherit'] },
+    )
+    const closed = new Promise(r => child.on('close', r))
+    child.stdout.pause()
+    // Give the script time to write everything and exit, if it exits early.
+    await new Promise(r => setTimeout(r, 1500))
+    let output = ''
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', chunk => {
+      output += chunk
+    })
+    child.stdout.resume()
+    await closed
+
+    expect(output.length).toBeGreaterThan(200_000)
+    expect(JSON.parse(output).inputs).toHaveLength(1500)
+  }, 30_000)
 })
 
 describe('listInputs', () => {

@@ -14,8 +14,11 @@
  * compacted entries, pasted text and tool output don't.
  *
  * A transcript is tamper-evident, not tamper-proof: a shell command can
- * edit it. An answer whose links don't resolve is reported as broken, and
- * findTranscriptWrites lists every command that wrote to a transcript.
+ * edit it. An answer whose links don't resolve, that was written out of
+ * time order, or that shares its question with a second answer is
+ * reported as broken; findTranscriptWrites and findSubagentWrites list
+ * every command or file edit, the session's own or its sub-agents', that
+ * may have written to a transcript.
  */
 
 import { createReadStream, readdirSync, statSync } from 'node:fs'
@@ -58,6 +61,8 @@ export interface TranscriptWrite {
   at: string
   tool: string
   detail: string
+  /** The sub-agent transcript the call is in; absent for the session's own transcript. */
+  source?: string
 }
 
 export interface InputSummary {
@@ -94,10 +99,12 @@ export interface TranscriptIndex {
   byTimestamp: Map<string, string[]>
   order: Node[]
   toolCalls: ToolCall[]
+  /** How many entries carry a result for each tool call id. */
+  resultCounts: Map<string, number>
 }
 
 export function emptyIndex(): TranscriptIndex {
-  return { nodes: new Map(), byTimestamp: new Map(), order: [], toolCalls: [] }
+  return { nodes: new Map(), byTimestamp: new Map(), order: [], toolCalls: [], resultCounts: new Map() }
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -169,7 +176,10 @@ export function addLine(index: TranscriptIndex, line: string): void {
     for (const block of content) {
       if (!isRecord(block)) continue
       if (block.type === 'text' && typeof block.text === 'string') node.texts.push(block.text)
-      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') node.toolResultId = block.tool_use_id
+      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+        node.toolResultId = block.tool_use_id
+        index.resultCounts.set(block.tool_use_id, (index.resultCounts.get(block.tool_use_id) ?? 0) + 1)
+      }
       if (block.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
         node.toolUseIds.add(block.id)
         const input = isRecord(block.input) ? block.input : {}
@@ -194,11 +204,27 @@ export function indexLines(lines: Iterable<string>): TranscriptIndex {
 
 const PASTED = /<pasted_content\b[^>]*>[\s\S]*?<\/pasted_content>/g
 
-/** A session's first entry has no parent; any other parent must be an earlier entry. */
+/** Only a session's first entry has no parent; any other parent must be an earlier entry. */
 function hasEarlierParent(index: TranscriptIndex, node: Node): boolean {
-  if (node.parentUuid === null) return true
+  if (node.parentUuid === null) return node.pos === 0
   const parent = index.nodes.get(node.parentUuid)
   return parent !== undefined && parent.pos < node.pos
+}
+
+/** Entries are written in time order, so an answer added later can't carry an earlier time. */
+function isInTimeOrder(index: TranscriptIndex, node: Node): boolean {
+  for (let pos = node.pos - 1; pos >= 0; pos--) {
+    const previous = index.order[pos].timestamp
+    if (previous) return previous <= node.timestamp
+  }
+  return true
+}
+
+/** The checks Q9 puts on the entry itself, whatever kind of answer it is. */
+function entryProblem(index: TranscriptIndex, node: Node): string | undefined {
+  if (!hasEarlierParent(index, node)) return 'its parent entry is missing'
+  if (!isInTimeOrder(index, node)) return 'it is timestamped earlier than the entry before it'
+  return undefined
 }
 
 function isPickerAnswer(index: TranscriptIndex, node: Node): boolean {
@@ -246,7 +272,11 @@ function classify(index: TranscriptIndex, node: Node): AnswerLookup {
     }
     const asked = source.asks.get(node.toolResultId)
     if (!asked) return { at, status: 'not-your-input', reason: 'tool output, not a picker answer' }
-    if (!hasEarlierParent(index, node)) return { at, status: 'broken-link', reason: 'its parent entry is missing' }
+    const problem = entryProblem(index, node)
+    if (problem) return { at, status: 'broken-link', reason: problem }
+    if ((index.resultCounts.get(node.toolResultId) ?? 0) > 1) {
+      return { at, status: 'broken-link', reason: 'its question has more than one answer' }
+    }
     if (!node.answers) return { at, status: 'not-your-input', reason: 'the picker recorded no answer' }
     return { at, status: 'ok', kind: 'picker', answer: node.answers, shown: asked }
   }
@@ -257,7 +287,8 @@ function classify(index: TranscriptIndex, node: Node): AnswerLookup {
     return { at, status: 'not-your-input', reason: `origin is ${node.originKind ?? 'missing'}, not human` }
   }
   if (node.texts.length === 0) return { at, status: 'not-your-input', reason: 'no text' }
-  if (!hasEarlierParent(index, node)) return { at, status: 'broken-link', reason: 'its parent entry is missing' }
+  const problem = entryProblem(index, node)
+  if (problem) return { at, status: 'broken-link', reason: problem }
 
   const text = node.texts.join('\n')
   const answer = text.replace(PASTED, '[pasted text]')
@@ -334,6 +365,26 @@ function shellWritesTranscript(command: string): boolean {
   return CODE_WRITE_SIGNS.some(sign => sign.test(command))
 }
 
+const FILE_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+
+/** The text a file-writing tool call puts into its file. */
+function writtenText(input: Record<string, unknown>): string[] {
+  const texts = [input.content, input.new_string, input.new_source].filter((t): t is string => typeof t === 'string')
+  if (Array.isArray(input.edits)) {
+    for (const edit of input.edits)
+      if (isRecord(edit) && typeof edit.new_string === 'string') texts.push(edit.new_string)
+  }
+  return texts
+}
+
+/** A script written to a file, then run without naming the transcript, carries the write in its own text. */
+function textWritesTranscript(path: unknown, text: string): boolean {
+  if (!text.includes('.claude/projects') || !text.includes('.jsonl')) return false
+  if (CODE_WRITE_SIGNS.some(sign => sign.test(text))) return true
+  const shellScript = (typeof path === 'string' && path.endsWith('.sh')) || text.startsWith('#!')
+  return shellScript && shellWritesTranscript(text)
+}
+
 /** Every command or file edit that may have written to a transcript file. Over-reports on purpose. */
 export function findTranscriptWrites(index: TranscriptIndex): TranscriptWrite[] {
   const writes: TranscriptWrite[] = []
@@ -343,9 +394,30 @@ export function findTranscriptWrites(index: TranscriptIndex): TranscriptWrite[] 
         writes.push({ at: call.at, tool: 'Bash', detail: call.input.command })
       continue
     }
+    if (!FILE_WRITE_TOOLS.has(call.name)) continue
     const path = call.input.file_path ?? call.input.notebook_path
     if (typeof path === 'string' && TRANSCRIPT_PATH.test(path))
       writes.push({ at: call.at, tool: call.name, detail: path })
+    else if (writtenText(call.input).some(text => textWritesTranscript(path, text)))
+      writes.push({ at: call.at, tool: call.name, detail: typeof path === 'string' ? path : '' })
+  }
+  return writes
+}
+
+/** The same check over the session's sub-agents, whose transcripts sit in `<session>/subagents/`. */
+export async function findSubagentWrites(projectDir: string, session: string): Promise<TranscriptWrite[]> {
+  const dir = join(projectDir, session, 'subagents')
+  let files: string[]
+  try {
+    files = readdirSync(dir)
+      .filter(f => f.endsWith('.jsonl'))
+      .sort()
+  } catch {
+    return []
+  }
+  const writes: TranscriptWrite[] = []
+  for (const file of files) {
+    for (const write of findTranscriptWrites(await readIndex(join(dir, file)))) writes.push({ ...write, source: file })
   }
   return writes
 }
@@ -406,19 +478,27 @@ async function main(argv: string[]): Promise<number> {
   const index = await readIndex(file)
   const result = list
     ? { session: id, file, inputs: listInputs(index, since) }
-    : { session: id, file, answers: at.map(a => lookupAnswer(index, a)), transcriptWrites: findTranscriptWrites(index) }
+    : {
+        session: id,
+        file,
+        answers: at.map(a => lookupAnswer(index, a)),
+        transcriptWrites: [...findTranscriptWrites(index), ...(await findSubagentWrites(projectDir, id))],
+      }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
   return 0
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}` || fileURLToPath(import.meta.url) === process.argv[1]
 
+// process.exitCode, not process.exit(): exiting drops output a pipe hasn't taken yet.
 if (isMain) {
   main(process.argv.slice(2)).then(
-    code => process.exit(code),
+    code => {
+      process.exitCode = code
+    },
     err => {
       process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      process.exitCode = 1
     },
   )
 }
