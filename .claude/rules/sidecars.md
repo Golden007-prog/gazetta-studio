@@ -81,7 +81,7 @@ No target manifest is read, so the order of the manifest copy and missing manife
 
 **Restoring history on a target** (`history-restorer.ts`) rebuilds all three relations; today it skips `alias-targets`.
 
-**Public targets** keep no indices (`design-public-storage.md` Q5); nothing here applies to them.
+**Public targets** keep no indices today (`design-public-storage.md` Q5). Once these indices describe the target, public targets keep them too (`design-target-removal.md` Q12).
 
 | Rejected | Why |
 |---|---|

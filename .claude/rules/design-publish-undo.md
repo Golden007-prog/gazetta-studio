@@ -66,7 +66,7 @@ A crash midway leaves the target like a crashed publish: rerunning the undo, or 
 
 **Authorization:** undo and rollback need `restore:history` **and** the target's publish capability (`publish:production` or `publish:non-production`), so a role that can't publish to production can't change it through history.
 
-**Approval:** undoing the latest publish creates no publish request on an approval-required target: it's an emergency rollback of content that was approved minutes before. Rolling back to any older revision on such a target creates a publish request like a publish would.
+**Approval:** undoing the latest publish creates no publish request on an approval-required target: it's an emergency rollback of content that was approved minutes before. Rolling back to any older revision on such a target creates a publish request like a publish would. The approval gate itself sits at the start of the shared target-publish function (Q4; [`design-target-removal.md`](design-target-removal.md) Q13).
 
 **Undo of an undo:** when the target's latest revision is itself a rollback, `gazetta undo` refuses ("The last change was an undo; use `gazetta rollback <rev>`."), and the admin shows no Undo button. Repeated undo never toggles back and forth.
 
