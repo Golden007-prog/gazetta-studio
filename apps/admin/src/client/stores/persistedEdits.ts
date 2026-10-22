@@ -35,7 +35,8 @@
  *
  *   - selectionKey (richer than stash key; survives cross-page)
  *   - editedContent (the dirty content the user typed)
- *   - savedBaselineHash (optional; future divergence detection)
+ *   - base (the manifest's save-etag when the edit was made; sent as
+ *     If-Match once the draft is restored, so a newer save conflicts)
  *
  * The save closure rebuilds via `useEditorActions.buildTarget(sel)`
  * on the navigate-back path; that's a pure function over the
@@ -45,6 +46,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { EditorSelection } from '../composables/editorSelection.js'
 
+/** The version of a manifest an edit was made on: the save-etag to send as If-Match. */
+export interface DraftBase {
+  /** Manifest path, as in the etag store (`pages/home/page.json`). */
+  manifest: string
+  etag: string
+}
+
 export interface PersistedEdit {
   /** Stable cross-page key for the (selection, locale, path) tuple. */
   key: string
@@ -52,6 +60,8 @@ export interface PersistedEdit {
   editedContent: Record<string, unknown>
   /** ISO timestamp when the entry was last touched (for diagnostics). */
   updatedAt: string
+  /** Absent on drafts stored before the version was recorded: those save over the current version. */
+  base?: DraftBase
 }
 
 /**
@@ -103,10 +113,23 @@ export function persistedEditKeyForSelection(
 export const usePersistedEditsStore = defineStore('persistedEdits', () => {
   const entries = ref<Map<string, PersistedEdit>>(new Map())
 
-  function set(key: string, editedContent: Record<string, unknown>): void {
+  function set(key: string, editedContent: Record<string, unknown>, base?: DraftBase): void {
     const next = new Map(entries.value)
-    next.set(key, { key, editedContent, updatedAt: new Date().toISOString() })
+    const kept = base ?? entries.value.get(key)?.base
+    next.set(key, { key, editedContent, updatedAt: new Date().toISOString(), ...(kept ? { base: kept } : {}) })
     entries.value = next
+  }
+
+  /** A write made on `from` succeeded with `to`: drafts made on `from` are now on `to`. */
+  function rebase(manifest: string, from: string, to: string): void {
+    let changed = false
+    const next = new Map(entries.value)
+    for (const [k, entry] of entries.value) {
+      if (entry.base?.manifest !== manifest || entry.base.etag !== from) continue
+      next.set(k, { ...entry, base: { manifest, etag: to } })
+      changed = true
+    }
+    if (changed) entries.value = next
   }
 
   function get(key: string): PersistedEdit | null {
@@ -158,6 +181,7 @@ export const usePersistedEditsStore = defineStore('persistedEdits', () => {
     clear,
     clearItem,
     clearAll,
+    rebase,
     _hydrateAll,
   }
 })

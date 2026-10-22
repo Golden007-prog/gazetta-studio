@@ -16,6 +16,8 @@ export interface MetadataEntry {
   /** The metadata as loaded when the first edit was made: Discard's baseline. */
   original: Readonly<MetadataValue>
   pending: MetadataValue
+  /** Save-etag of the version the edit was made on. Absent on drafts stored before it was recorded. */
+  baseEtag?: string
 }
 
 /**
@@ -78,7 +80,23 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
     edit(next, original)
     if (canonical(next) === canonical(original)) entries.delete(k)
     // A new entry object on every change: the draft store finds changes by reference.
-    else entries.set(k, { original, pending: next })
+    else entries.set(k, { original, pending: next, ...(existing?.baseEtag ? { baseEtag: existing.baseEtag } : {}) })
+  }
+
+  /** Record the version a pending entry is made on. */
+  function setBaseEtag(key: MetadataKey, etag: string) {
+    const k = manifestFileKeyToString(key)
+    const existing = entries.get(k)
+    if (existing && existing.baseEtag !== etag) entries.set(k, { ...toRaw(existing), baseEtag: etag })
+  }
+
+  /** A write made on `from` succeeded with `to`: entries made on `from` are now on `to`. */
+  function rebase(key: MetadataKey, from: string, to: string) {
+    const k = manifestFileKeyToString(key)
+    for (const map of [entries, restored]) {
+      const entry = map.get(k)
+      if (entry?.baseEtag === from) map.set(k, { ...toRaw(entry), baseEtag: to })
+    }
   }
 
   function setField(key: MetadataKey, loaded: PageMetadata | null, field: MetadataTextField, value: string) {
@@ -135,13 +153,15 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
     entries.clear()
   }
 
-  /** The page is open in this locale: its restored draft becomes pending. */
-  function activate(key: MetadataKey) {
+  /** The page is open in this locale: its restored draft becomes pending. Returns the draft it activated. */
+  function activate(key: MetadataKey): MetadataEntry | null {
     const k = manifestFileKeyToString(key)
     const draft = restored.get(k)
-    if (!draft) return
+    if (!draft) return null
     restored.delete(k)
-    if (!entries.has(k)) entries.set(k, draft)
+    if (entries.has(k)) return null
+    entries.set(k, draft)
+    return draft
   }
 
   /**
@@ -161,7 +181,8 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
       const v = value as Partial<MetadataEntry> | null
       const isObject = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x)
       if (key.kind !== 'page' || !v || !isObject(v.original) || !isObject(v.pending)) continue
-      restored.set(k, { original: copy(v.original), pending: copy(v.pending) })
+      const baseEtag = typeof v.baseEtag === 'string' ? v.baseEtag : undefined
+      restored.set(k, { original: copy(v.original), pending: copy(v.pending), ...(baseEtag ? { baseEtag } : {}) })
     }
   }
 
@@ -184,7 +205,7 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
       if (!now) continue
       const original = copy(entry.pending)
       if (canonical(now.pending) === canonical(original)) entries.delete(k)
-      else entries.set(k, { original, pending: copy(now.pending) })
+      else entries.set(k, { ...toRaw(now), original, pending: copy(now.pending) })
     }
   }
 
@@ -207,6 +228,8 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
     clearActive,
     activate,
     markWritten,
+    setBaseEtag,
+    rebase,
     allEntries,
     pendingCount,
     hasPendingEdits,

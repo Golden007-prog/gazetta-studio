@@ -28,7 +28,12 @@ import { api, type PageMetadata, StaleSaveError, ValidationFailedError } from '.
 import { useLocaleStore } from '../stores/locale.js'
 import { useEditorEtagsStore, manifestPath } from '../stores/editorEtags.js'
 import { useSaveConflictsStore } from '../stores/saveConflicts.js'
-import { persistedEditKey, persistedEditKeyForSelection, usePersistedEditsStore } from '../stores/persistedEdits.js'
+import {
+  type DraftBase,
+  persistedEditKey,
+  persistedEditKeyForSelection,
+  usePersistedEditsStore,
+} from '../stores/persistedEdits.js'
 import { draftsLoaded } from '../drafts/persistence.js'
 
 const MAX_RETRY_ATTEMPTS = 3
@@ -90,6 +95,20 @@ export function useEditorActions() {
     return persistedEditKey(kind, sel.selection.name, locale, targetPath)
   }
 
+  /** The version the open editor's content is edited on: the manifest its save writes, with that manifest's etag. */
+  function baseForCurrent(): DraftBase | undefined {
+    const sel = useSelectionStore().selection
+    if (!sel || !ec.target) return undefined
+    const locale = useLocaleStore().effectiveLocale ?? undefined
+    const path = ec.target.path
+    const manifest =
+      sel.type === 'page' && path.startsWith('@')
+        ? manifestPath('fragment', path.slice(1).split('/')[0], locale)
+        : manifestPath(sel.type, sel.name, locale)
+    const etag = useEditorEtagsStore().get(manifest)
+    return etag ? { manifest, etag } : undefined
+  }
+
   // --- Stash ---
 
   function stashCurrent() {
@@ -100,7 +119,7 @@ export function useEditorActions() {
       // target.path which collides across pages; persistedEdits uses
       // the richer (kind, name, locale, path) tuple.
       const key = persistedKeyForCurrent()
-      if (key) usePersistedEditsStore().set(key, deepClone(ec.content))
+      if (key) usePersistedEditsStore().set(key, deepClone(ec.content), baseForCurrent())
     }
   }
 
@@ -194,7 +213,10 @@ export function useEditorActions() {
     try {
       const updateFn = kind === 'page' ? api.updatePage : api.updateFragment
       const result = await updateFn(name, payload, { locale, ifMatch })
-      if (result.etag) etags.set(path, result.etag)
+      if (result.etag) {
+        etags.set(path, result.etag)
+        if (ifMatch) rebaseDrafts(kind, name, locale, ifMatch, result.etag)
+      }
     } catch (err) {
       if (err instanceof StaleSaveError) {
         useSaveConflictsStore().set({
@@ -214,7 +236,7 @@ export function useEditorActions() {
       // and don't go through reconcile (a 5xx isn't ambiguous in
       // the same way; the server told us it failed).
       if (err instanceof TypeError) {
-        await reconcileMidSaveDrop(kind, name, locale, pendingForConflict, path)
+        await reconcileMidSaveDrop(kind, name, locale, pendingForConflict, path, ifMatch)
         return
       }
       throw err
@@ -232,6 +254,7 @@ export function useEditorActions() {
     locale: string | undefined,
     pendingForConflict: Record<string, unknown>,
     path: string,
+    ifMatch: string | undefined,
   ): Promise<void> {
     const etags = useEditorEtagsStore()
     let current: { template?: unknown; content?: unknown; components?: unknown }
@@ -252,7 +275,10 @@ export function useEditorActions() {
     // save. Equal = case (a); the save actually landed before the
     // connection dropped.
     if (manifestsEquivalent(current, pendingForConflict)) {
-      if (currentEtag) etags.set(path, currentEtag)
+      if (currentEtag) {
+        etags.set(path, currentEtag)
+        if (ifMatch) rebaseDrafts(kind, name, locale, ifMatch, currentEtag)
+      }
       // Silent success per design-offline.md Q4 "handled invisibly."
       return
     }
@@ -269,6 +295,19 @@ export function useEditorActions() {
     })
     if (fallbackEtag) etags.set(path, fallbackEtag)
     throw new StaleSaveError(current as Record<string, unknown>, fallbackEtag)
+  }
+
+  /**
+   * This session wrote a manifest made on `from` and got `to`. Every pending
+   * entry for it made on `from` is now on `to`, including drafts a failed
+   * Save leaves: otherwise a reload would report the author's own write as
+   * someone else's. Entries made on another version keep it.
+   */
+  function rebaseDrafts(kind: 'page' | 'fragment', name: string, locale: string | undefined, from: string, to: string) {
+    const fileKey: ManifestFileKey = locale ? { kind, name, locale } : { kind, name }
+    usePersistedEditsStore().rebase(manifestPath(kind, name, locale), from, to)
+    structural.rebase(fileKey, from, to)
+    if (kind === 'page') metadata.rebase({ ...fileKey, kind }, from, to)
   }
 
   /**
@@ -513,6 +552,8 @@ export function useEditorActions() {
       activateDrafts()
       const persisted = persistedKey ? usePersistedEditsStore().get(persistedKey) : null
       if (persisted) {
+        // Saved against the version the draft was made on, not the one just loaded.
+        if (persisted.base) useEditorEtagsStore().set(persisted.base.manifest, persisted.base.etag)
         await ec.open(target, persisted.editedContent)
         // Promote: the entry is now live in the editor; remove from
         // the persisted store so a subsequent navigate-away → stash
@@ -568,7 +609,7 @@ export function useEditorActions() {
     // debounces writes to IndexedDB; we just keep the store
     // up-to-date on every keystroke.
     const key = persistedKeyForCurrent()
-    if (key) usePersistedEditsStore().set(key, deepClone(newContent))
+    if (key) usePersistedEditsStore().set(key, deepClone(newContent), baseForCurrent())
   }
 
   function revertStashed(componentPath: string) {
@@ -605,10 +646,24 @@ export function useEditorActions() {
 
   /** Restored structural and metadata drafts become pending once their page is open in that locale. */
   function activateDrafts() {
+    const etags = useEditorEtagsStore()
     const manifestKey = currentManifestKey()
-    if (manifestKey) structural.activate(inCurrentLocale(manifestKey))
+    if (manifestKey) {
+      const fileKey = inCurrentLocale(manifestKey)
+      const draft = structural.activate(fileKey)
+      // Saved against the version the draft was made on, not the one just loaded.
+      if (draft?.baseEtag) etags.set(manifestPath(fileKey.kind, fileKey.name, fileKey.locale), draft.baseEtag)
+    }
     const key = currentMetadataKey()
-    if (key) metadata.activate(key)
+    if (key) {
+      const draft = metadata.activate(key)
+      if (draft?.baseEtag) etags.set(manifestPath('page', key.name, key.locale), draft.baseEtag)
+    }
+  }
+
+  /** The manifest's etag now: the version a structural or metadata edit is made on. */
+  function etagNow(key: ManifestFileKey): string | null {
+    return useEditorEtagsStore().get(manifestPath(key.kind, key.name, key.locale))
   }
 
   /** The selected page's metadata as loaded, in the locale it was loaded for. */
@@ -625,12 +680,18 @@ export function useEditorActions() {
 
   function editMetadata(field: MetadataTextField, value: string) {
     const key = currentMetadataKey()
-    if (key) metadata.setField(key, loadedMetadata(), field, value)
+    if (!key) return
+    metadata.setField(key, loadedMetadata(), field, value)
+    const etag = etagNow(key)
+    if (etag) metadata.setBaseEtag(key, etag)
   }
 
   function setMetadataNoindex(on: boolean) {
     const key = currentMetadataKey()
-    if (key) metadata.setNoindex(key, loadedMetadata(), on)
+    if (!key) return
+    metadata.setNoindex(key, loadedMetadata(), on)
+    const etag = etagNow(key)
+    if (etag) metadata.setBaseEtag(key, etag)
   }
 
   // --- Structural operations (with preview side effects) ---
@@ -641,7 +702,10 @@ export function useEditorActions() {
     fromIndex: number,
     toIndex: number,
   ) {
-    structural.moveComponent(inCurrentLocale(key), current, fromIndex, toIndex)
+    const fileKey = inCurrentLocale(key)
+    structural.moveComponent(fileKey, current, fromIndex, toIndex)
+    const etag = etagNow(fileKey)
+    if (etag) structural.setBaseEtag(fileKey, etag)
     usePreviewStore().invalidateDraft()
   }
 
@@ -651,7 +715,10 @@ export function useEditorActions() {
     component: import('gazetta/types').InlineComponent | string,
     insertIndex?: number,
   ) {
-    structural.addComponent(inCurrentLocale(key), current, component, insertIndex)
+    const fileKey = inCurrentLocale(key)
+    structural.addComponent(fileKey, current, component, insertIndex)
+    const etag = etagNow(fileKey)
+    if (etag) structural.setBaseEtag(fileKey, etag)
     usePreviewStore().invalidateDraft()
   }
 
@@ -660,7 +727,10 @@ export function useEditorActions() {
     current: readonly import('gazetta/types').ComponentEntry[],
     atIndex: number,
   ) {
-    structural.removeComponent(inCurrentLocale(key), current, atIndex)
+    const fileKey = inCurrentLocale(key)
+    structural.removeComponent(fileKey, current, atIndex)
+    const etag = etagNow(fileKey)
+    if (etag) structural.setBaseEtag(fileKey, etag)
     usePreviewStore().invalidateDraft()
   }
 

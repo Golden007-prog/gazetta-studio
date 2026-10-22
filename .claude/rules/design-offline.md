@@ -364,6 +364,7 @@ When Vue Query is "offline," queries pause (don't refetch); mutations queue; on 
 
 - Reads return `etag: <content-hash>` header (existing `.{8hex}.hash` per `sidecars.md`)
 - Client stores the etag with the cached state
+- Each unsaved draft records the etag of the version it was made on (locked 2026-10-20, #1034). A draft restored after a reload makes that etag the manifest's `If-Match` when it becomes active (its page or component is opened), not the etag of the version just loaded; there is no check when the draft comes back, and no new UI — a newer version gets the usual `409 STALE` banner. A successful write this session that was sent with a draft's etag moves that draft to the new etag, including drafts a Save that failed part-way leaves; drafts made on another version keep theirs. Drafts stored before this have no etag and save over the current version.
 - Saves include `If-Match: <hash>` header
 - Server compares incoming `If-Match` to current hash; on mismatch, returns `409 STALE`:
 

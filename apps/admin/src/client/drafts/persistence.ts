@@ -30,6 +30,7 @@ const DEFAULT_DEBOUNCE_MS = 300
 interface StructuralValue {
   original: ComponentEntry[]
   pending: ComponentEntry[]
+  baseEtag?: string
 }
 
 /** One pending-edit store, seen as a map of key → entry the draft store can hold. */
@@ -61,7 +62,11 @@ function structuralLane(): Lane {
     },
     serialize: entry => {
       const e = entry as StructuralValue
-      return { original: e.original.slice(), pending: e.pending.slice() }
+      return {
+        original: e.original.slice(),
+        pending: e.pending.slice(),
+        ...(e.baseEtag ? { baseEtag: e.baseEtag } : {}),
+      }
     },
   }
 }
@@ -91,7 +96,7 @@ function metadataLane(): Lane {
     replace: entries => store._hydrate(entries),
     serialize: entry => {
       const e = entry as MetadataEntry
-      return { original: e.original, pending: e.pending }
+      return { original: e.original, pending: e.pending, ...(e.baseEtag ? { baseEtag: e.baseEtag } : {}) }
     },
   }
 }

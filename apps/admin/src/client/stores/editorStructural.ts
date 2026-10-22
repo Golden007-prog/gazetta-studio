@@ -11,6 +11,8 @@ import { type ManifestFileKey, manifestFileKeyToString } from '../utils/manifest
 export interface StructuralEntry {
   original: readonly ComponentEntry[]
   pending: ComponentEntry[]
+  /** Save-etag of the version the edit was made on. Absent on drafts stored before it was recorded. */
+  baseEtag?: string
 }
 
 /**
@@ -49,7 +51,24 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
     entries.set(k, {
       original: existing?.original ?? original.slice(),
       pending: next,
+      ...(existing?.baseEtag ? { baseEtag: existing.baseEtag } : {}),
     })
+  }
+
+  /** Record the version a pending entry is made on. */
+  function setBaseEtag(key: ManifestFileKey, etag: string) {
+    const k = manifestFileKeyToString(key)
+    const existing = entries.get(k)
+    if (existing && existing.baseEtag !== etag) entries.set(k, { ...toRaw(existing), baseEtag: etag })
+  }
+
+  /** A write made on `from` succeeded with `to`: entries made on `from` are now on `to`. */
+  function rebase(key: ManifestFileKey, from: string, to: string) {
+    const k = manifestFileKeyToString(key)
+    for (const map of [entries, restored]) {
+      const entry = map.get(k)
+      if (entry?.baseEtag === from) map.set(k, { ...toRaw(entry), baseEtag: to })
+    }
   }
 
   function moveComponent(key: ManifestFileKey, current: readonly ComponentEntry[], fromIndex: number, toIndex: number) {
@@ -96,13 +115,15 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
     entries.clear()
   }
 
-  /** The page is open in this locale: its restored draft becomes pending. */
-  function activate(key: ManifestFileKey) {
+  /** The page is open in this locale: its restored draft becomes pending. Returns the draft it activated. */
+  function activate(key: ManifestFileKey): StructuralEntry | null {
     const k = manifestFileKeyToString(key)
     const draft = restored.get(k)
-    if (!draft) return
+    if (!draft) return null
     restored.delete(k)
-    if (!entries.has(k)) entries.set(k, draft)
+    if (entries.has(k)) return null
+    entries.set(k, draft)
+    return draft
   }
 
   /**
@@ -116,7 +137,7 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
       if (!now) continue
       const original = toRaw(entry).pending.slice()
       if (JSON.stringify(now.pending) === JSON.stringify(original)) entries.delete(k)
-      else entries.set(k, { original, pending: toRaw(now).pending })
+      else entries.set(k, { ...toRaw(now), original })
     }
   }
 
@@ -133,7 +154,12 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
     entries.clear()
     restored.clear()
     for (const [key, entry] of drafts) {
-      restored.set(manifestFileKeyToString(key), { original: entry.original, pending: entry.pending })
+      const baseEtag = typeof entry.baseEtag === 'string' ? entry.baseEtag : undefined
+      restored.set(manifestFileKeyToString(key), {
+        original: entry.original,
+        pending: entry.pending,
+        ...(baseEtag ? { baseEtag } : {}),
+      })
     }
   }
 
@@ -167,6 +193,8 @@ export const useEditorStructuralStore = defineStore('editorStructural', () => {
     clearActive,
     activate,
     markWritten,
+    setBaseEtag,
+    rebase,
     pendingFor,
     hasPendingFor,
     allEntries,

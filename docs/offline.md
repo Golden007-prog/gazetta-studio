@@ -93,6 +93,13 @@ All three work across multiple pages. If you have unsaved edits on
 navigate to those pages after reload. The saved baseline is
 fetched fresh from the server; your dirty edits overlay on top.
 
+Each unsaved edit remembers the version of the page it was made on.
+If someone else saved that page while your tab was closed, Save shows
+the usual "edited by someone else" banner instead of saving over their
+version, as it would have if the tab had stayed open. If nobody did,
+Save works as usual. Edits kept by an older version of the admin,
+which didn't record the version, save over the current one.
+
 Save clears the dirty state for the saved item; navigating to a
 different page doesn't lose the others. **Don't Save** discards them.
 
