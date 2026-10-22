@@ -2,7 +2,7 @@
 
 Researched 2026-10-19. Question: which third-party AI reviewer can a public repo on GitHub's free organisation plan connect for free, and how good are they?
 
-**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, drafts included, except dependency-bot PRs. Since 2026-10-20, Sentry Seer reviews too: when a PR is marked ready, and on each later commit.
+**How we review.** The maintainer reviews every PR locally with Claude in VS Code (`/review-prs`). The `review-on-comment` workflow (`@claude review`) exists but isn't used. Before the trial, a PR got its first review only when that local session ran, so outside contributors waited for it. Since 2026-10-19, Sourcery also reviews every PR when it opens and on each push, drafts included, except dependency-bot PRs. Since 2026-10-20, Sentry Seer reviews too, usually the PR's head when it opens ready or is marked ready. Later commits get a review only when asked with `@sentry review`.
 
 **Decision (updated 2026-10-20).** Trial **Sourcery** for 3–4 weeks on real PRs, with **Sentry Seer** alongside it from 2026-10-20. CodeRabbit was tried first and dropped: its free plan allows one review an hour (see "Seeded-bug results"). The reviewer's comments are an input to the local review, which checks each claim before relying on it.
 
@@ -35,7 +35,7 @@ Not free for us: OpenAI Codex review and Cursor Bugbot (paid plans), Augment (pa
 
 | Service | Free for us? | Notes |
 |---|---|---|
-| **Sentry Seer AI Code Review** | By application: the open-source sponsorship includes "Seer for 5 active contributors", "no term limit", for projects under "a friendly license like Apache or MIT" ([sponsorship](https://sentry.io/for/open-source/)) | Skips drafts; reviews when marked ready, on each later commit, and on `@sentry review` ([docs](https://docs.sentry.io/product/ai-in-sentry/ai-code-review/)). Needs a Sentry organisation. **Adopted** as the second reviewer: sponsorship approved 2026-10-20. Its docs say it "cannot approve or block merges", and only "file names, code diffs, and PR descriptions" go to the AI. |
+| **Sentry Seer AI Code Review** | By application: the open-source sponsorship includes "Seer for 5 active contributors", "no term limit", for projects under "a friendly license like Apache or MIT" ([sponsorship](https://sentry.io/for/open-source/)) | Skips drafts; reviews when marked ready and on `@sentry review` ([docs](https://docs.sentry.io/product/ai-in-sentry/ai-code-review/)). The docs also say each later commit, but on #1096–#1137 it reviewed one commit per PR unless asked (see "Unknown"). Needs a Sentry organisation. **Adopted** as the second reviewer: sponsorship approved 2026-10-20. Its docs say it "cannot approve or block merges", and only "file names, code diffs, and PR descriptions" go to the AI. |
 | Aikido | By application only; the free plan excludes PR review ([pricing](https://www.aikido.dev/pricing)) | No published terms |
 | Snyk Secure Developer Program | By application; README and website link required; "not backed by any corporate entity" ([programme](https://snyk.io/open-source/)) | Security fixes, not general review |
 | OpenHands, Cline PR-review Actions | Free software, but need a paid model key | Cline's split into a read-only review job and a write-only posting job is the safest design seen |
@@ -158,14 +158,33 @@ One row per PR and reviewer, using the categories in item 3. "Local first" says 
 | 10-22 | #1118 (contributor) | Seer | 1 | Accepted: non-Latin-1 alias names made the `Location` header throw; fixed before review | No |
 | 10-22 | #1119 (contributor) | Sourcery | 5 | 2 accepted, fixed before review: the admin history test rejected the new ids, and an ordering check passed with no rows. 3 not acted on: older versions can't read the new ids (accepted before 1.0), ordering between old and new versions in one millisecond, and a retention edge older than the PR | No |
 | 10-22 | #1119 (contributor) | Seer | 1 | Accepted: the same admin test; fixed before review | No |
+| 10-22 | #1120 (docs) | Sourcery | 0 | No review: the account's weekly review budget was used up | – |
+| 10-22 | #1120 (docs) | Seer | 0 | No findings | – |
+| 10-22 | #1122 (docs) | Sourcery | 0 | No review: weekly budget used up | – |
+| 10-22 | #1122 (docs) | Seer | 0 | No findings | – |
+| 10-22 | #1124 (docs) | Sourcery | 0 | No review: weekly budget used up | – |
+| 10-22 | #1124 (docs) | Seer | 1 | Accepted: the live check expected 301s in the request's language that plain-static `_redirects` didn't have; the design gained one row per language, and #1130 fixes the code | No |
+| 10-22 | #1127 (docs) | Sourcery | 0 | No review: weekly budget used up | – |
+| 10-22 | #1127 (docs) | Seer | 0 | No findings | – |
+| 10-22 | #1131 (contributor) | Sourcery, Seer | 0 | No findings | – |
+| 10-22 | #1132 | Sourcery | 0 | No review: weekly budget used up | – |
+| 10-22 | #1132 | Seer | 3 | 3 accepted, but read only after merging: the merge didn't pin the reviewed head, the PR's author wasn't checked before an unattended merge, and `process.exit` cut piped output short. All fixed in #1137 | No |
+| 10-22 | #1133 (docs) | Sourcery | 0 | No review: weekly budget used up | – |
+| 10-22 | #1133 (docs) | Seer | 1 over three reviews, two on `@sentry review` | Accepted: `review-prs` merged on an approval marker anyone could post; the maintainer decided only the session account's verdict counts | No |
+| 10-22 | #1134 (contributor) | Sourcery | 3 | 3 accepted. 2 fixed by the contributor before review: case variants of manifest names, a 404 test that missed manifest bodies. 1 is cut 7 of #1085: the worker and ESI serve still return stored files under `/pages/` and `/fragments/` | No |
+| 10-22 | #1134 (contributor) | Seer | 0 over three reviews | No findings | – |
+| 10-22 | #1135 (contributor) | Sourcery | 3 | 3 accepted. 2 fixed by the contributor before review: `.gitignore` written last, global excludes in the test. 1 is #1139: after a fresh clone, purge finds no dependency indices | No |
+| 10-22 | #1135 (contributor) | Seer | 1 | Accepted: the same purge point, #1139 | No |
+| 10-22 | #1116 (contributor) | Seer, on `@sentry review` | 0 | No findings on the final head | – |
+| 10-22 | #1118 (contributor) | Seer, on `@sentry review` | 1 over two reviews | Accepted: with `locales` set and no `defaultLocale`, archive redirects dropped the language prefix; fixed by the contributor | No |
+| 10-22 | #1046 (contributor) | Seer, on `@sentry review` | 2 | Accepted, sent back to the contributor: fragment keys repeat across sibling groups, and a touch drop records the dragged row | No |
 
 Until #1037, every wrong comment was on a CI-workflow PR (#1012, #1014). On the seven fix-bot PRs of 10-20, neither reviewer raised a false finding, and two accepted findings were bugs the local review had missed. #1037's wrong comment came from a rule only our design docs state, which the reviewer can't see. On 10-21, 80 findings were accepted, 5 partly, and 7 discussed as existing behaviour. On code PRs: the first six included four bugs the local review hadn't found, two of them in code the PR didn't touch; on a first-time contributor's PR (#1082), 3 accepted and 7 discussed. The rest were on docs PRs: 7 on the `.gazetta/` exposure docs (#1072, #1073, #1076), 20 on the live-check design (#1069), 49 across the public-storage, publish-undo and target-index designs and their follow-ups (#1083, #1086, #1087, #1091, #1095). The design reviews also found bugs in existing code: #1077, #1078, #1079, #1088, #1089. On 10-22, the four fix-bot PRs (#1101–#1104) had 12 findings accepted and 7 rejected across Sourcery and Seer. The accepted ones included a predictable `/tmp` cache path, two bugs reproduced on main and filed (#1108, #1109), and weak checks in the PRs' tests. Of the rejected ones, one described a flow the code doesn't allow; the rest were edge cases or existing behaviour. Reviewing this log's own PR (#1111), Sourcery found a race left in #1107's history fix (#1112). Later that day Sourcery stopped reviewing for the maintainer's account: "you've used your own review budget of 250,000 diff characters for the last 7 days". The first refusal came on fix-bot's #1103, after the maintainer pushed a commit there; small pushes and PRs by the same account were still reviewed afterwards, so a review seems to be refused only when it doesn't fit in what's left. The large design PRs (#1113, #1120) got only Sourcery's summary. Other contributors' PRs were still reviewed (#1116, #1118, #1119). #1113 got an independent `review-architecture` pass instead; its 13 findings are on #1094, with fixes proposed in #1120. On the three contributor PRs that followed (#1116, #1118, #1119), the contributors fixed or answered every finding before review; the one that wasn't theirs to fix, a cache race on every publish, predates #1118 and is filed as #1125.
 
 ## Unknown
 
 - Why Sourcery posted a guide but no review on #1016.
-- Why Seer didn't review #1051's second commit, when it reviews later commits on other PRs.
-- Why Seer often doesn't start on a push: it skipped #1073 (opened ready), #1076, and several #1069 pushes until asked with `@sentry review`, and cancelled #1072 when the PR was merged mid-review. It ignored `@sentry review` on a merged PR.
+- Why Seer doesn't review later commits on its own, though its docs say it does. On the 28 PRs from #1096 to #1137 that Seer reviewed, its own reviews covered one commit per PR: the head when the PR was opened or marked ready (on #1101, the draft's head at opening, not the commit marked ready). Every other review followed `@sentry review` (#1099, #1104, #1110, #1116, #1118, #1133, #1134, #1135). Earlier it skipped #1051's second commit, #1073 (opened ready), #1076 and several #1069 pushes, cancelled #1072 when the PR was merged mid-review, and ignored `@sentry review` on a merged PR.
 - Sourcery stops automatic re-reviews after 5 per PR ("Auto re-review limit reached", #1069); `@sourcery-ai review` asks for one more. Whether a requested re-review covers the whole PR or only new commits isn't stated.
 - Sourcery's limits for public repos (not published; paid plans list "higher review limits"), and whether it reviews fork PRs.
 - Bot and fork-PR behaviour, training policy and quality for Codacy, Gitar, Kodus and CodeAnt.
