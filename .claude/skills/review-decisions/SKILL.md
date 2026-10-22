@@ -1,6 +1,6 @@
 ---
 name: review-decisions
-description: Review a PR that records design decisions in the maintainer's place, and merge it when it passes. Approves only when every decision the PR locks traces to the maintainer's own answer in this machine's session transcript, the docs record it faithfully, and nothing it rests on is false; asks the maintainer with picker questions otherwise. A separate Fable agent gives a second opinion on each decision. Run it right after opening an in-scope PR, and from /review-prs on any in-scope PR without a passing verdict for its latest commit.
+description: Review a PR that records design decisions in the maintainer's place, and merge it when it passes. Approves only when every decision the PR locks traces to the maintainer's own answer in this machine's session transcript, the docs record it faithfully, and nothing it rests on is false; asks the maintainer with picker questions otherwise. Seer's and Sourcery's comments are the second opinion; a Fable agent adds one when the maintainer asks. Run it right after opening an in-scope PR, and from /review-prs on any in-scope PR without a passing verdict for its latest commit.
 allowed-tools: Bash Read Grep Glob Agent AskUserQuestion
 argument-hint: <PR number>
 ---
@@ -63,7 +63,9 @@ Only `status: ok` is evidence. The script decides what counts as the maintainer'
 
 ## 5. Run the checks (fresh agent)
 
-Spawn one agent with the Agent tool (no `model` override: it runs on the session's Opus). Give it the PR diff (`gh pr diff <N>`), the decision list, the lookup output, and this brief:
+Seer's and Sourcery's comments on the PR are the second opinion, and the checker reads them, so start it once Seer (`sentry[bot]`) has reacted to the PR, commented or reviewed, or after 15 minutes, whichever comes first. On a clean docs PR Seer posts no comment: a 🎉 reaction (`gh api repos/{owner}/{repo}/issues/<N>/reactions`) is its "reviewed, nothing to say".
+
+Spawn one agent with the Agent tool (no `model` override: it runs on the session's Opus). Give it the PR diff (`gh pr diff <N>`), the decision list, the lookup output, the PR's Sourcery and Seer comments (`gh api repos/{owner}/{repo}/pulls/<N>/comments`, plus `.../pulls/<N>/reviews` and `.../issues/<N>/comments`), and this brief:
 
 > You are checking a PR that records design decisions, on behalf of the project's maintainer, who will not read it. Your job is to find every way the PR goes beyond, falls short of, or misstates what the maintainer decided. Read before asserting: open every file and line you cite.
 >
@@ -75,6 +77,7 @@ Spawn one agent with the Agent tool (no `model` override: it runs on the session
 > 3. **Edits around decisions.** An edit with no Rejected table must either change no decision (status lines, links, wording carried over from an answer) or follow from a named existing decision, cited in the doc. Deleting or changing an existing decision is a decision and needs an answer.
 > 4. **Soundness.** Re-read, at the cited file and line, every claim about code or behaviour that a decision rests on. Check the PR doesn't contradict other design docs, ADRs (`docs/adr/`), `docs/non-goals.md` or `CONTEXT.md`. A claim the doc labels "read from code, not reproduced" stays a hypothesis; flag it only if it's wrong, or a decision rests on an unlabelled one.
 > 5. **Transcript writes.** For each entry in `transcriptWrites`, say whether it could have changed an entry the decision list relies on.
+> 6. **The AI reviewers' comments** are the second opinion on the decisions. Check each against the code. One that holds and raises a concrete problem the maintainer wasn't shown (compare with `shown`) is a `decision` finding: an alternative or failure mode missing from the decision's Rejected table, a failed foundational check (5,000-page envelope, multi-instance correctness, or another dimension in `.claude/rules/feature-design-process.md`), a clash with a rule in `.claude/rules/team-preferences.md`, or a cost the decision doesn't mention. Otherwise it's mechanical, or nothing. Don't raise anything of your own out of general doubt.
 >
 > Classify each finding:
 > - `mechanical`: the doc misrecords an answer, lacks a citation, or cites stale text, and the fix is to make the doc match the evidence;
@@ -86,9 +89,9 @@ Spawn one agent with the Agent tool (no `model` override: it runs on the session
 > {"decision": 3, "check": "fidelity", "level": "mechanical", "problem": "…", "fix": "…"}
 > ```
 
-## 6. Ask for a second opinion (fresh agent, different model)
+## 6. A Fable second opinion, when the maintainer asks
 
-Start it once Seer (`sentry[bot]`) has reacted to the PR, commented or reviewed, or after 15 minutes, whichever comes first; the checker runs meanwhile. On a clean docs PR Seer posts no comment: a 🎉 reaction (`gh api repos/{owner}/{repo}/issues/<N>/reactions`) is its "reviewed, nothing to say". On a later round (after a fix or an answer), give it only the decisions whose text changed since its last pass; its earlier result stands for the rest.
+Only when the maintainer asks for one on this PR ("second opinion #N"). On a later round (after a fix or an answer), give it only the decisions whose text changed since its last pass; its earlier result stands for the rest.
 
 Spawn a second agent with `model: "fable"` (Claude Fable 5.1). If that fails, use the default model: the second opinion still runs, on Opus. Give it the PR diff, the decision list with the `shown` text for each decision, and the PR's Sourcery and Seer comments (`gh api repos/{owner}/{repo}/pulls/<N>/comments`, plus `.../reviews`), with this brief:
 
@@ -129,7 +132,7 @@ Post one comment on the PR:
 | 3 | <decision> | follows from <decision> |
 
 Fixed before approving: <list, or "nothing">
-Second opinion (Fable 5.1 or Opus): <"no concerns", or each concern and the maintainer's answer>
+Second opinion: <what Seer and Sourcery said and what came of it, and a Fable pass if one was asked for: "no concerns", or each concern and the maintainer's answer>
 Transcript writes: <"none", or each one and why it doesn't affect the evidence>
 ```
 
@@ -154,4 +157,5 @@ Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-o
 - Never review a PR that changes this skill; it goes to the maintainer.
 - Never merge a held PR, or a commit other than the one the verdict names.
 - The second opinion can't approve or block. Its concerns become questions.
+- No Fable pass unless the maintainer asks for it.
 - Don't run outside this machine: the evidence is here.
