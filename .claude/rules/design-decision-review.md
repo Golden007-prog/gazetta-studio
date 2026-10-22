@@ -380,7 +380,7 @@ Follows from Q12.
 | 2 | `SKILL.md`: scope, hold, decision list, lookup, checker, second opinion, fix-and-recheck loop, questions, verdict, merge (#1132) | 1 | (first runs) | Medium |
 | 3 | This doc, the rule 33 clause, `feature-design-process.md` lines, the `review-prs` hook, glossary entries, and the `hold` label; reviewed by the skill as its first run | 2 | (docs) | Low |
 | 4 | First runs on #1120 and #1124, after adding a decision list to each PR body | 3 | (manual) | Low |
-| 5 | Changes from the first run (#1136): the lookup's tamper checks and `process.exitCode`; in `SKILL.md`, the Q7 scope and author check, the AI reviewers as the second opinion (only Seer's and Sourcery's accounts), with Seer asked again after each push and the Fable run-or-skip question (Q3a, Q5), and the Q8 verdict checks (only this account's verdict, `main`'s commit, `--match-head-commit`) | 2 | unit-first | Low |
+| 5 | Changes from the first run (#1136): the lookup's tamper checks and `process.exitCode`; in `SKILL.md`, the Q7 scope and author check, the AI reviewers as the second opinion (only Seer's and Sourcery's accounts), with Seer asked again after each push and the Fable run-or-skip question (Q3a, Q5), and the Q8 verdict checks (only this account's verdict, the PR's base and a rebase when `main` changed the PR's files, `--match-head-commit`) | 2 | unit-first | Low |
 
 ## Migration
 
@@ -408,7 +408,7 @@ Choices made while building #1132, each carrying out a decision above.
 | Pasted text | Replaced by "[pasted text]" and flagged; the maintainer's own words around it still count | Q2 rule 2 |
 | The entry chain | The answer's parent must be an earlier entry, or absent (no `parentUuid`), as on a session's first entry and its compaction boundaries; a `parentUuid` that names no earlier entry is `broken-link` | Q9 |
 | Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and, outside heredoc bodies, names a `.jsonl` file and has a redirect (other than to `/dev/null` or between descriptors, such as `2>&1`), `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `truncate` or `dd`, or anywhere, heredoc bodies included, has code that opens a file for writing (`open(…, 'w'/'a'/'x')`, `writeFile`, `appendFile`, `write_text`); and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. Read-only scans can be flagged too | Q9 |
-| Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`, which `/review-prs` reads to find PRs without a passing verdict for their head; it counts only in a comment by the account the session posts as, on a PR that account opened | Q8 |
+| Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`; #1136 adds `base=<sha>`, the form `/review-prs` step 2 reads to find PRs without a passing verdict for their head. A verdict counts only in a comment by the account the session posts as, on a PR that account opened, and only while `main` hasn't changed the PR's files since its base | Q8 |
 | Merge gate | The head is the one the verdict names, there's no `hold` label, and the verdict is posted; then a rebase-merge with `--admin` | Q6, Q8, Q9; rule 16 |
 | The Fable agent's model | `model: "fable"`; if that fails, the default model | Q5 |
 
