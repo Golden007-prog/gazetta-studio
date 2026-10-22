@@ -22,8 +22,7 @@
  * follow-up cut; v1 ships with everyone-gets-the-default-role.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { rm, cp } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { rm, cp, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose'
 import type { Hono } from 'hono'
@@ -94,13 +93,24 @@ async function buildAppWithAuthBlock(authBlock: Record<string, unknown> | undefi
   return { app, projectRoot }
 }
 
+/** The starter copies under `.tmp/` this file's builds make. */
+async function starterCopies(): Promise<string[]> {
+  const entries = await readdir(tempDir(''), { withFileTypes: true }).catch(() => [])
+  return entries.filter(e => e.isDirectory() && e.name.startsWith('auth-integ-')).map(e => e.name)
+}
+
+let copiesBefore: string[] = []
+beforeAll(async () => {
+  copiesBefore = await starterCopies()
+})
+
 afterAll(async () => {
   for (const root of createdRoots) {
     await rm(root, { recursive: true, force: true }).catch(() => {})
   }
-  for (const root of createdRoots) {
-    expect(existsSync(root), `${root} left behind`).toBe(false)
-  }
+  // A run leaves no starter copy behind, including for builds that throw.
+  const left = (await starterCopies()).filter(name => !copiesBefore.includes(name))
+  expect(left).toEqual([])
 })
 
 async function buildAndTrack(authBlock: Record<string, unknown> | undefined): Promise<Hono> {
@@ -216,14 +226,11 @@ describe('Cut 10 — forwarded-user trust mode', () => {
   })
 
   it('AuthConfigSchema rejection at boot when neither trustedProxies nor allowAnyOrigin set', async () => {
-    const before = createdRoots.length
     await expect(
       buildAndTrack({
         trust: 'forwarded-user',
       }),
     ).rejects.toThrow()
-    // A build that throws still registers its starter copy for cleanup.
-    expect(createdRoots.length).toBe(before + 1)
   })
 })
 
