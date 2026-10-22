@@ -211,6 +211,10 @@ async function scanContentTree(
   return items
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 /**
  * Walk a `pages/` or `fragments/` tree, reading every matching manifest
  * into `items` with relative-path keys. Recurses so nested dynamic
@@ -234,32 +238,55 @@ async function scanManifestsInto(
   relPrefix: string,
   manifestName: string,
   items: Map<string, BlobContent>,
+  prefetchedEntries?: Awaited<ReturnType<StorageProvider['readDir']>>,
 ): Promise<void> {
   let entries: Awaited<ReturnType<StorageProvider['readDir']>>
-  try {
-    entries = await storage.readDir(absDir)
-  } catch {
-    return // Directory doesn't exist (or provider threw) — nothing to scan.
+  if (prefetchedEntries) {
+    // Recursion: the parent already listed this directory to discover it,
+    // so reuse that listing. Re-listing here behind the catch below would
+    // silently drop this subtree from the baseline on a transient error,
+    // and a later restore would DELETE those paths (#1100 review).
+    entries = prefetchedEntries
+  } else {
+    try {
+      entries = await storage.readDir(absDir)
+    } catch (err) {
+      // Root scan location: a genuinely missing directory means "nothing
+      // to scan", but readDir errors carry no portable not-found signal
+      // across providers, so confirm absence with exists(). Any other
+      // failure (transient, permission, storage outage) must abort the
+      // write - recording a baseline without the whole location would
+      // let a later restore DELETE every manifest in it (#1100 review).
+      // exists() throwing also fails closed.
+      if (await storage.exists(absDir)) throw err
+      return
+    }
   }
   // `page.json` + `page.<locale>.json` (locale is one dot-free segment,
-  // per localeFilename's normalizeLocale).
-  const base = manifestName.replace(/\.json$/, '')
-  const manifestPattern = new RegExp(`^${base}(\\.[^.]+)?\\.json$`)
+  // per localeFilename's normalizeLocale). The locale-variant pattern
+  // only applies to `.json` manifests - a custom non-JSON manifest name
+  // matches exactly, as before #1098. The basename is escaped so custom
+  // names with regex metacharacters match literally.
+  const jsonBase = manifestName.endsWith('.json') ? manifestName.slice(0, -'.json'.length) : null
+  const manifestPattern = jsonBase === null ? null : new RegExp(`^${escapeRegExp(jsonBase)}(\\.[^.]+)?\\.json$`)
   for (const e of entries) {
     if (!e.isDirectory) continue
     const sub = join(absDir, e.name)
     const relSub = `${relPrefix}/${e.name}`
-    let subEntries: Awaited<ReturnType<StorageProvider['readDir']>>
-    try {
-      subEntries = await storage.readDir(sub)
-    } catch {
-      subEntries = []
-    }
+    // No catch here: this directory exists (the parent listing just
+    // returned it), so a readDir failure is a real error, not a missing
+    // directory. Letting it throw aborts the baseline - recording
+    // without this directory's manifests would let a later restore
+    // DELETE them as absent from the snapshot (#1098 review).
+    const subEntries = await storage.readDir(sub)
     for (const f of subEntries) {
-      if (f.isDirectory || !manifestPattern.test(f.name)) continue
+      if (f.isDirectory) continue
+      const matches = manifestPattern === null ? f.name === manifestName : manifestPattern.test(f.name)
+      if (!matches) continue
       items.set(`${relSub}/${f.name}`, await storage.readFile(join(sub, f.name)))
     }
-    // Recurse for nested routes (pages/blog/[slug]/page.json).
-    await scanManifestsInto(storage, sub, relSub, manifestName, items)
+    // Recurse for nested routes (pages/blog/[slug]/page.json), reusing
+    // the listing already fetched above instead of reading it again.
+    await scanManifestsInto(storage, sub, relSub, manifestName, items, subEntries)
   }
 }

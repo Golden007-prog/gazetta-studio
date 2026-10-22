@@ -63,6 +63,183 @@ describe('recordWrite', () => {
     ])
   })
 
+  it('a failed child-directory listing fails the baseline instead of recording an incomplete one (#1098 review)', async () => {
+    // A transient readDir error on one item directory must abort the
+    // baseline: recording without that directory's manifests would let a
+    // later restore DELETE them as "absent from the snapshot".
+    const inner = memoryStorage()
+    inner.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/home/page.json': 'home',
+      'pages/about/page.json': 'about',
+      'pages/about/page.fr.json': 'about-fr',
+    })
+    const storage = {
+      ...inner,
+      async readDir(path: string) {
+        if (path.endsWith('pages/about')) throw new Error('storage transient')
+        return inner.readDir(path)
+      },
+    }
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await expect(
+      recordWrite({
+        history,
+        contentRoot,
+        operation: 'save',
+        items: [{ path: 'pages/home/page.json', content: 'home-v2' }],
+      }),
+    ).rejects.toThrow(/storage transient/)
+    // Nothing recorded - an incomplete baseline was not persisted.
+    expect(await history.listRevisions()).toHaveLength(0)
+  })
+
+  it('a failed nested-directory listing cannot silently omit a subtree; directories are listed once (#1100 review)', async () => {
+    // Depth >= 2: recursion into an existing subdirectory must reuse the
+    // listing the parent already fetched. Re-listing behind a catch would
+    // swallow transient errors and omit the subtree from the baseline,
+    // with the same restore-deletes consequence. This fault throws if the
+    // directory is listed a SECOND time, so a regression that reintroduces
+    // a swallowed re-listing fails here instead of reaching users.
+    const inner = memoryStorage()
+    inner.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/about/page.json': 'about',
+      'pages/about/[id]/page.json': 'nested',
+    })
+    let aboutListings = 0
+    const storage = {
+      ...inner,
+      async readDir(path: string) {
+        if (path.endsWith('pages/about') && ++aboutListings === 2) throw new Error('storage transient')
+        return inner.readDir(path)
+      },
+    }
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/about/page.json', content: 'about-v2' }],
+    })
+
+    const list = await history.listRevisions()
+    const baseline = await history.readRevision(list[1].id)
+    expect(Object.keys(baseline.snapshot)).toContain('pages/about/[id]/page.json')
+    expect(aboutListings).toBe(1)
+  })
+
+  it('a failed root scan-location listing fails the baseline instead of recording an empty one (#1100 review)', async () => {
+    // The root probe must not treat a transient/permission listing error
+    // as "location missing": that would record a baseline without the
+    // whole location, and restore would delete every manifest in it.
+    const inner = memoryStorage()
+    inner.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/home/page.json': 'home',
+    })
+    const storage = {
+      ...inner,
+      async readDir(path: string) {
+        if (path === 'pages') throw new Error('storage transient')
+        return inner.readDir(path)
+      },
+    }
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await expect(
+      recordWrite({
+        history,
+        contentRoot,
+        operation: 'save',
+        items: [{ path: 'pages/home/page.json', content: 'home-v2' }],
+      }),
+    ).rejects.toThrow(/storage transient/)
+    expect(await history.listRevisions()).toHaveLength(0)
+  })
+
+  it('a genuinely missing root scan location still scans as empty (#1100 review)', async () => {
+    // Missing-location semantics are preserved: providers whose readDir
+    // throws on absent directories (fs, S3) must not fail the write when
+    // the location simply does not exist.
+    const inner = memoryStorage()
+    inner.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/home/page.json': 'home',
+    })
+    const storage = {
+      ...inner,
+      async readDir(path: string) {
+        if (path === 'fragments') throw new Error('ENOENT: no such directory')
+        return inner.readDir(path)
+      },
+    }
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/home/page.json', content: 'home-v2' }],
+    })
+
+    const list = await history.listRevisions()
+    expect(list).toHaveLength(2)
+    const baseline = await history.readRevision(list[1].id)
+    expect(Object.keys(baseline.snapshot)).toContain('pages/home/page.json')
+  })
+
+  it('custom scan-location manifest names with regex metacharacters match literally (#1098 review)', async () => {
+    storage.seed({
+      'data/main/page+v2.json': 'exact',
+      'data/main/pageeev2.json': 'unrelated - must NOT be captured',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      scanLocations: [{ dir: 'data', manifest: 'page+v2.json' }],
+      scanRootFiles: [],
+      items: [{ path: 'data/main/page+v2.json', content: 'exact-v2' }],
+    })
+
+    const list = await history.listRevisions()
+    const baseline = await history.readRevision(list[1].id)
+    const paths = Object.keys(baseline.snapshot)
+    expect(paths).toContain('data/main/page+v2.json')
+    expect(paths).not.toContain('data/main/pageeev2.json')
+  })
+
+  it('custom non-JSON scan-location manifests are captured exactly (#1098 review)', async () => {
+    storage.seed({
+      'records/main/records.yaml': 'yaml-content',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      scanLocations: [{ dir: 'records', manifest: 'records.yaml' }],
+      scanRootFiles: [],
+      items: [{ path: 'records/main/records.yaml', content: 'yaml-v2' }],
+    })
+
+    const list = await history.listRevisions()
+    const baseline = await history.readRevision(list[1].id)
+    expect(Object.keys(baseline.snapshot)).toContain('records/main/records.yaml')
+  })
+
   it('baseline captures locale variant manifests, including nested pages (#1088)', async () => {
     // A translation that exists before the target has any history must
     // be in the first snapshot - otherwise undoing its first save
