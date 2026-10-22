@@ -8,6 +8,7 @@ How a page or fragment deleted on the source stops being served by a target. Tod
 - [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094): the issue this design resolves
 - [#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060): served sites didn't read archive markers; #1118 fixed it, so worker and ESI targets serve archives as 301 or 410
 - [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152): what plain-static targets should serve at an archived route; today the host serves the marker file where no `_redirects` row applies
+- [#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138): `gazetta serve` and the generated worker get the site's languages; a prerequisite for translations falling back on worker and ESI targets
 - [`design-publishing.md`](design-publishing.md) and [`design-decisions.md`](design-decisions.md) #16: Publish is one verb with an author-chosen direction
 - [`design-publish-undo.md`](design-publish-undo.md): Q4's removal step and the shared target-publish function, which removals reuse
 - [`sidecars.md`](sidecars.md): per-item sidecars, and target indices that describe the target (#1077), which the Q4 check reads
@@ -44,13 +45,13 @@ Read from code on 2026-10-22, not reproduced end to end:
 
 1. `compareTargets` reports items present on the destination but absent from the source as `deleted` (`compare.ts`). The publish list **pre-selects** them, because they count as changes (`hasChanges` in `usePublishItems.ts`), although their checkbox is hidden (`PublishItemList.vue:128`), and the panel sends them in `items` (`PublishPanel.vue:306`); `publishItems` copies nothing for them. The CLI never mentions them, and the sync chip counts them ("N behind"), so the target stays behind with no action available.
 2. No code removes a published item from a target. Publish undo's cut 2 builds that step.
-3. **Worker and ESI targets serve archived pages as 301 or 410** since #1118 ([#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060)). Plain-static targets get their rows from `_redirects`, which is rebuilt from the **source's** archived manifests (`admin-api/routes/publish.ts`, `cli/index.ts`), so a purged archive's row drops at the next publish of anything. Where the host doesn't apply a row, it serves the archived route's marker file, a blank page ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)).
+3. **Worker and ESI targets serve archived pages as 301 or 410** since #1118 ([#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060)), in the default language; in other languages they need the site's languages, which `gazetta serve` and the generated worker get with [#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138). Plain-static targets get their rows from `_redirects`, which is rebuilt from the **source's** archived manifests (`admin-api/routes/publish.ts`, `cli/index.ts`), so a purged archive's row drops at the next publish of anything. Where the host doesn't apply a row, it serves the archived route's marker file, a blank page ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)).
 4. **Unpublished archives leak into `_redirects`.** Archiving a page on the source and then publishing any other item to a plain-static target with `redirects.format` adds the archive's row, although its archive was never published there.
 5. `sitemap.xml` is built from the target's own sidecars, and archived pages carry `noindex` (`publish-item.ts:408`), so they're excluded. R2 listings can miss files just written, so the CLI merges source entries into that listing (`cli/index.ts`).
 6. A missing fragment doesn't fail loudly: `assembleEsi` (`assemble.ts`) replaces it with `<!-- fragment not found: … -->`, so pages that still use it are served without it, with status 200.
 7. Publish hooks receive `PublishItem { kind, name, path }`, described as "what's being published" (`hooks/types.ts`). A hook may read each item's source manifest.
 8. The admin route's CDN purge lists the URLs of the published pages from the **source** site, so a page no longer on the source is never purged; pages are edge-cached for 24 h by default (`publish-renderers.ts:218`).
-9. **Translations fall back.** When `index.fr.html` is missing, the worker and ESI `gazetta serve` serve the default-language page and fragment (`workers/cloudflare-r2.ts`, `serve.ts`). Static targets keep a translation at `fr/<route>/index.html`, with no fallback.
+9. **Translations fall back.** When `index.fr.html` is missing, the worker and ESI `gazetta serve` serve the default-language page and fragment once they're given the site's languages (`workers/cloudflare-r2.ts`, `serve.ts`). Neither entry point passes them yet (#1138), so today every non-default-language page on an ESI target answers 404. Static targets keep a translation at `fr/<route>/index.html`, with no fallback.
 10. Item folders nest: `pages/about/team/` lives inside `pages/about/` (`itemDir`, `publish-item.ts`).
 11. `gazetta publish --force` skips compare (`cli/index.ts`).
 
@@ -83,7 +84,7 @@ Follows from Q14.
 
 Everything compare reports today can be removed. Assets are out: compare doesn't list them, and removing asset bytes safely needs the target's asset index to describe the target (#1077). An image deleted for legal reasons stays downloadable on targets until the asset follow-up ships (Future directions).
 
-Removing an item deletes only its own files: its manifest, its `index*.html`, its sidecars and its rendered files. A nested page's folder stays: `pages/about/team/` survives the removal of `about` (finding 10). Removing a translation (`pages/about:fr`) deletes that variant's files only; on worker and ESI targets visitors then get the default-language page (finding 9), on static targets a 404.
+Removing an item deletes only its own files: its manifest, its `index*.html`, its sidecars and its rendered files. A nested page's folder stays: `pages/about/team/` survives the removal of `about` (finding 10). Removing a translation (`pages/about:fr`) deletes that variant's files only; on worker and ESI targets visitors then get the default-language page once #1138 lands (finding 9); on static targets a 404, as for a page that was never translated there.
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -92,17 +93,26 @@ Decided: maintainer, 2026-10-22 (#1120).
 | Include assets now | Needs compare to list assets on both sides and #1077's target indices first. |
 | Pages only | Fragments and translations only on the target would keep the target behind forever: the same bug. |
 
+A removed translation on a static target answers 404, and the fallback on worker and ESI targets waits for #1138, as the archive copy waited for #1060.
+
+Decided: maintainer, 2026-10-22 (#1120)
+
+| Rejected | Why |
+|---|---|
+| A static target falls back too (a redirect or a `_redirects` row to the default-language page) | A new mechanism; a static target already answers 404 for a page that was never translated there |
+| Describe the fallback without #1138 | Today every non-default-language page on an ESI target answers 404, so the copy and the live check would describe a fallback that doesn't happen |
+
 ### Q4 — A removal can't break what stays on the target
 
 Before any write, publish refuses when something staying on the destination still uses what is being removed:
 - a page or fragment that uses a removed fragment, unless it is published in the same run with a version that no longer uses it, or removed with it;
-- an archive that redirects to a removed page, unless it is also removed or republished pointing elsewhere.
+- an archive that redirects to a removed page, unless it is also removed or republished pointing elsewhere (it then no longer depends on the removed page, so this follows from the rule above).
 
 Removing a fragment's translation while its default-language version stays breaks nothing, because the runtimes fall back (finding 9); only removing a fragment's default version is checked against its users.
 
 The check reads the destination's `fragment-deps` and `alias-targets` indices, which must describe the target (#1077). Where an item staying on the target has no forward record, its users can't be known and the check refuses, naming it (Q12).
 
-The panel shows the problem on the row and keeps Publish disabled: "Still used on production by pages/home — select it too", with a link that selects it. When the item that still uses it is unchanged and uses the removed fragment on the source too (after a `git rm` of the fragment), there is nothing to select: the row says "pages/home still uses @promo on local too — fix it there first", and the source fails validation as well. The server repeats the check as a backstop and writes nothing when it fails. Removals run after everything else in the publish (Q15). Static targets bake fragments into pages, so only the redirect check applies there.
+The panel shows the problem on the row and keeps Publish disabled: "Still used on production by pages/home — select it too", with a link that selects it. When the item that still uses it also uses the removed fragment on the source (after a `git rm` of the fragment), there is nothing to select: the row says "pages/home still uses @promo on local: fix it there first", and the source fails validation as well. The server repeats the check as a backstop and writes nothing when it fails. Removals run after everything else in the publish (Q15). Static targets bake fragments into pages, so only the redirect check applies there.
 
 Decided: maintainer, 2026-10-22 (#1120). Refusing unknown users follows from Q12, and removals running last from Q15.
 
@@ -114,7 +124,7 @@ Decided: maintainer, 2026-10-22 (#1120). Refusing unknown users follows from Q12
 
 ### Q5 — A purge changes nothing on a target until its removal is published
 
-After a purge on the source, a target keeps serving the archive until the author publishes the removal; then the page answers 404 (or, for a translation on worker and ESI targets, the default-language page). On plain-static targets the archive's `_redirects` row stays until then (Q6). Where the host doesn't apply the row (on Netlify, or for an archive without an alias on Cloudflare Pages), it serves the archived route's marker file instead, a blank page (#1152).
+After a purge on the source, a target keeps serving the archive until the author publishes the removal; then the page answers 404 (or, for a translation on worker and ESI targets once #1138 lands, the default-language page). On plain-static targets the archive's `_redirects` row stays until then (Q6). Where the host doesn't apply the row (on Netlify, or for an archive without an alias on Cloudflare Pages), it serves the archived route's marker file instead, a blank page (#1152).
 
 The removal row says what changes, from what the target serves: "Only on production: redirects to /welcome, will return 404 after removal", or "returns 410, will return 404 after removal". Docs advise: to tell search engines a page is gone, archive it and publish that before purging.
 
@@ -129,9 +139,9 @@ A 404 after a 410 costs nothing for search when the archive answered 410 for a w
 
 ### Q6 — `_redirects` describes the target, from per-page archive sidecars
 
-Publishing an archived page also writes a zero-byte sidecar next to it on the target: `.gone`, or `.alias-<name>` with the name encoded as other sidecars encode names (slashes → dots, `encodeRefName`). Writing one deletes the page's other archive sidecar first, so re-pointing an alias (rename flattening, soft-delete Q3) leaves one row. Publishing a live version over it, or removing the page, deletes it.
+Publishing an archived page also writes a zero-byte sidecar next to it on the target: `.gone`, or `.alias-<name>` with the name encoded as other sidecars encode names (slashes → dots, `encodeRefName`). Writing one deletes the page's other archive sidecar first, so re-pointing an alias (rename flattening, soft-delete Q3) leaves one row; this follows from `_redirects` having one row per page. Publishing a live version over it, or removing the page, deletes it.
 
-`_redirects` is built from the listing the sitemap already reads (`listSidecars(target, 'pages')`). It keeps purged archives until their removal (Q5) and never contains an archive the target doesn't hold (finding 4). Archive sidecars written or deleted in the same publish are merged into that listing in memory, because R2 listings can miss files just written (finding 5). Building it costs no extra read when `siteUrl` is set, because the sitemap lists anyway, and one listing otherwise. As in v1, the default-locale page decides a page's archive state, and the file has one row per language the target publishes (`/fr/landing  /fr/welcome  301`; `design-redirects.md`, #1124, #1130). Only plain-static targets use `_redirects`; worker targets read the marker instead (#1118).
+`_redirects` is built from the listing the sitemap already reads (`listSidecars(target, 'pages')`). It keeps purged archives until their removal (Q5) and never contains an archive the target doesn't hold (finding 4). Archive sidecars written or deleted in the same publish are merged into that listing in memory, because R2 listings can miss files just written (finding 5); merging the deletions follows from never listing an archive the target doesn't hold. Building it costs no extra read when `siteUrl` is set, because the sitemap lists anyway, and one listing otherwise. As in v1, the default-locale page decides a page's archive state, and the file has one row per language the target publishes (`/fr/landing  /fr/welcome  301`; `design-redirects.md`, #1124, #1130). Only plain-static targets use `_redirects`; worker targets read the marker instead (#1118).
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -194,7 +204,7 @@ See "Cut sequence". The planner issue opens once #1092 cut 2 and #1093 cut 2 hav
 
 ### Q12 — The check works on every target: indices on public targets, unknown means refuse
 
-Once #1077 lands, public targets keep dependency indices too. `design-public-storage.md` Q5 keeps them off public targets only because, today, they're rebuilt from the source and would reveal unpublished page names; indices that describe the target reveal only which published pages use which fragments. An item staying on the target with no forward record (for example a target-only item kept through #1077's one-time `--force` rebuild) has unknown users: the check refuses, naming it ("pages/old-landing is only on production and can't be checked — remove it too, or keep @promo").
+Once #1093's cuts 1–2 land (target indices that describe the target, #1077), public targets keep dependency indices too. `design-public-storage.md` Q5 keeps them off public targets only because, today, they're rebuilt from the source and would reveal unpublished page names; indices that describe the target reveal only which published pages use which fragments. An item staying on the target with no forward record (for example a target-only item kept through #1077's one-time `--force` rebuild) has unknown users: the check refuses, naming it ("pages/old-landing is only on production and can't be checked — remove it too, or keep @promo").
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -265,10 +275,10 @@ Rule 23: removals look like any other row, stay unselected until chosen, and say
 | `RemovalArchiveAlias` | "Only on production: redirects to /welcome, will return 404 after removal" | `publish-item-remove`; `publish-item-removal-note` |
 | `RemovalArchiveGone` | "Only on production: returns 410, will return 404 after removal" | `publish-item-remove`; `publish-item-removal-note` |
 | `RemovalStillUsed` | "Still used on production by pages/home — select it too" | link `publish-item-select-users`; Publish disabled; `publish-item-still-used` |
-| `RemovalSourceStillUses` | "pages/home still uses @promo on local too — fix it there first" | Publish disabled; `publish-item-still-used` |
+| `RemovalSourceStillUses` | "pages/home still uses @promo on local: fix it there first" | Publish disabled; `publish-item-still-used` |
 | `RemovalUnknownUsers` | "pages/old-landing is only on production and can't be checked — remove it too, or keep @promo" | Publish disabled; `publish-item-still-used` |
 
-The archive rows describe what the target serves (for plain-static hosts, see #1152).
+The archive rows describe what the target serves (for plain-static hosts, see #1152). The translation row's worker and ESI copy waits for #1138.
 
 Header: summary "3 modified · 1 added · 2 only on production" (`publish-items-summary`); "Also select the 2 removals" (`publish-select-removals`) only when removals exist; "Select all" selects changes only.
 
@@ -312,7 +322,7 @@ The last case exits 1.
 Composition with designs in flight:
 - **Publish undo:** where the destination keeps history, removals are recorded in the publish revision (removed items are absent from its snapshot), so undoing the publish brings them back; elsewhere Q14 confirms first.
 - **Target indices (#1077):** removing an item deletes its edges and forward record; public targets keep indices too (Q12).
-- **Live check:** a removed page is expected to answer 404, a removed translation on worker and ESI targets the default-language page (`design-live-check.md` Q3).
+- **Live check:** a removed page is expected to answer 404, a removed translation on worker and ESI targets the default-language page once #1138 lands (`design-live-check.md` Q3).
 - **Public storage:** archive sidecars and indices are dot-prefixed like other per-item sidecars and reveal only published state (`design-public-storage.md` Q4, Q5 as amended by Q12).
 
 ## Cut sequence
@@ -337,7 +347,7 @@ No production users. Archived pages published before cut 1 have no archive sidec
 
 ## Future directions
 
-- **Removing assets** from targets, once #1077 makes target indices describe the target. Trigger: a takedown request (an image deleted for legal reasons stays downloadable) or storage growth on targets.
+- **Removing assets** from targets, once #1093 makes target indices describe the target (#1077). Trigger: a takedown request (an image deleted for legal reasons stays downloadable) or storage growth on targets.
 - **`beforeRemove` hook phase** for vetoing removals. Trigger: operator demand.
 - **`--remove <item>` on the CLI.** Trigger: demand.
 - **Sync chip split into behind and ahead**, as `design-editor-ux.md` describes.
