@@ -44,6 +44,14 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      # The worker folder isn't a workspace, so the root `npm ci` doesn't
+      # install it, and npx would download the newest wrangler on every
+      # deploy instead of the locked one (#1123). A step of its own keeps
+      # the deploy token away from install scripts.
+      - name: Install worker dependencies
+        working-directory: sites/gazetta.studio/worker
+        run: npm ci
+
       - name: Deploy worker
         working-directory: sites/gazetta.studio/worker
         run: npx wrangler deploy

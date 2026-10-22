@@ -7,13 +7,13 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "hono": "^4.12.0",
-    "gazetta": "file:../../../packages/gazetta"
+    "gazetta": "file:../../../packages/gazetta",
+    "hono": "^4.12.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250401.0",
-    "wrangler": "^4.151.3",
+    "@cloudflare/workers-types": "^5.20261022.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "wrangler": "^4.151.3"
   }
 }
