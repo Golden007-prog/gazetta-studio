@@ -16,6 +16,7 @@ import { logger } from 'hono/logger'
 import { createHash } from 'node:crypto'
 import type { StorageProvider, TargetType } from './types.js'
 import { assembleEsi, parseCacheComment } from './assemble.js'
+import { isPublicSitePath } from './public-site-path.js'
 import { archiveResponse } from './runtime/archive-response.js'
 import { fetchFragmentEntries } from './runtime/fragment-fetch.js'
 
@@ -209,6 +210,11 @@ export function createServer(options: ServeOptions) {
   if (type === 'static') {
     app.get('*', async c => {
       const requestPath = new URL(c.req.url).pathname
+      // Private storage (audit log, history, manifests, sidecars) answers
+      // 404, like a missing page.
+      if (!isPublicSitePath(requestPath)) {
+        return c.html('<h1>404 — Page not found</h1>', 404)
+      }
       const { locale } = extractLocale(requestPath, locales ?? [])
       const filePath = requestPath === '/' ? 'index.html' : `${requestPath.replace(/\/$/, '')}/index.html`
       try {
