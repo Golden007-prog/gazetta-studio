@@ -13,6 +13,7 @@ Walk every open PR. For each, do a real review (not a summary). Always ask befor
 1. **List open PRs** — `gh pr list --json number,title,author,isDraft,createdAt,mergeable,reviewDecision,statusCheckRollup` and present a table sorted oldest-first.
 
 2. **For each PR**, in order:
+   - **A PR recording the maintainer's decisions** — if every changed file is in [`review-decisions`](../review-decisions/SKILL.md)' scope and the body has a `## Decisions` list, run that skill instead of the steps below, unless the PR already has its approving verdict for the head commit (`<!-- review-decisions: head=<sha> verdict=approve -->`). It merges the PR itself when it passes ([`design-decision-review.md`](../../rules/design-decision-review.md) Q8)
    - **Read PR metadata** — `gh pr view <N> --json title,body,baseRefName,headRefName,additions,deletions,changedFiles,files,commits`
    - **Read the linked issue** if one exists — `gh issue view <N>` (look for `Closes #X` in body)
    - **Read the diff** — `gh pr diff <N>` (or use Read on changed files for big diffs)

@@ -379,6 +379,41 @@ the two units under one name once made re-decomposition unreachable.
 Infrastructure failures (rate limits, `spawn E2BIG`) never cause a
 hand-off — they say nothing about the spec.
 
+## Decision review
+
+**review-decisions**:
+Skill that reviews a PR recording the maintainer's design decisions, in the
+maintainer's place, and merges it when it passes. It checks that every
+decision the PR locks traces to the maintainer's own answer in this
+machine's session transcript, is recorded faithfully, and rests on true
+facts; a Fable agent adds a second opinion. Anything else becomes a picker
+question for the maintainer. Distinct from the code-review skills
+(`review-orchestrator` and its angles), which judge code. See
+[design-decision-review.md](design-decision-review.md).
+
+**Decision list**:
+The `## Decisions` table in a design PR's body: one row per decision the PR
+locks, with the session id and timestamp of the maintainer's answer, or the
+decision it follows from. `review-decisions` looks each answer up in the
+session transcript. Distinct from a bot's **decision log** (`> Decision:`
+lines in a bot transcript), which records a bot's own reasoning.
+
+**Decided mark**:
+The line `Decided: maintainer, <date> (#<PR>)` under each locked decision a
+PR adds or changes, or `Follows from <decision>` for one derived from an
+earlier decision. Tells readers and cut-planner who made the decision.
+Older decisions aren't backfilled.
+
+**Hold**:
+"hold #N" in a session, or a `hold` label on the PR: `review-decisions`
+won't merge that PR. Taken from Kubernetes' `/hold`.
+
+**Session transcript**:
+The JSONL file Claude Code writes for an interactive session, under
+`~/.claude/projects/<project>/<session id>.jsonl`. The evidence
+`review-decisions` checks (`bots/_lib/decision-answers.ts`). Distinct from
+a bot's **transcript** (the `<bot-name>-transcripts` Actions artifact).
+
 ## Issue triage
 
 **State role** / **Category role**:

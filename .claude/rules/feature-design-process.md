@@ -102,6 +102,11 @@ When an implementation cut diverges from its design, the design doc is updated i
 
 This extends [team-preferences rule 8](team-preferences.md) ("update docs in the same commit as the feature") from user-facing docs to internal design docs. Drift is a bug, caught at PR review; not a long-term decay problem to audit later.
 
+**Recording the maintainer's decisions** ([`design-decision-review.md`](design-decision-review.md)):
+
+- **In the PR body**, a `## Decisions` table: one row per decision the PR locks, with where it is, the decision in one line, the maintainer's answer (session id and the answer's timestamp, from `bots/_lib/decision-answers.ts --list`), and its kind: `yours`, or `follows from <decision>`. The `review-decisions` skill reads it, and runs right after the PR is opened.
+- **In the doc**, a line under each locked decision the PR adds or changes: `Decided: maintainer, <date> (#<PR>)`. A decision derived from an earlier one says so instead: `Follows from <decision>`. Older decisions aren't backfilled, and session ids stay out of the docs.
+
 **CONTEXT.md update trigger:**
 
 Per the `grill-with-docs` skill (`~/.claude/skills/grill-with-docs/SKILL.md`), terms land in `CONTEXT.md` inline as they're resolved during grilling — captured when they crystallise, not batched. The filter is "meaningful to a domain expert" (Page, Fragment, Active Target — yes; `ComponentManifest`, `ResolveContext` — no, those are implementation type names, not domain language). Follow the skill's rule rather than layering a project-specific convention on top.
@@ -279,6 +284,7 @@ Rules:
 - **Always present alternatives** — at least 2-3 options per question
 - **Always recommend** — never ask "what do you think?" without a position
 - **Reasoning is mandatory** — not just "I prefer B" but "B because..."
+- **State each recommendation in full** — a typed "agree" accepts exactly what the message before it says, and the design doc may lock no more than that ([`design-decision-review.md`](design-decision-review.md) Q9). Never "agree with the direction, details later"
 - **Capture as you go** — when a term is resolved, update CONTEXT.md inline; when a decision is made, capture in the design doc
 - **End with a Q-final on Cut sequence** — every design pass concludes with the cut-sequence Q. For each cut, lock:
   - Position in sequence + dependencies
