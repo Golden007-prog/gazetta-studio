@@ -7,9 +7,9 @@ paths:
 
 # Decision review
 
-A skill, `review-decisions`, reviews PRs that record the maintainer's design decisions, in the maintainer's place, and merges them when they pass. The maintainer still makes every decision, usually by answering grilling questions. The skill checks that a PR locks only what the maintainer answered, records it faithfully, and rests on true facts. Anything else comes back to the maintainer as a picker question.
+A skill, `review-decisions`, reviews PRs that record the maintainer's design decisions, in the maintainer's place, and merges them when they pass. The maintainer still makes every decision, usually by answering grilling questions. The skill checks that a PR locks only what the maintainer answered, records it faithfully, and rests on true facts. Whatever only the maintainer can decide comes back as a picker question; the author fixes its own recording errors (Q4).
 
-**Status**: design pass complete (2026-10-22), grilled Q1–Q12. The lookup script, its tests and the skill shipped in #1132; this doc and the rule 33 clause were the skill's first review (#1133).
+**Status**: design pass complete (2026-10-22), grilled Q1–Q12. The lookup script, its tests and the skill shipped in #1132; this doc and the rule 33 clause were the skill's first review (#1133), which also settled the amendments to Q2, Q5, Q7, Q9 and Q10. The code changes those need are tracked in #1136.
 
 **Roles** used below:
 - **The maintainer** makes the decisions.
@@ -41,6 +41,7 @@ Rule 33 makes design PRs wait for the maintainer's review: #963 was merged with 
 - Other docs-only PRs: `docs/audits/`, user docs (Q7)
 - Code PRs, and anything that deploys (Q1, Q6)
 - PRs from contributors and bots, which have no transcript to check (Q7)
+- PRs that change the skill itself: its `SKILL.md`, this doc, the rule 33 clause (Q7)
 - A digest of approvals (Q1)
 - Tamper-proof evidence: a signature per PR, or a separate GitHub identity for the author (Q9; Future directions)
 
@@ -67,7 +68,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 | Any design PR; the skill escalates only problems it can detect | How #963 happened: a decision the maintainer never saw gets locked. A checker can catch contradictions, but it can't tell that a decision isn't the one the maintainer would have made |
 | A short review brief; the maintainer still approves every design PR | The same bottleneck, slightly smaller |
 | A, plus a periodic digest of what it approved | A recurring reading chore, the kind of process the maintainer avoids |
-| Every docs-only PR: audit logs, skill edits, user docs | Those need only the maintainer's merge OK, not a design review: a separate merge-permission question |
+| Every docs-only PR: audit logs, skill edits, user docs | Those need only the maintainer's merge OK, not a design review: a separate merge-permission question. (Q7 later brought `SKILL.md` files into scope, because they hold wording the maintainer approved) |
 | Every PR, code included | Code PRs already get CI, Sourcery, Seer and the author's review, so what's left is merge permission, and merging `packages/gazetta` deploys production. A separate decision, better made once the skill has a track record |
 
 ### Q2 — How the skill learns what the maintainer decided
@@ -75,9 +76,11 @@ Decided: maintainer, 2026-10-22 (#1133)
 The PR body lists each decision with the timestamp of the maintainer's answer. The skill looks up each one in the session transcript and confirms it's really the maintainer's input: one lookup per decision, instead of searching the whole file. It runs only on this machine, where the transcripts are, which fits because design PRs come out of sessions with the maintainer.
 
 Three rules:
-1. A typed "agree" accepts the recommendation in the author's message just before it. The evidence is the pair, and the doc can't lock more than that message offered.
+1. A typed "agree" accepts the recommendations in the author's messages since the maintainer's previous answer: the turn it answers. The evidence is the pair, and the doc can't lock more than those messages offered.
 2. Only the maintainer's own input counts. System notices, pasted text and tool output are excluded.
 3. The verdict comment quotes only the picker label or the short answer, because the repo is public.
+
+The evidence has to outlive the session. Claude Code deletes session transcripts older than `cleanupPeriodDays` (default 30 days), so the maintainer's user settings set it to 3650, the value Claude Code's docs suggest for long retention.
 
 Q2 first called the transcript "the only evidence I can't write". Q9 corrects that: it is tamper-evident, not tamper-proof.
 
@@ -85,6 +88,8 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 | Rejected | Why |
 |---|---|
+| An "agree" accepts only the author's last message before it | A recommendation can span the turn: Q1's lock was the first of two messages before the "agree" that accepted it, and the lookup already returns the whole turn |
+| Keep the default 30 days of transcripts | A PR left open for a month couldn't be checked, and every answer would have to be given again |
 | The skill searches the transcript for each decision | Slow and fuzzy: the file is 141 MB, and a short answer like "agree" means nothing without the question before it |
 | A decision log the author writes during grilling, trusted as written | The author's own writing |
 | The maintainer confirms each PR on GitHub, with a comment or reaction | The author posts as the maintainer's account, so a confirmation looks the same whoever wrote it |
@@ -159,12 +164,16 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 A fresh Opus 5.5 agent runs the checks, which are lookups and re-reads. A fresh Fable 5.1 agent gives the second opinion. A second opinion needs independence from the author (who runs on Opus 5.5) and at least the author's capability, and Fable 5.1 is the only model with both. It also reads Sourcery's and Seer's comments on the PR: they're inputs, worth turning into questions when they hold, not the opinion itself. If Fable isn't available, a second fresh Opus agent gives the second opinion.
 
-The cost is one Fable pass per design PR, at 2.5 times Opus's price per token, which can take several minutes. (Prices from the bundled model reference dated 2026-10-06: Fable 5.1 $10 / $50 per million tokens in / out, Opus 5.5 $4 / $20.)
+So that it sees Seer's review, the second opinion starts once Seer has posted, or after 15 minutes, whichever comes first; the checker runs meanwhile. After a fix round or an answered question, it runs again only on the decisions whose text changed, and its earlier result stands for the rest.
+
+The cost is one Fable pass per design PR, plus one for each decision that changes, at 2.5 times Opus's price per token; a pass can take several minutes. (Prices from the bundled model reference dated 2026-10-06: Fable 5.1 $10 / $50 per million tokens in / out, Opus 5.5 $4 / $20.)
 
 Decided: maintainer, 2026-10-22 (#1133)
 
 | Rejected | Why |
 |---|---|
+| Start the second opinion as soon as the PR opens | Seer usually posts about 4 minutes after a PR opens, so its comments would be missed |
+| Run the whole second opinion again after every round | A full Fable pass each time, on decisions that didn't change |
 | One fresh Opus agent does both | The author's model, so the same blind spots; having just verified everything also anchors its opinion |
 | A second fresh Opus agent gives the second opinion | Still the author's model, with its blind spots (kept as the fallback) |
 | Sonnet 5.5 or Haiku 5.5 gives the second opinion | A weaker reviewer misses what the stronger author missed, and adds false alarms |
@@ -173,7 +182,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 ### Q6 — Who merges
 
-The author merges as soon as the skill approves, or right after the maintainer answers its escalations, and then tells the maintainer in one line ("merged #1124: all 3 decisions yours, no concerns"). The approval is the review it replaces, so asking again adds nothing. Nothing in scope deploys (Q7). A wrong merge is cheap to undo: revert a docs commit, and the verdict comment shows what was approved and on what evidence.
+The author merges as soon as the skill approves, or right after the maintainer answers its escalations, and then tells the maintainer in one line ("merged #1124: all 3 decisions yours, no concerns"). The approval is the review it replaces, so asking again adds nothing. Nothing in scope deploys (Q7). A wrong merge is cheap to undo: revert a docs commit, and the verdict comment shows what was approved and on what evidence. The merge uses GitHub's admin bypass (`--admin`), as every merge here does: `main` requires an approving review, and the maintainer's account, which the author posts as, can't approve its own PR.
 
 "Ask before every merge" stays for everything outside the skill's scope, including code PRs and anything that deploys.
 
@@ -188,16 +197,20 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 ### Q7 — Which PRs are in scope
 
-The skill's scope is every file that records the maintainer's decisions: everything under `.claude/rules/` and `docs/adr/`, plus `CONTEXT.md`, `ROADMAP.md`, `docs/non-goals.md`, and `SKILL.md` files under `.claude/skills/`. It's the same review whichever file the decision is in: did the maintainer decide this, and is it recorded faithfully? Folders rather than a list of files, so new design or rule files are covered without updating the skill. None of these files deploy.
+The skill's scope is every file that records the maintainer's decisions: everything under `.claude/rules/` and `docs/adr/`, plus the root `CLAUDE.md`, `CONTEXT.md`, `ROADMAP.md`, `docs/non-goals.md`, and `SKILL.md` files under `.claude/skills/`. It's the same review whichever file the decision is in: did the maintainer decide this, and is it recorded faithfully? Folders rather than a list of files, so new design or rule files are covered without updating the skill. `CLAUDE.md` is in because it summarises each design doc's locked decisions, and a design pass adds its line there. None of these files deploy.
 
-Two rules:
+Three rules:
 - **A PR that touches any file outside the set is out of scope.** It gets the normal review and the maintainer's merge OK. This keeps code, workflows and anything that deploys out.
 - **A PR that didn't come out of a session with the maintainer is out of scope**, because there's no transcript to check: contributors' and bots' PRs.
+- **A PR that changes the skill itself is out of scope:** its `SKILL.md`, this design doc, or the rule 33 clause. The skill runs from whatever copy is checked out, so a PR weakening it would be reviewed by the weakened copy: the one case where the review can't be independent, and a handful of PRs a year. The rule starts after #1133, which Q12 made the skill's first run.
 
 Decided: maintainer, 2026-10-22 (#1133)
 
 | Rejected | Why |
 |---|---|
+| Leave the root `CLAUDE.md` out | A design PR that adds its doc's line there would fall out of scope (#1133 left the line out for that reason) |
+| Also let a design PR carry its research or trial-log file under `docs/audits/` | Those hold facts, not decisions (as for the `docs/audits/` row below) |
+| Changes to the skill stay in scope, reviewed with the copy on `main` | Still the one case where the review can't be independent; a handful of PRs a year are cheap to read |
 | Only the design docs rule 33 names: `.claude/rules/design-*.md`, `docs/adr/`, `CONTEXT.md` | Changes to rules, priorities and skills would still wait for the maintainer, though they record decisions the same way |
 | The scope above, plus research and trial-log records under `docs/audits/` | Those contain facts, not decisions. Merging them without the maintainer's OK is the separate merge-permission question from Q1, best added once the skill has a track record |
 | Any PR that touches only docs, including the user-facing docs under `docs/` | User docs make public claims about behaviour, which goes beyond "did the maintainer decide this?" |
@@ -226,7 +239,7 @@ A script looks up the timestamps the PR lists, returns each answer with the ques
 This corrects Q2. Claude Code writes the transcript, but nothing stops a shell command of the author's from editing it, so it is tamper-evident rather than tamper-proof. Such a command would itself be recorded in the transcript, and a faked answer wouldn't fit the links. The realistic failure is the author recording an answer wrong: paraphrasing past what was chosen, losing detail after compaction, or getting the order mixed up. The lookup catches that every time, and a deliberate fake would leave a trace, which is enough for a solo project.
 
 Three additions, from how others record a person's decisions:
-1. **Exact comparison** (from "Loopjacking", arXiv 2609.21081: "complete canonical approval rendering and exact use-time comparison"). The script returns the question exactly as the maintainer saw it: the question, each option with its description, and the pick. The doc may lock only what that shows. For a typed "agree", what the maintainer saw is the author's message just before, so recommendations must state each decision in full, never "agree with the direction, details later".
+1. **Exact comparison** (from "Loopjacking", arXiv 2609.21081: "complete canonical approval rendering and exact use-time comparison"). The script returns the question exactly as the maintainer saw it: the question, each option with its description, and the pick. The doc may lock only what that shows. For a typed "agree", what the maintainer saw is the author's messages since the maintainer's previous answer (Q2 rule 1), so recommendations must state each decision in full, never "agree with the direction, details later".
 2. **A hold** (from Kubernetes' `/hold`). The maintainer says "hold #N", or adds a `hold` label, and the skill won't merge that PR.
 3. **"Decided by" on every locked decision** (from MADR's decision-makers), for example "Decided: maintainer, 2026-10-22 (#1124)". Q10 places it.
 
@@ -248,7 +261,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 **In the PR body** (fixed by Q2 and Q9), a `## Decisions` table that the lookup reads: one row per decision, with where it is, the decision in one line, the maintainer's answer (session and timestamp), and its kind: `yours`, or `follows from <decision>`.
 
-**In the docs**, a line under each locked decision the PR adds or changes: "Decided: maintainer, 2026-10-22 (#1124)". A decision that follows from another cites it instead: "Follows from Q2 F1". The mark sits where the decision is read, which matters for cut-planner when it copies locked decisions into cuts. It's MADR's "decision-makers" idea applied per decision, since our docs hold many decisions. It costs one line per new decision, and it makes derived decisions name their source, which Q1 already requires.
+**In the docs**, a line under each locked decision the PR adds or changes: "Decided: maintainer, 2026-10-22 (#1124)". A decision that follows from another cites it instead: "Follows from Q2 F1". The mark sits where readers and contributors read the decision. cut-planner reads only its planner issue, never a design doc, so seeding a planner issue copies each decision's Decided line into its `## Locked decisions`. It's MADR's "decision-makers" idea applied per decision, since our docs hold many decisions. It costs one line per new decision, and it makes derived decisions name their source, which Q1 already requires.
 
 Older decisions aren't backfilled: only decisions a PR adds or changes get the mark. Session ids and timestamps stay out of the docs, because a reader can't use them; they live in the PR list and the verdict comment.
 
@@ -258,7 +271,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 |---|---|
 | A table at the top of each design doc listing every decision with who and when | Drifts from the Q sections it repeats, and the doc grows a second copy of every decision |
 | One metadata block per doc, MADR-style | Our docs hold many decisions from different dates, while MADR covers one decision per record |
-| No mark in the doc; provenance only in the PR and the verdict comment | Nobody can tell from the doc who decided, which matters to readers and to cut-planner |
+| No mark in the doc; provenance only in the PR and the verdict comment | Nobody can tell from the doc who decided, which matters to readers and contributors |
 
 ### Q11 — Name and home
 
@@ -277,7 +290,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 ### Q12 — Building it and switching it on
 
-Built in one session, riskiest part first: the lookup script with tests, then `SKILL.md` (checking agent, Fable second opinion, verdict comment, questions, fix-and-recheck loop, hold, merge), then this doc and the rule amendments, then first runs on #1120 and #1124. That makes two PRs: a code PR (#1132: the script, its tests and the skill), merged with the maintainer's usual OK, and a docs PR (this doc, rule 33 and the process lines), which the skill reviews as its first run, checking Q1–Q12 against the session transcript. Turning the skill off means removing one clause from rule 33.
+Built in one session, riskiest part first: the lookup script with tests, then `SKILL.md` (checking agent, Fable second opinion, verdict comment, questions, fix-and-recheck loop, hold, merge), then this doc and the rule amendments, then first runs on #1120 and #1124. That makes two PRs: a code PR (#1132: the script, its tests and the skill), merged with the maintainer's usual OK, and a docs PR (this doc, rule 33 and the process lines), which the skill reviews as its first run, checking Q1–Q12 against the session transcript. Turning the skill off means removing its clause from rule 33 and the lines that hand PRs to it in `review-prs` and `feature-design-process.md`.
 
 Decided: maintainer, 2026-10-22 (#1133)
 
@@ -299,9 +312,11 @@ lookup: bots/_lib/decision-answers.ts --at <each listed timestamp> (Q2, Q9)
   ▼
 checker (fresh Opus 5.5): provenance, fidelity, edits around decisions,
   soundness, transcript writes (Q3, Q5)
-second opinion (fresh Fable 5.1): concrete concerns only (Q3a, Q5)
+second opinion (fresh Fable 5.1): concrete concerns only; starts once Seer
+  has posted, or after 15 minutes (Q3a, Q5)
   ▼
-mechanical findings → the author fixes them and re-runs, at most 3 rounds (Q4)
+mechanical findings → the author fixes them and re-runs, at most 3 rounds;
+  the second opinion re-runs only on decisions that changed (Q4, Q5)
 decision findings and concerns → picker questions, one batch per PR (Q3a, Q4)
   ▼
 verdict comment naming the commit it checked (Q8)
@@ -339,15 +354,16 @@ Follows from Q12.
 | 2 | `SKILL.md`: scope, hold, decision list, lookup, checker, second opinion, fix-and-recheck loop, questions, verdict, merge (#1132) | 1 | (first runs) | Medium |
 | 3 | This doc, the rule 33 clause, `feature-design-process.md` lines, the `review-prs` hook, glossary entries, and the `hold` label; reviewed by the skill as its first run | 2 | (docs) | Low |
 | 4 | First runs on #1120 and #1124, after adding a decision list to each PR body | 3 | (manual) | Low |
+| 5 | Changes from the first run (#1136): the lookup's tamper checks and `process.exitCode`; in `SKILL.md`, the Q7 scope and author check, the Seer wait and re-runs on changed decisions (Q5), and `--match-head-commit` | 2 | unit-first | Low |
 
 ## Migration
 
-Design PRs opened before this doc (#1120, #1124) get a `## Decisions` list added to their PR body before the skill runs on them (Q12). Decisions already in the docs keep no mark (Q10). To switch the skill off, remove its clause from rule 33 (Q12).
+Design PRs opened before this doc (#1120, #1124) get a `## Decisions` list added to their PR body before the skill runs on them (Q12). Decisions already in the docs keep no mark (Q10). To switch the skill off, remove its clause from rule 33 and the lines that hand PRs to it in `review-prs` and `feature-design-process.md` (Q12).
 
 ## Open questions
 
 1. **The transcript format isn't a documented interface.** The lookup relies on fields Claude Code writes today (`uuid`, `parentUuid`, `origin`, `toolUseResult`, `sourceToolAssistantUUID`). If they change, lookups come back `not-found` or `broken-link`, which sends decisions to the maintainer instead of approving them: it fails safe, but it would stop the skill being useful until the script is updated.
-2. **Whether Fable 5.1 is available to sub-agents on the maintainer's plan.** The first run shows it; the fallback is a second Opus agent (Q5).
+2. ~~**Whether Fable 5.1 is available to sub-agents on the maintainer's plan.**~~ **Answered on the first run:** the second opinion on #1133 ran on Fable 5.1.
 
 ## Future directions
 
@@ -364,8 +380,15 @@ Choices made while building #1132, each carrying out a decision above.
 |---|---|---|
 | What a typed answer was shown | All of the author's messages since the maintainer's previous input, oldest first | Q2 rule 1; Q9 exact comparison |
 | Pasted text | Replaced by "[pasted text]" and flagged; the maintainer's own words around it still count | Q2 rule 2 |
-| The entry chain | A session's first entry has no parent; every other entry's parent must be an earlier entry | Q9 |
-| Writes to a transcript | Flagged when a command names a `.jsonl` file under `.claude/projects` and redirects or tees into it, edits it in place, moves, copies or truncates it, or runs code that writes a file; heredoc bodies are ignored, so read-only scripts aren't flagged | Q9 |
+| The entry chain | The answer's parent must be an earlier entry, or missing; a session's first entry and its compaction boundaries have no parent | Q9 |
+| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and redirects or tees into it, edits it in place, moves, copies or truncates it, or runs code that writes a file (heredoc bodies are ignored), and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. A read-only scan whose script is written with `cat >` and run with the transcript path is flagged too | Q9 |
 | Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`, which `/review-prs` reads to find PRs without a passing verdict for their head | Q8 |
-| Merge gate | The head is the one the verdict names, there's no `hold` label, and the verdict is posted; then a rebase-merge | Q6, Q8, Q9; rule 16 |
+| Merge gate | The head is the one the verdict names, there's no `hold` label, and the verdict is posted; then a rebase-merge with `--admin` | Q6, Q8, Q9; rule 16 |
 | Second opinion's model | `model: "fable"`; if that fails, the default model | Q5 |
+
+### Current code alignment
+
+Until #1136 lands, #1132's code does less than the decisions above. The author applies the missing rules by hand on each run and says so in the verdict.
+- **The lookup (Q9)** accepts four fakes the first run's checker built: an answer appended later with an earlier timestamp, a second result for one picker question, an entry with no parent in the middle of the file, and a script run without naming the transcript. It doesn't scan sub-agent transcripts or the content of Write and Edit calls.
+- **Its output** can be cut at 64 KB when piped to a slow reader, because the script calls `process.exit` right after writing; `transcriptWrites` is the last field.
+- **`SKILL.md`** doesn't put `CLAUDE.md` in scope, take the skill's own files out, or check the PR's author (Q7); its second opinion starts without waiting for Seer and re-runs every round (Q5); and its merge doesn't pass `--match-head-commit` (Q8).

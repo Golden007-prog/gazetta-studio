@@ -386,8 +386,8 @@ Skill that reviews a PR recording the maintainer's design decisions, in the
 maintainer's place, and merges it when it passes. It checks that every
 decision the PR locks traces to the maintainer's own answer in this
 machine's session transcript, is recorded faithfully, and rests on true
-facts; a Fable agent adds a second opinion. Anything else becomes a picker
-question for the maintainer. Distinct from the code-review skills
+facts; a Fable agent adds a second opinion. Whatever only the maintainer can
+decide becomes a picker question; the author fixes its own recording errors. Distinct from the code-review skills
 (`review-orchestrator` and its angles), which judge code. See
 [design-decision-review.md](design-decision-review.md).
 

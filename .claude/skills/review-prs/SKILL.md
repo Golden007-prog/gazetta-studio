@@ -1,12 +1,12 @@
 ---
 name: review-prs
-description: Walk the open-PR queue end-to-end. For each PR, read the diff + linked issue, fact-check load-bearing claims, run/monitor CI, and recommend merge / close / changes. Asks before merging.
+description: Walk the open-PR queue end-to-end. For each PR, read the diff + linked issue, fact-check load-bearing claims, run/monitor CI, and recommend merge / close / changes. Asks before merging, except PRs the review-decisions skill approves.
 disable-model-invocation: true
 allowed-tools: Bash Read Grep Glob Edit Write AskUserQuestion
 argument-hint: [optional PR number to start with]
 ---
 
-Walk every open PR. For each, do a real review (not a summary). Always ask before merging.
+Walk every open PR. For each, do a real review (not a summary). Always ask before merging, except a PR the `review-decisions` skill approves (step 2).
 
 ## Loop
 
@@ -285,7 +285,7 @@ For bot-authored PRs (see "Reading bot-authored PRs" above), also:
 
 ## Merge protocol
 
-Default: **always ask before merging**. Even with admin bypass available.
+Default: **always ask before merging**. Even with admin bypass available. The one exception: a PR that `review-decisions` approves, which merges without asking ([`design-decision-review.md`](../../rules/design-decision-review.md) Q6).
 
 When merging:
 - **Rebase-merge only** per rule 16 (`gh pr merge <N> --rebase --delete-branch`)
