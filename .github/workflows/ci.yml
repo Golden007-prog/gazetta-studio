@@ -16,9 +16,11 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Cancel older runs on PR branches only. On main, let every commit's
-  # run finish — cancelling mid-flight could leave a push unvalidated
-  # and races with deploy/publish workflows that trust CI.
+  # Cancel older runs on PR branches only. On main, a run in progress
+  # finishes — cancelling mid-flight could leave a push unvalidated
+  # and races with deploy/publish workflows that trust CI. GitHub still
+  # replaces a main run that is waiting when a newer push queues, so
+  # merges in quick succession share one run on the newest commit.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
