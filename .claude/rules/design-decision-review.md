@@ -9,7 +9,7 @@ paths:
 
 A skill, `review-decisions`, reviews PRs that record the maintainer's design decisions, in the maintainer's place, and merges them when they pass. The maintainer still makes every decision, usually by answering grilling questions. The skill checks that a PR locks only what the maintainer answered, records it faithfully, and rests on true facts. Whatever only the maintainer can decide comes back as a picker question; the author fixes its own recording errors (Q4).
 
-**Status**: design pass complete (2026-10-22), grilled Q1–Q12. The lookup script, its tests and the skill shipped in #1132; this doc and the rule 33 clause were the skill's first review (#1133), which also settled the amendments to Q2, Q3a, Q5, Q7, Q8, Q9 and Q10. The code changes those need are tracked in #1136.
+**Status**: design pass complete (2026-10-22), grilled Q1–Q12. The lookup script, its tests and the skill shipped in #1132; this doc and the rule 33 clause were the skill's first review (#1133), which also settled the amendments to Q2, Q3a, Q5, Q7, Q8, Q9 and Q10. #1137 made the code changes those need (#1136).
 
 **Roles** used below:
 - **The maintainer** makes the decisions.
@@ -400,21 +400,18 @@ Design PRs opened before this doc (#1120, #1124) get a `## Decisions` list added
 
 ## Implementation notes
 
-Choices made while building #1132, each carrying out a decision above.
+Choices made while building #1132 and #1137, each carrying out a decision above.
 
 | Topic | Implemented | Follows from |
 |---|---|---|
 | What a typed answer was shown | All of the author's messages since the maintainer's previous input, oldest first | Q2 rule 1; Q9 exact comparison |
 | Pasted text | Replaced by "[pasted text]" and flagged; the maintainer's own words around it still count | Q2 rule 2 |
-| The entry chain | The answer's parent must be an earlier entry, or absent (no `parentUuid`), as on a session's first entry and its compaction boundaries; a `parentUuid` that names no earlier entry is `broken-link` | Q9 |
-| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and, outside heredoc bodies, names a `.jsonl` file and has a redirect (other than to `/dev/null` or between descriptors, such as `2>&1`), `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `truncate` or `dd`, or anywhere, heredoc bodies included, has code that opens a file for writing (`open(…, 'w'/'a'/'x')`, `writeFile`, `appendFile`, `write_text`); and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. Read-only scans can be flagged too | Q9 |
-| Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`; #1136 adds `base=<sha>`, the form `/review-prs` step 2 reads to find PRs without a passing verdict for their head. A verdict counts only in a comment by the account the session posts as, on a PR that account opened, and only while `main` hasn't changed the PR's files since its base | Q8 |
-| Merge gate | The head is the one the verdict names, there's no `hold` label, and the verdict is posted; then a rebase-merge with `--admin` | Q6, Q8, Q9; rule 16 |
-| The Fable agent's model | `model: "fable"`; if that fails, the default model | Q5 |
-
-### Current code alignment
-
-Until #1136 lands, #1132's code does less than the decisions above. The author applies the missing rules by hand on each run and says so in the verdict, since Q9 stays as written and Q12 has the skill finish #1133 and cut 4's runs before #1136 lands.
-- **The lookup (Q9)** accepts four fakes the first run's checker built: an answer appended later with an earlier timestamp, a second result for one picker question, an entry with no parent in the middle of the file, and a script run without naming the transcript. It doesn't scan sub-agent transcripts or the content of Write and Edit calls.
-- **Its output** can be cut at 64 KB when piped to a slow reader, because the script calls `process.exit` right after writing; `transcriptWrites` is the last field.
-- **`SKILL.md`** doesn't put `CLAUDE.md` or `bots/README.md` in scope, take the skill's own files out, or check the PR's author (Q7); it runs a Fable second opinion on every PR, without waiting for Seer, and re-runs it every round, while Q5 now has the checker read the AI reviewers' comments as the second opinion, with Seer asked again after each push, and recommend a Fable pass when one would help, with the question always asked for a new design doc or ADR, and a pass run only when the maintainer asks; its Fable agent gets the PR's comments and reviews from unfiltered endpoints, not only Seer's and Sourcery's (Q3a); and its verdict doesn't name the PR's base, it doesn't rebase a PR whose files `main` changed, and its merge doesn't pass `--match-head-commit` (Q8).
+| The entry chain | The answer's parent must be an earlier entry; only the transcript's first entry may have none. An answer with a missing parent, timestamped earlier than the entry before it, or sharing its picker question with a second answer is `broken-link` | Q9 |
+| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and, outside heredoc bodies, names a `.jsonl` file and has a redirect (other than to `/dev/null` or between descriptors, such as `2>&1`), `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `truncate` or `dd`, or anywhere, heredoc bodies included, has code that opens a file for writing (`open(…, 'w'/'a'/'x')`, `writeFile`, `appendFile`, `write_text`). A Write, Edit, MultiEdit or NotebookEdit call is flagged when it names a transcript as its file, or when the text it writes names a transcript and opens a file for writing, or is a shell script (a `.sh` file, or text starting with `#!`) that would write to one. The session's sub-agent transcripts (`<session>/subagents/*.jsonl`) are scanned the same way and reported with `source`. Reading a transcript isn't flagged; read-only scans can still be | Q9 |
+| Script output | `process.exitCode` instead of `process.exit()`, which dropped output a pipe hadn't taken yet | Q9 |
+| Second-opinion comments | Read from `pulls/<N>/comments`, `pulls/<N>/reviews` and `issues/<N>/comments`, keeping only `sentry[bot]`'s and `sourcery-ai[bot]`'s; the verdict lists anyone else's by author and link | Q3a |
+| Waiting for Seer | The checker starts when the head's `Seer Code Review` check finishes (`success` when Seer has nothing to say, `neutral` when it commented), or after 15 minutes. On a later round the skill first posts `@sentry review` | Q5 |
+| The Fable question | Asked when the PR adds a `.claude/rules/design-*.md` file or an ADR under `docs/adr/`, or when the checker's reply says `Fable: yes` | Q5 |
+| Verdict marker | `<!-- review-decisions: head=<sha> base=<sha> verdict=approve -->`, where `base` is the PR's merge base with `main`; `/review-prs` reads it to find PRs without a passing verdict for their head. A verdict counts only in a comment by the account the session posts as, on a PR that account opened, and only while `main` hasn't changed the PR's files since its base | Q8 |
+| Merge gate | The head is the one the verdict names, `main` hasn't changed the PR's files since its base (otherwise the PR is rebased and checked again), there's no `hold` label, and the verdict is posted; then a rebase-merge with `--admin --match-head-commit` | Q6, Q8, Q9; rule 16 |
+| The Fable agent's model | `model: "fable"`; if that fails, the default model, and the verdict names the one that ran | Q5 |
