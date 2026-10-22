@@ -47,6 +47,9 @@ const realStarter = resolve(import.meta.dirname, '../../../examples/starter')
 // Every project root, registered before anything can throw, so afterAll can wipe it.
 const createdRoots: string[] = []
 
+// This process's starter copies: another test run in the same checkout can't be taken for a leak.
+const COPY_PREFIX = `auth-integ-${process.pid}-`
+
 /**
  * Build an admin app with the supplied AuthIdentityProvider injected
  * directly. Sidesteps site.config.ts admin.auth parsing for cuts that
@@ -62,7 +65,7 @@ const createdRoots: string[] = []
  * createAdminApp and wire the routes directly.
  */
 async function buildAppWithAuthBlock(authBlock: Record<string, unknown> | undefined) {
-  const projectRoot = tempDir(`auth-integ-${Date.now()}-${Math.random()}`)
+  const projectRoot = tempDir(`${COPY_PREFIX}${Date.now()}-${Math.random()}`)
   createdRoots.push(projectRoot)
   await rm(projectRoot, { recursive: true, force: true })
   await cp(realStarter, projectRoot, {
@@ -93,10 +96,13 @@ async function buildAppWithAuthBlock(authBlock: Record<string, unknown> | undefi
   return { app, projectRoot }
 }
 
-/** The starter copies under `.tmp/` this file's builds make. */
+/** The starter copies under `.tmp/` this process's builds make. */
 async function starterCopies(): Promise<string[]> {
-  const entries = await readdir(tempDir(''), { withFileTypes: true }).catch(() => [])
-  return entries.filter(e => e.isDirectory() && e.name.startsWith('auth-integ-')).map(e => e.name)
+  const entries = await readdir(tempDir(''), { withFileTypes: true }).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') return []
+    throw err
+  })
+  return entries.filter(e => e.isDirectory() && e.name.startsWith(COPY_PREFIX)).map(e => e.name)
 }
 
 let copiesBefore: string[] = []
