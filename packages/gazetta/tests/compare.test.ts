@@ -5,6 +5,7 @@ import { compareTargets } from '../src/compare.js'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { createContentRoot } from '../src/content-root.js'
 import { sidecarNameFor } from '../src/hash.js'
+import { writeSidecars } from '../src/sidecars.js'
 import { tempDir } from './_helpers/temp.js'
 
 const root = tempDir('compare-test-' + Date.now())
@@ -113,6 +114,72 @@ describe('compareTargets', () => {
     const r = await compareTargets({ sourceRoot, target, templatesDir, projectRoot: root, manifest: { name: 'Test' } })
     expect(r.modified).toEqual(['pages/home'])
     expect(r.unchanged).toEqual(['fragments/header'])
+  })
+
+  it.each([false, true])(
+    'republishes stale locale indexing despite matching hashes (default noindex=%s)',
+    async noindex => {
+      const { hashManifest } = await import('../src/hash.js')
+      const { scanTemplates, templateHashesFrom } = await import('../src/templates-scan.js')
+      const { loadSite } = await import('../src/site-loader.js')
+      const manifest = { name: 'Test', locales: { default: 'en', supported: ['en', 'fr'] } }
+      await writeFile(
+        join(siteDir, 'pages/home/page.json'),
+        JSON.stringify({ template: 'page', content: {}, metadata: { robots: noindex ? 'noindex' : 'index' } }),
+      )
+      await writeFile(
+        join(siteDir, 'pages/home/page.fr.json'),
+        JSON.stringify({ template: 'page', content: {}, metadata: noindex ? undefined : { robots: 'noindex' } }),
+      )
+      const templateHashes = templateHashesFrom(await scanTemplates(templatesDir, root))
+      const site = await loadSite({ contentRoot: sourceRoot, templatesDir, manifest })
+      const date = new Date('2026-10-01T00:00:00Z').toISOString()
+      for (const [locale, page] of [
+        [undefined, site.pages.get('home')!],
+        ['fr', site.pageLocales.get('home')!.locales.get('fr')!],
+      ] as const) {
+        await writeSidecars(
+          target,
+          'pages/home',
+          { hash: hashManifest(page, { templateHashes }), pub: { lastPublished: date, noindex } },
+          locale,
+        )
+      }
+
+      const result = await compareTargets({ sourceRoot, target, templatesDir, projectRoot: root, manifest })
+      expect(result.unchanged).toContain('pages/home')
+      expect(result.unchanged).not.toContain('pages/home:fr')
+      expect(result.modified).toEqual(['pages/home:fr'])
+    },
+  )
+
+  it('keeps correctly published archives unchanged even when locale metadata allows indexing', async () => {
+    const { hashManifest } = await import('../src/hash.js')
+    const { scanTemplates, templateHashesFrom } = await import('../src/templates-scan.js')
+    const { loadSite } = await import('../src/site-loader.js')
+    const manifest = { name: 'Test', locales: { default: 'en', supported: ['en', 'fr'] } }
+    await writeFile(
+      join(siteDir, 'pages/home/page.json'),
+      JSON.stringify({ template: 'page', content: {}, archived: true }),
+    )
+    await writeFile(join(siteDir, 'pages/home/page.fr.json'), JSON.stringify({ template: 'page', content: {} }))
+    const templateHashes = templateHashesFrom(await scanTemplates(templatesDir, root))
+    const site = await loadSite({ contentRoot: sourceRoot, templatesDir, manifest })
+    for (const [locale, page] of [
+      [undefined, site.pages.get('home')!],
+      ['fr', site.pageLocales.get('home')!.locales.get('fr')!],
+    ] as const) {
+      await writeSidecars(
+        target,
+        'pages/home',
+        { hash: hashManifest(page, { templateHashes }), pub: { lastPublished: '2026-10-01T00:00:00Z', noindex: true } },
+        locale,
+      )
+    }
+
+    const result = await compareTargets({ sourceRoot, target, templatesDir, projectRoot: root, manifest })
+    expect(result.unchanged).toEqual(['pages/home', 'pages/home:fr'])
+    expect(result.modified).toEqual([])
   })
 
   it('detects modified when content changes locally', async () => {

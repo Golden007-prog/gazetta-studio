@@ -54,6 +54,7 @@ import {
   type RenderOutput,
 } from './publish-renderers.js'
 import { writeSidecars } from './sidecars.js'
+import { publishedPageNoindex } from './seo.js'
 import type { CacheConfig, StorageProvider } from './types.js'
 import type { Site } from './site-loader.js'
 import type { ContentRoot } from './content-root.js'
@@ -404,8 +405,9 @@ export async function publishItemCore(input: PublishItemInput): Promise<PublishI
     if (target.manifestHash) {
       // Pages can declare noindex via metadata.robots; fragments have no
       // metadata field. Archive marker always forces noindex.
-      const pageMeta = kind === 'page' ? (item as { metadata?: { robots?: string } }).metadata : undefined
-      const noindex = output.archived ? true : !!pageMeta?.robots?.includes('noindex')
+      const page = kind === 'page' && locale ? (site.pageLocales.get(name)?.locales.get(locale) ?? item) : item
+      const pageMeta = kind === 'page' ? (page as { metadata?: { robots?: string } }).metadata : undefined
+      const noindex = publishedPageNoindex(pageMeta, output.archived === true)
       await writeSidecars(
         target.storage,
         dir,

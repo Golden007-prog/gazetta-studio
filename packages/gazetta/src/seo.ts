@@ -13,6 +13,11 @@
 import type { PageMetadata } from './types.js'
 import { trimTrailingSlashes } from './url.js'
 
+/** Published pages are hidden when archived or their own robots metadata requests noindex. */
+export function publishedPageNoindex(metadata: Pick<PageMetadata, 'robots'> | undefined, archived: boolean): boolean {
+  return archived || !!metadata?.robots?.includes('noindex')
+}
+
 /** Escape HTML attribute values — prevents XSS in generated meta tags. */
 export function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
