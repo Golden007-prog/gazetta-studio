@@ -57,7 +57,8 @@ carrying a comment marker:
 
 Worker-served target types (static-with-worker, ESI, dynamic) read the
 first 200 bytes of `pages/landing/index.html`, see the marker, and
-emit `301 Moved Permanently` to `deriveRoute('welcome')` — no
+emit `301 Moved Permanently` to `/welcome` in the request's language
+(`/fr/landing` → `/fr/welcome`) — no
 composition, no body served. Cache headers on the 301 response strip
 strong caching (`Cache-Control: max-age=300`) so unarchive propagates
 quickly.
