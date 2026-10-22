@@ -6,17 +6,18 @@ import { fragmentHashLookup } from './fragment-hashes.js'
 import { hashManifest } from './hash.js'
 import { scanTemplates, templateHashesFrom, type TemplateInfo } from './templates-scan.js'
 import { listSidecars } from './sidecars.js'
+import { isArchived } from './archive-helpers.js'
 import type { StorageProvider } from './types.js'
 import type { ContentRoot } from './content-root.js'
 
 export interface CompareResult {
   /** Items present locally but not on target (no sidecar found) */
   added: string[]
-  /** Items present on both, hashes differ */
+  /** Items present on both, hashes or published indexing state differ */
   modified: string[]
   /** Items present on target but not locally */
   deleted: string[]
-  /** Items present on both with matching hashes */
+  /** Items present on both with matching hashes and published indexing state */
   unchanged: string[]
   /** Target has no sidecars at all (never published, or pre-sidecar) */
   firstPublish: boolean
@@ -117,6 +118,7 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
   const fragmentHashes = fragmentHashLookup(site, templateHashes)
 
   const local = new Map<string, string>()
+  const pageNoindex = new Map<string, boolean>()
   // Static pages bake every fragment; ESI pages bake only fragments nested
   // in inline components (their top-level refs are composed per request).
   const pageHashOpts = (locale?: string) => ({
@@ -126,6 +128,7 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
   })
   for (const [name, page] of site.pages) {
     local.set(`pages/${name}`, hashManifest(page, pageHashOpts()))
+    pageNoindex.set(`pages/${name}`, isArchived(page) || !!page.metadata?.robots?.includes('noindex'))
 
     // Per-locale items — each locale variant is compared independently
     const localeEntry = site.pageLocales.get(name)
@@ -133,6 +136,7 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
       for (const [locale, localePage] of localeEntry.locales) {
         const localeKey = `pages/${name}:${locale}`
         local.set(localeKey, hashManifest(localePage, pageHashOpts(locale)))
+        pageNoindex.set(localeKey, isArchived(page) || !!localePage.metadata?.robots?.includes('noindex'))
       }
     }
   }
@@ -175,8 +179,10 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
 
   for (const [item, hash] of local) {
     const targetHash = target.get(item)
+    const published = item.startsWith('pages/') ? pagesSidecars.get(item.slice('pages/'.length))?.pub : undefined
+    const staleIndexing = published && published.noindex !== pageNoindex.get(item)
     if (targetHash === undefined) result.added.push(item)
-    else if (targetHash === hash) result.unchanged.push(item)
+    else if (targetHash === hash && !staleIndexing) result.unchanged.push(item)
     else result.modified.push(item)
   }
   for (const item of target.keys()) {
