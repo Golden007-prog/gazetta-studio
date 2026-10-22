@@ -99,6 +99,8 @@ Locked before re-filing Cut 12 (#526), whose first spec left these open and name
 5. **Mixed fan-out.** In one publish run, ungated targets publish immediately; each gated target gets one request per item in the caller-expanded list (`publishRun` treats `items` verbatim, so dependents expanded by the caller get their own requests) and one per removal. The per-target result reports `outcome: 'requested'` with the `requestId`s. Creating a request requires `publish:request` (403 otherwise).
 6. **CLI refuses gated targets.** `gazetta publish <gated-target>` exits non-zero with "`<target>` requires publish approval — request it from the admin." A CLI run has no `Principal` to record as requester, so it cannot create a request.
 
+The removal parts of locks 1, 3, 4 and 5 follow from [`design-target-removal.md`](design-target-removal.md) Q13 (#1120).
+
 **Rejected alternatives:** gating in the route (CLI bypass); re-reading content at approval time without a snapshot (approve-A-ship-B); executing under the requester's identity (the requester may since have lost the capability, and the approver is the accountable actor); a CLI `--request` flag (no principal to record).
 
 ### Configuration
