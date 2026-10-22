@@ -132,8 +132,8 @@ Archive state lives on the manifest itself, as additive optional fields:
 
 | State | Behavior at render time |
 |---|---|
-| Archived, `aliasOf: 'newname'` | Renderer transparently follows the alias. `@oldname` resolves as `@newname`. Page route `/oldname` emits 301. |
-| Archived, no `aliasOf` (pure soft-delete) | Validator warning at save + scanner; render-time emits 410 (page) or render-time error (fragment). |
+| Archived, `aliasOf: 'newname'` | Renderer transparently follows the alias. `@oldname` resolves as `@newname`. Page route `/oldname` emits 301. On ESI targets, serving also follows a fragment's alias marker, for pages published before the fragment was archived. |
+| Archived, no `aliasOf` (pure soft-delete) | Validator warning at save + scanner; render-time emits 410 (page) or render-time error (fragment). An ESI page that still uses such a fragment is served without it (200, with a comment in its place, as for a missing fragment), not 410: the page isn't gone, only one part of it (decided 2026-10-22, #1118). |
 
 **Auxiliary validators** (Q11):
 - `referenced-archived-without-alias` (warn) — manifest references `@oldname`, `@oldname` archived without alias
@@ -362,7 +362,7 @@ dropped — it would have doubled the surface for no real gain.
 
 | Target type | Archive with `aliasOf` | Archive without `aliasOf` |
 |---|---|---|
-| **`static`** with worker | HTML carries `<!-- gazetta:archived alias=X -->` marker. Worker reads first 200 bytes; emits 301 to `deriveRoute(X)`. | HTML carries `<!-- gazetta:archived gone -->` marker. Worker emits 410. |
+| **`static`** with worker | HTML carries `<!-- gazetta:archived alias=X -->` marker. Worker reads first 200 bytes; emits 301 to X's route in the request's language (`/fr/about` with alias `home` → `/fr`). | HTML carries `<!-- gazetta:archived gone -->` marker. Worker emits 410. |
 | **`static`** without worker | `_redirects` regenerated at publish from walked archived manifests (host-glue). Plain static can't emit 410; falls to host's natural 404. Operator-config opt-in: emit a 200 "Gone" placeholder page. |
 | **`esi`** | Same HTML marker as static — worker reads first 200 bytes of `pages/{name}/index.html` BEFORE composing. Marker present → emit 301 without composing. | Same — marker present → emit 410 without composing. |
 | **`dynamic`** | Origin emits HTML marker OR returns 301 directly. Same marker grammar as static / ESI. | Same — 410. |
@@ -386,7 +386,7 @@ page is dead weight regardless.
 ```
 
 - Must be the first line of the file (worker reads first 200 bytes; absence falls through to normal serve)
-- `<bare-name>` is the target name (worker calls `deriveRoute()` to resolve to URL)
+- `<bare-name>` is the target name. The worker resolves it with `deriveRoute()` plus the request's locale prefix, the way the site loader builds locale routes, so visitors stay in their language (decided 2026-10-22, #1118)
 - Single-line; no nested HTML; no whitespace games
 
 Storage providers' `readBytes` supports range reads (per `design-media.md`); first-200-bytes is one cheap read, an order of magnitude smaller than a typical HTML file.
