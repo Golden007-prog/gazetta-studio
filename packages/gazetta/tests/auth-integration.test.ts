@@ -45,6 +45,9 @@ import { tempDir } from './_helpers/temp.js'
 
 const realStarter = resolve(import.meta.dirname, '../../../examples/starter')
 
+// Every project root, registered before anything can throw, so afterAll can wipe it.
+const createdRoots: string[] = []
+
 /**
  * Build an admin app with the supplied AuthIdentityProvider injected
  * directly. Sidesteps site.config.ts admin.auth parsing for cuts that
@@ -61,6 +64,7 @@ const realStarter = resolve(import.meta.dirname, '../../../examples/starter')
  */
 async function buildAppWithAuthBlock(authBlock: Record<string, unknown> | undefined) {
   const projectRoot = tempDir(`auth-integ-${Date.now()}-${Math.random()}`)
+  createdRoots.push(projectRoot)
   await rm(projectRoot, { recursive: true, force: true })
   await cp(realStarter, projectRoot, {
     recursive: true,
@@ -90,9 +94,6 @@ async function buildAppWithAuthBlock(authBlock: Record<string, unknown> | undefi
   return { app, projectRoot }
 }
 
-// Track all created project roots so afterAll can wipe them.
-const createdRoots: string[] = []
-
 afterAll(async () => {
   for (const root of createdRoots) {
     await rm(root, { recursive: true, force: true }).catch(() => {})
@@ -103,8 +104,7 @@ afterAll(async () => {
 })
 
 async function buildAndTrack(authBlock: Record<string, unknown> | undefined): Promise<Hono> {
-  const { app, projectRoot } = await buildAppWithAuthBlock(authBlock)
-  createdRoots.push(projectRoot)
+  const { app } = await buildAppWithAuthBlock(authBlock)
   return app
 }
 
