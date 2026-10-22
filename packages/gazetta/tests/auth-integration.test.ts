@@ -23,6 +23,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { rm, cp } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose'
 import type { Hono } from 'hono'
@@ -95,6 +96,9 @@ const createdRoots: string[] = []
 afterAll(async () => {
   for (const root of createdRoots) {
     await rm(root, { recursive: true, force: true }).catch(() => {})
+  }
+  for (const root of createdRoots) {
+    expect(existsSync(root), `${root} left behind`).toBe(false)
   }
 })
 
@@ -212,11 +216,14 @@ describe('Cut 10 — forwarded-user trust mode', () => {
   })
 
   it('AuthConfigSchema rejection at boot when neither trustedProxies nor allowAnyOrigin set', async () => {
+    const before = createdRoots.length
     await expect(
       buildAndTrack({
         trust: 'forwarded-user',
       }),
     ).rejects.toThrow()
+    // A build that throws still registers its starter copy for cleanup.
+    expect(createdRoots.length).toBe(before + 1)
   })
 })
 
