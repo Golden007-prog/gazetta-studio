@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --exclude tests/docker.test.ts --coverage --coverage.provider=v8 --coverage.include='src/**' --coverage.reporter=json-summary --coverage.reporter=text-summary && vitest run tests/docker.test.ts"
   },
   "dependencies": {
-    "@formkit/drag-and-drop": "0.5.3",
+    "@formkit/drag-and-drop": "0.6.1",
     "@hono/node-server": "^2.1.5",
     "@primeuix/themes": "^2.0.3",
     "@tanstack/query-async-storage-persister": "^5.104.4",
