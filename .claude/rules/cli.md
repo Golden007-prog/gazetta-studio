@@ -426,15 +426,14 @@ pages/{route}/index.html    # fully assembled HTML per route
 
 ## Partial Publish from CLI
 
-`gazetta publish` renders all pages by default. To publish a single page:
+Not implemented: the CLI has no `--page` or `--fragment` flag (`cli/args.ts`), so
+`gazetta publish` always publishes everything that changed. Per-page publish is in the
+admin UI's Publish panel. A planned form:
 
 ```
 gazetta publish production --page home
 gazetta publish production --fragment header
 ```
-
-Useful for fixing one page without re-rendering the entire site. The admin UI already
-supports per-page publish via the Publish button.
 
 ## Adding a New Storage Provider
 
