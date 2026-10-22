@@ -985,17 +985,43 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
     if (redirectsFormat && redirectsFormat !== 'none') {
       const { emitRedirects } = await import('../runtime/redirects-emit.js')
       const { allPageEntries, deriveRoute } = await import('../site-loader.js')
+      const { resolveSiteLocales, localeRoutePrefix } = await import('../locale.js')
       const archives: { from: string; to?: string }[] = []
+      // One row per published route: a redirect keeps the visitor's
+      // language (#1124). Locale variant entries share the parent's
+      // archive state in v1 (per `design-soft-delete.md` future
+      // directions), so rows expand from the default-locale entry.
+      const resolvedLoc = resolveSiteLocales(manifest)
+      // Rows mirror the static write path (staticPageIndexPath): default-
+      // locale content is always published unprefixed — the target's
+      // locales filter only gates variants — and each published variant
+      // lives at /<locale>/. The site default is therefore always in the
+      // row set, and prefixes never apply target.locale/defaultPrefix
+      // overrides, which the static write path ignores.
+      const siteDefault = resolvedLoc?.default ?? ''
+      const rowLocales = resolvedLoc
+        ? [siteDefault, ...(targetConfig?.locales ?? resolvedLoc.supported).filter(l => l !== siteDefault)]
+        : ['']
       for (const entry of allPageEntries(site)) {
         if (entry.page.archived !== true) continue
-        // Locale variants share the parent's archive state in v1; the
-        // default-locale row is the canonical entry. Per-locale archive
-        // is reserved for a future cut (per `design-soft-delete.md`
-        // future directions).
         if (entry.locale) continue
-        const from = deriveRoute(entry.name)
-        const to = entry.page.aliasOf ? deriveRoute(entry.page.aliasOf) : undefined
-        archives.push(to !== undefined ? { from, to } : { from })
+        const baseFrom = deriveRoute(entry.name)
+        const baseTo = entry.page.aliasOf ? deriveRoute(entry.page.aliasOf) : undefined
+        for (const loc of rowLocales) {
+          const prefix = loc
+            ? localeRoutePrefix(loc, { ...resolvedLoc!, default: siteDefault, defaultPrefix: false })
+            : ''
+          const from = baseFrom === '/' ? prefix || '/' : `${prefix}${baseFrom}`
+          // A language with no destination version falls back to the
+          // destination's default-language page (#1124 Q10): static
+          // publish only writes /<locale>/<page> when the page has
+          // that version, while the archived page's own row exists
+          // for every published route.
+          const destEntry = entry.page.aliasOf ? site.pageLocales.get(entry.page.aliasOf) : undefined
+          const destPrefix = loc === '' || loc === siteDefault || (destEntry?.locales.has(loc) ?? false) ? prefix : ''
+          const to = baseTo === undefined ? undefined : baseTo === '/' ? destPrefix || '/' : `${destPrefix}${baseTo}`
+          archives.push(to !== undefined ? { from, to } : { from })
+        }
       }
       const result = emitRedirects(redirectsFormat, archives)
       if (result && result.body !== '') {
