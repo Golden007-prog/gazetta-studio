@@ -230,19 +230,26 @@ describe('history fault injection — mid-index-write failure', () => {
       error: 'index write fails',
     })
     const history2 = createHistoryProvider({ storage: faulted })
-    await expect(
-      history2.recordRevision({
-        operation: 'save',
-        items: new Map([['b.json', '{"b":1}']]),
-      }),
-    ).rejects.toThrow(/index write fails/)
+    // Since #1089 the manifest is the record and index.json only a cache,
+    // so a cache-write failure must not fail the save (#1107 review): the
+    // call resolves with the recorded revision.
+    const rev = await history2.recordRevision({
+      operation: 'save',
+      items: new Map([['b.json', '{"b":1}']]),
+    })
+    expect(faulted.triggered()).toBe(true)
 
-    // Index is still the pre-failure snapshot — listRevisions only sees rev 1.
+    // Index is still the pre-failure snapshot — the failed write did not
+    // corrupt the cache file.
     const indexAfter = await readIndex(storage)
     expect(indexAfter).toEqual(indexBefore)
+    // And the revision itself is NOT lost: the revisions/ listing is the
+    // source of truth, so listRevisions sees both revisions despite the
+    // failed cache write.
     const list = await history2.listRevisions()
-    expect(list).toHaveLength(1)
-    expect(list[0].id).toBe(firstList[0].id)
+    expect(list).toHaveLength(2)
+    expect(list.map(r => r.id)).toContain(firstList[0].id)
+    expect(list.map(r => r.id)).toContain(rev.id)
   })
 })
 
