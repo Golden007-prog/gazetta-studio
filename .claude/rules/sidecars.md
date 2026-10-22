@@ -17,7 +17,8 @@ Two roles, two storage shapes.
 
 Used by:
 - `compareTargets` — listing target `.{hash}.hash` files to detect which items
-  are out of sync without reading manifests.
+  are out of sync without reading manifests, and the `.pub` sidecars' noindex
+  flags, so a page whose published flag differs from the source is out of sync too.
 - `gazetta publish` — published-state stamp + noindex propagation to sitemap
   generation.
 
@@ -128,7 +129,10 @@ separately, and the edge runtime composes per request.
 1. `gazetta publish` runs `compareTargets` first.
 2. Compare always re-hashes from in-memory manifests (no source-side hash
    cache) and lists target `.{hash}.hash` files.
-3. Items with matching hashes go in `unchanged`.
+3. Items with matching hashes go in `unchanged`, except a page whose published
+   `noindex` flag differs from what the source would publish
+   (`publishedPageNoindex` in `seo.ts`): it counts as modified, so the next
+   publish rewrites it (#1153).
 4. Unless `--force`, the render loop skips items in `unchanged` and logs
    `N unchanged (skipped)`.
 

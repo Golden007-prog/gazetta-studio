@@ -632,10 +632,9 @@ Content (pages, fragments, site.config.ts) lives inside `sites/{name}/`.
 Each locale file (for example `page.fr.json`) is a complete page manifest. Its own
 `metadata.robots` controls indexing in both rendered HTML and the published sitemap:
 `"noindex"` excludes that locale URL without excluding the default page, and an omitted
-`robots` value permits indexing even if the default page is `noindex`. If a locale file
-is absent, publishing that locale falls back to the default manifest's setting.
-An ordinary publish also corrects a previously published locale's stale indexing flag,
-even when its content hash has not changed; `--force` is not required.
+`robots` value permits indexing even if the default page is `noindex`. An ordinary
+publish also corrects a previously published locale's stale indexing flag, even when its
+content hash has not changed; `--force` is not required.
 
 ## Next steps
 

@@ -86,6 +86,13 @@ The admin workspace's tests end with `apps/admin/tests/docker.test.ts`, which st
 MinIO and Azurite through Docker. Without Docker running, that step fails; run the
 workspace you changed instead, for example `npm test -w packages/gazetta`.
 
+On a busy machine a few tests can hit their 5-second timeout; run with fewer workers,
+for example `cd packages/gazetta && npx vitest run --maxWorkers=2`.
+
+On Windows, run the tests in WSL. A contributor running them natively hit failures from
+Windows path separators, and Vitest picked up a Vite config from a folder above the
+checkout.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
