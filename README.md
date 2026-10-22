@@ -136,7 +136,12 @@ npm run build            # build all packages
 ## Documentation
 
 - **[Getting Started](docs/getting-started.md)** — create a site, write templates, add pages and fragments
-- **[Design](docs/design.md)** — full architecture and design decisions
+- **[CONTEXT.md](CONTEXT.md)** — the project's vocabulary: pages, fragments, targets and the rest
+- **Design docs** — `.claude/rules/design-*.md`, one per feature, with the decisions behind it
+
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to pick an issue, run the tests and open a PR.
 
 ## License
 
