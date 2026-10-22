@@ -6,7 +6,8 @@ How a page or fragment deleted on the source stops being served by a target. Tod
 
 **Companion docs:**
 - [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094): the issue this design resolves
-- [#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060): served sites don't read archive markers yet; a prerequisite for the archive rows' copy on worker and ESI targets
+- [#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060): served sites didn't read archive markers; #1118 fixed it, so worker and ESI targets serve archives as 301 or 410
+- [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152): what plain-static targets should serve at an archived route; today the host serves the marker file where no `_redirects` row applies
 - [`design-publishing.md`](design-publishing.md) and [`design-decisions.md`](design-decisions.md) #16: Publish is one verb with an author-chosen direction
 - [`design-publish-undo.md`](design-publish-undo.md): Q4's removal step and the shared target-publish function, which removals reuse
 - [`sidecars.md`](sidecars.md): per-item sidecars, and target indices that describe the target (#1077), which the Q4 check reads
@@ -43,7 +44,7 @@ Read from code on 2026-10-22, not reproduced end to end:
 
 1. `compareTargets` reports items present on the destination but absent from the source as `deleted` (`compare.ts`). The publish list **pre-selects** them, because they count as changes (`hasChanges` in `usePublishItems.ts`), although their checkbox is hidden (`PublishItemList.vue:128`), and the panel sends them in `items` (`PublishPanel.vue:306`); `publishItems` copies nothing for them. The CLI never mentions them, and the sync chip counts them ("N behind"), so the target stays behind with no action available.
 2. No code removes a published item from a target. Publish undo's cut 2 builds that step.
-3. **Archived pages aren't served as archived on worker and ESI targets yet.** Nothing reads the marker (`parseArchiveMarker` has no caller), so they return a blank 200 ([#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060)). Plain-static targets get their 301 and 410 rows from `_redirects`, which is rebuilt from the **source's** archived manifests (`admin-api/routes/publish.ts`, `cli/index.ts`), so a purged archive's row drops at the next publish of anything.
+3. **Worker and ESI targets serve archived pages as 301 or 410** since #1118 ([#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060)). Plain-static targets get their rows from `_redirects`, which is rebuilt from the **source's** archived manifests (`admin-api/routes/publish.ts`, `cli/index.ts`), so a purged archive's row drops at the next publish of anything. Where the host doesn't apply a row, it serves the archived route's marker file, a blank page ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)).
 4. **Unpublished archives leak into `_redirects`.** Archiving a page on the source and then publishing any other item to a plain-static target with `redirects.format` adds the archive's row, although its archive was never published there.
 5. `sitemap.xml` is built from the target's own sidecars, and archived pages carry `noindex` (`publish-item.ts:408`), so they're excluded. R2 listings can miss files just written, so the CLI merges source entries into that listing (`cli/index.ts`).
 6. A missing fragment doesn't fail loudly: `assembleEsi` (`assemble.ts`) replaces it with `<!-- fragment not found: … -->`, so pages that still use it are served without it, with status 200.
@@ -113,7 +114,7 @@ Decided: maintainer, 2026-10-22 (#1120). Refusing unknown users follows from Q12
 
 ### Q5 — A purge changes nothing on a target until its removal is published
 
-After a purge on the source, a target keeps serving the archive until the author publishes the removal; then the page answers 404 (or, for a translation on worker and ESI targets, the default-language page). On plain-static targets the archive's `_redirects` row stays until then (Q6). On worker and ESI targets, "serving the archive" means 410 or 301 only once #1060 ships; until then they return a blank 200 (finding 3).
+After a purge on the source, a target keeps serving the archive until the author publishes the removal; then the page answers 404 (or, for a translation on worker and ESI targets, the default-language page). On plain-static targets the archive's `_redirects` row stays until then (Q6). Where the host doesn't apply the row (on Netlify, or for an archive without an alias on Cloudflare Pages), it serves the archived route's marker file instead, a blank page (#1152).
 
 The removal row says what changes, from what the target serves: "Only on production: redirects to /welcome, will return 404 after removal", or "returns 410, will return 404 after removal". Docs advise: to tell search engines a page is gone, archive it and publish that before purging.
 
@@ -130,7 +131,7 @@ A 404 after a 410 costs nothing for search when the archive answered 410 for a w
 
 Publishing an archived page also writes a zero-byte sidecar next to it on the target: `.gone`, or `.alias-<name>` with the name encoded as other sidecars encode names (slashes → dots, `encodeRefName`). Writing one deletes the page's other archive sidecar first, so re-pointing an alias (rename flattening, soft-delete Q3) leaves one row. Publishing a live version over it, or removing the page, deletes it.
 
-`_redirects` is built from the listing the sitemap already reads (`listSidecars(target, 'pages')`). It keeps purged archives until their removal (Q5) and never contains an archive the target doesn't hold (finding 4). Archive sidecars written or deleted in the same publish are merged into that listing in memory, because R2 listings can miss files just written (finding 5). Building it costs no extra read when `siteUrl` is set, because the sitemap lists anyway, and one listing otherwise. As in v1, the default-locale page decides a page's archive state, and the file has one row per language the target publishes (`/fr/landing  /fr/welcome  301`; `design-redirects.md`, #1124, #1130). Only plain-static targets use `_redirects`; worker targets will read the marker instead (#1060).
+`_redirects` is built from the listing the sitemap already reads (`listSidecars(target, 'pages')`). It keeps purged archives until their removal (Q5) and never contains an archive the target doesn't hold (finding 4). Archive sidecars written or deleted in the same publish are merged into that listing in memory, because R2 listings can miss files just written (finding 5). Building it costs no extra read when `siteUrl` is set, because the sitemap lists anyway, and one listing otherwise. As in v1, the default-locale page decides a page's archive state, and the file has one row per language the target publishes (`/fr/landing  /fr/welcome  301`; `design-redirects.md`, #1124, #1130). Only plain-static targets use `_redirects`; worker targets read the marker instead (#1118).
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -267,7 +268,7 @@ Rule 23: removals look like any other row, stay unselected until chosen, and say
 | `RemovalSourceStillUses` | "pages/home still uses @promo on local too — fix it there first" | Publish disabled; `publish-item-still-used` |
 | `RemovalUnknownUsers` | "pages/old-landing is only on production and can't be checked — remove it too, or keep @promo" | Publish disabled; `publish-item-still-used` |
 
-The archive rows describe what the target serves; on worker and ESI targets their 301 and 410 copy needs #1060.
+The archive rows describe what the target serves (for plain-static hosts, see #1152).
 
 Header: summary "3 modified · 1 added · 2 only on production" (`publish-items-summary`); "Also select the 2 removals" (`publish-select-removals`) only when removals exist; "Select all" selects changes only.
 
@@ -320,7 +321,7 @@ Composition with designs in flight:
 |---|---|---|---|---|
 | 1 | Archive sidecars on targets (`.gone`, `.alias-<name>`, one per page): written with the marker, deleted when a live version replaces it; `listSidecars` reports them; `_redirects` built from the target's listing, with this publish's own sidecar writes merged in, in the shared post-publish function | publish undo cut 1 | unit + api | Medium |
 | 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); the approval gate at the shared function (Q13, with review workflow cuts 12–13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093) | api-first | Medium-high |
-| 3 | Publish panel: rows per the UX table; target-only rows no longer sent in `items`; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table. The archive rows' 301/410 copy on worker and ESI targets waits for #1060 | 2 | component + e2e | Medium |
+| 3 | Publish panel: rows per the UX table; target-only rows no longer sent in `items`; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
 | 4 | CLI: list items only on the target; `--remove`, running compare even with `--force` | 2 | integration | Low |
 | 5 | Docs: removals in the publishing docs; purge and 410 guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
 | 6 | Add `--remove` to gazetta.studio's `deploy-site.yml` (maintainer PR; bots can't push workflow files) | 4 | manual | Low |
