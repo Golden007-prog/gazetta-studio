@@ -58,7 +58,7 @@ carrying a comment marker:
 Worker-served target types (static-with-worker, ESI, dynamic) read the
 first 200 bytes of `pages/landing/index.html`, see the marker, and
 emit `301 Moved Permanently` to `/welcome` in the request's language
-(`/fr/landing` → `/fr/welcome`) — no
+(`/fr/landing` → `/fr/welcome`; follows from `design-soft-delete.md` Q10) — no
 composition, no body served. Cache headers on the 301 response strip
 strong caching (`Cache-Control: max-age=300`) so unarchive propagates
 quickly.
@@ -74,7 +74,7 @@ site root; the `json` format is for custom integrations.
 The file has one row per language the target publishes, with the
 prefixes its routes use (`/landing  /welcome  301` and
 `/fr/landing  /fr/welcome  301`), so plain-static sites redirect the
-same way worker sites do (decided 2026-10-22, #1124). Today's code
+same way worker sites do (follows from `design-soft-delete.md` Q10). Today's code
 writes default-language rows only
 ([#1130](https://github.com/gazetta-studio/gazetta-studio/issues/1130)).
 
