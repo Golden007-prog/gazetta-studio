@@ -78,12 +78,13 @@ Spawn one agent with the Agent tool (no `model` override: it runs on the session
 > 4. **Soundness.** Re-read, at the cited file and line, every claim about code or behaviour that a decision rests on. Check the PR doesn't contradict other design docs, ADRs (`docs/adr/`), `docs/non-goals.md` or `CONTEXT.md`. A claim the doc labels "read from code, not reproduced" stays a hypothesis; flag it only if it's wrong, or a decision rests on an unlabelled one.
 > 5. **Transcript writes.** For each entry in `transcriptWrites`, say whether it could have changed an entry the decision list relies on.
 > 6. **The AI reviewers' comments** are the second opinion on the decisions. Check each against the code. One that holds and raises a concrete problem the maintainer wasn't shown (compare with `shown`) is a `decision` finding: an alternative or failure mode missing from the decision's Rejected table, a failed foundational check (5,000-page envelope, multi-instance correctness, or another dimension in `.claude/rules/feature-design-process.md`), a clash with a rule in `.claude/rules/team-preferences.md`, or a cost the decision doesn't mention. Otherwise it's mechanical, or nothing. Don't raise anything of your own out of general doubt.
+> 7. **A Fable pass?** Say whether a Fable second opinion would help this PR, and why: for example it adds a design doc, a decision is hard to reverse or touches production, or it locks many new decisions and the AI reviewers said nothing.
 >
 > Classify each finding:
 > - `mechanical`: the doc misrecords an answer, lacks a citation, or cites stale text, and the fix is to make the doc match the evidence;
 > - `decision`: the maintainer has to decide. This covers a decision without an answer, a changed or removed decision, a wrong fact a decision rests on, a contradiction with an earlier decision, ADR or non-goal, and a transcript write that could have changed evidence.
 >
-> End with a fenced block, one JSON object per line, possibly empty:
+> End with one line, `Fable: yes, <why>` or `Fable: no`, then a fenced block, one JSON object per line, possibly empty:
 >
 > ```findings
 > {"decision": 3, "check": "fidelity", "level": "mechanical", "problem": "…", "fix": "…"}
@@ -91,7 +92,7 @@ Spawn one agent with the Agent tool (no `model` override: it runs on the session
 
 ## 6. A Fable second opinion, when the maintainer asks
 
-Only when the maintainer asks for one on this PR ("second opinion #N"). On a later round (after a fix or an answer), give it only the decisions whose text changed since its last pass; its earlier result stands for the rest.
+Only when the maintainer asks for one on this PR ("second opinion #N"), or says yes when the checker recommends one (step 7). On a later round (after a fix or an answer), give it only the decisions whose text changed since its last pass; its earlier result stands for the rest.
 
 Spawn a second agent with `model: "fable"` (Claude Fable 5.1). If that fails, use the default model: the second opinion still runs, on Opus. Give it the PR diff, the decision list with the `shown` text for each decision, and the PR's Sourcery and Seer comments (`gh api repos/{owner}/{repo}/pulls/<N>/comments`, plus `.../reviews`), with this brief:
 
@@ -114,8 +115,8 @@ Spawn a second agent with `model: "fable"` (Claude Fable 5.1). If that fails, us
 ## 7. Act on the results
 
 - **Mechanical findings:** fix them in the PR yourself (if you can push to its branch), push, and start again from step 1 for the new commit (step 6 then covers only the decisions that changed). Stop after three rounds without passing, and hand the PR to the maintainer with what still fails.
-- **Decision findings and concerns:** ask the maintainer, all at once for this PR, with AskUserQuestion (up to four questions per call, more calls if needed). Each question names the decision, says what's wrong or new in a sentence or two, and offers the choices with your recommendation first. Then write the answers into the docs and the decision list (the new answers have their own timestamps), push, and start again from step 1.
-- **No findings and no concerns:** go to step 8.
+- **Decision findings and concerns:** ask the maintainer, all at once for this PR, with AskUserQuestion (up to four questions per call, more calls if needed). Each question names the decision, says what's wrong or new in a sentence or two, and offers the choices with your recommendation first. If the checker said `Fable: yes`, add one question to the batch: run a Fable second opinion (step 6), with the checker's reasons, or skip. Then write the answers into the docs and the decision list (the new answers have their own timestamps), push, and start again from step 1.
+- **No findings and no concerns:** if the checker said `Fable: yes`, ask that one question first; otherwise go to step 8.
 
 ## 8. Verdict and merge
 
