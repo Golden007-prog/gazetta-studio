@@ -371,6 +371,15 @@ dropped — it would have doubled the surface for no real gain.
 
 Decided: maintainer, 2026-10-22 (#1124): an alias redirect keeps the request's language, and `_redirects` has one row per language the target publishes.
 
+On a plain-static target, when the alias's destination has no version in a language, that language's row points at the destination's default-language page (`/fr/landing  /welcome  301`). Static publish writes a language only where the page has it, so `/fr/welcome` doesn't exist; a worker target shows the default-language page there, and this row gives the same content.
+
+Decided: maintainer, 2026-10-22 (#1124)
+
+| Rejected | Why |
+|---|---|
+| Keep the row at the destination in that language (`/fr/landing  /fr/welcome  301`) | Static publish writes no `/fr/welcome`, so the redirect lands on a 404 |
+| No row for that language | `/fr/landing` then serves its blank archive marker, or a 404 |
+
 **Archived page HTML body content:**
 
 When a page is archived, the publish flow writes ONLY the marker line to
