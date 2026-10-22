@@ -146,6 +146,28 @@ describe('runInit', () => {
     expect(pkg.dependencies.zod).toBeDefined()
   })
 
+  it('gitignores .env files and .gazetta/ state', { timeout: 60000 }, async () => {
+    const { execSync } = await import('node:child_process')
+    execSync(`node ${resolve(import.meta.dirname, '../dist/cli/index.js')} init ${testDir}`, { stdio: 'pipe' })
+
+    execSync('git init -q .', { cwd: testDir, stdio: 'pipe' })
+    // Real git verdicts, not text comparison: the pattern must cover nested
+    // target state, not only a top-level .gazetta/. Global excludes are
+    // disabled so a match can only come from the generated .gitignore.
+    const ignored = (path: string) => {
+      try {
+        execSync(`git -c core.excludesFile=/dev/null check-ignore -q "${path}"`, { cwd: testDir, stdio: 'pipe' })
+        return true
+      } catch {
+        return false
+      }
+    }
+    expect(ignored('.env')).toBe(true)
+    expect(ignored('.env.local')).toBe(true)
+    expect(ignored('sites/main/targets/local/.gazetta/history/index.json')).toBe(true)
+    expect(ignored('package.json')).toBe(false)
+  })
+
   it('refuses to init in existing project', { timeout: 60000 }, async () => {
     const { execSync } = await import('node:child_process')
     execSync(`node ${resolve(import.meta.dirname, '../dist/cli/index.js')} init ${testDir}`, { stdio: 'pipe' })

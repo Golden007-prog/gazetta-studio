@@ -272,8 +272,7 @@ gazetta publish productoin
 ```
 my-site/
   package.json             # see below
-  .gitignore               # node_modules/, dist/, .env.local
-  .env                     # empty, with comments for common vars
+  .gitignore               # node_modules/, dist/, .env, .env.local, **/.gazetta/
   tsconfig.json            # paths: { "@templates/*": ["./templates/*"] }
   admin/
     package.json           # { name: "admin", ... }

@@ -15,9 +15,8 @@ Runtime behavior, security, caching, content management, publishing details, pla
 scripts and navigation. Templates should sanitize user-controlled content — Gazetta does
 not sanitize template output.
 
-**`.env` files:** `gazetta init` creates `.env` (committed, safe defaults) and `.env.local`
-(gitignored, for secrets). Credentials go in `.env.local`, never `.env`. The `.gitignore`
-excludes `.env.local` and `.env*.local`.
+**`.env` files:** the CLI loads `.env` and `.env.local`, and the generated `.gitignore`
+excludes both, so credentials in either file stay out of git.
 
 **Rate limiting:** `gazetta serve` does not include rate limiting. For production, use a
 reverse proxy (Caddy, nginx, Cloudflare) for rate limiting and DDoS protection. Future:

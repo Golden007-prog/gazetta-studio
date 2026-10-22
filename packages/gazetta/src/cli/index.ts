@@ -419,6 +419,9 @@ async function runInit(dir: string) {
   const name = target.split('/').pop() ?? 'my-site'
 
   const files: Record<string, string> = {
+    // First write: if init is interrupted, later state is still ignored.
+    '.gitignore': `node_modules/\ndist/\n.env\n.env.local\n**/.gazetta/\n`,
+
     'sites/main/site.config.ts': `import { defineSite, filesystemStorage } from 'gazetta'
 
 export default defineSite({
@@ -571,7 +574,6 @@ export default template
       ) + '\n',
 
     'admin/.gitkeep': '',
-    '.gitignore': `node_modules/\ndist/\n.env.local\n`,
 
     'package.json':
       JSON.stringify(
