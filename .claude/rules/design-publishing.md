@@ -130,16 +130,22 @@ target root/
 ├── templates/
 └── .gazetta/
     └── history/
-        ├── index.json              ← ordered revision list
+        ├── index.json              ← cache of the revision list (revisions/ is the source of truth)
         ├── objects/                ← content-addressed blobs
         │   └── ab/cd1234...
         └── revisions/
-            └── rev-0042.json       ← revision manifest (metadata + item → hash map)
+            └── rev-1792648514738.json  ← revision manifest (metadata + item → hash map)
 ```
 
 Storage providers see history as ordinary read/write bytes at paths. No provider-native
 versioning (S3 object versions, git commits) — one uniform approach across all providers
 keeps the storage interface minimal.
+
+A revision's id is the writing instance's clock time in milliseconds (`rev-<ms>`, then
+`rev-<ms>-2`, `-3` and so on within one millisecond), and history is ordered by id. Each
+revision is its own file, so concurrent writers on one target don't lose each other's
+revisions ([#1089](https://github.com/gazetta-studio/gazetta-studio/issues/1089)). Revisions
+written by instances whose clocks disagree can be listed out of order.
 
 ### Revision granularity
 

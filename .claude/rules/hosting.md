@@ -13,7 +13,7 @@ Serve modes, hosting platforms, deployment workflows, and production operations.
 
 ## Serve Modes
 
-> **Current code (2026-10-21):** `gazetta serve` serves the site only (`runServe` in `cli/index.ts` creates just the site server). The admin runs with `gazetta admin`. Sections below that describe admin, auth and `/admin` under `gazetta serve` are the planned shape, not today's behaviour. `gazetta dev` and `gazetta admin` currently listen on every network interface with no login by default ([#1074](https://github.com/gazetta-studio/gazetta-studio/issues/1074)).
+> **Current code (2026-10-22):** `gazetta serve` serves the site only (`runServe` in `cli/index.ts` creates just the site server). The admin runs with `gazetta admin`. Sections below that describe admin, auth and `/admin` under `gazetta serve` are the planned shape, not today's behaviour. `gazetta dev` listens on `127.0.0.1`, and so does `gazetta admin` while `admin.auth` is `trust: 'none'`; with real auth configured, `gazetta admin` listens on every interface. `--host` overrides the default on all three ([#1074](https://github.com/gazetta-studio/gazetta-studio/issues/1074)).
 
 | Mode | Command | Runtime | What it does |
 |------|---------|---------|-------------|
