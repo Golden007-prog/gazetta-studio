@@ -397,7 +397,7 @@ Strip strong caching: 301/410 responses get `Cache-Control: max-age=300` (5 minu
 
 **No publish-time aggregate manifests** for archive state. Workers read the page HTML's marker line; that's source-of-truth. Per-edge granularity — multi-instance correct, scales naturally.
 
-**Aggregate exception:** `_redirects` for Cloudflare/Netlify (external standard, host-glue), regenerated each publish from walked archived manifests. Optional per-target `redirects.format: 'cloudflare' | 'netlify' | 'json' | 'none'` config; default depends on target's runtime hint.
+**Aggregate exception:** `_redirects` for Cloudflare/Netlify (external standard, host-glue), regenerated each publish from walked archived manifests (decided: from the target's archive sidecars instead, [`design-target-removal.md`](design-target-removal.md) Q6). A purge changes nothing on a target until its removal is published (same doc, Q5). Optional per-target `redirects.format: 'cloudflare' | 'netlify' | 'json' | 'none'` config; default depends on target's runtime hint.
 
 **Capability-gap UX (locked; foundational principle for all features needing runtime capabilities):**
 

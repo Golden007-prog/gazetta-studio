@@ -325,7 +325,9 @@ The design above is forward-looking. Current code state:
   on unsaved edits via `useUnsavedGuardStore`.
 - **Sync indicators** — `SyncIndicators.vue` + `useSyncStatusStore` show "staging · 3 behind"
   chips in the top bar, relative to active. Click opens PublishPanel pre-pointed at that
-  destination.
+  destination. The chip shows one count (added + modified + only on that target), not the
+  separate "behind" and "ahead" that "Out of sync" describes; items only on the other
+  target are removable from the publish panel ([`design-target-removal.md`](design-target-removal.md) Q10).
 - **Target properties** — `environment`, `type`, and `editable` are all on `TargetConfig`
   ([packages/gazetta/src/types.ts](../../packages/gazetta/src/types.ts)). Defaults:
   environment=local, editable=true for local else false.

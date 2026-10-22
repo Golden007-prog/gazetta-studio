@@ -116,6 +116,10 @@ _Avoid_: Origin, From-target, Source (bare — collides with `SourceContext` and
 The role a Target plays as the destination of a Publish operation — where the Publish writes to. Picked by the Operator. Multiple Destination Targets are allowed (fan-out publish).
 _Avoid_: To-target, Target (bare in publish context — ambiguous), Sink.
 
+**Removal**:
+Publishing the absence of a Page or Fragment to a Destination Target: the item exists on the Destination Target but not on the Source Target, and the Operator chooses to take it off, so the Destination Target stops serving it (404). Always chosen per item (or with `gazetta publish --remove`), never automatic: an item missing from the Source Target may have been deleted there or added on the Destination Target. Per [`design-target-removal.md`](.claude/rules/design-target-removal.md).
+_Avoid_: Delete (the Source Target operation: Archive, then Purge), Prune, Sync-delete.
+
 **Source Context** (internal — admin API plumbing):
 The TypeScript type `SourceContext` in `admin-api/source-context.ts` holds the storage, content root, and history wiring for the **Active Target** in an admin-API request. Distinct from Source Target (which is a publish role). The code-side name predates the role-naming clarification; semantics are unchanged.
 

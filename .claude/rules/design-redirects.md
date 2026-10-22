@@ -229,9 +229,13 @@ phase.
 
 A page can be archived on the source but not yet on a destination
 target (e.g., `local` was archived; `production` hasn't been
-republished yet). The archived state propagates with the next
-publish — `_redirects` regenerates at that publish, picking up the
-new archive list.
+republished yet). **Current code:** `_redirects` is rebuilt from the
+source's archived manifests at every publish, so it picks up archives
+that were never published to that target and drops purged ones at the
+next publish of anything. **Decided** ([`design-target-removal.md`](design-target-removal.md)
+Q6): `_redirects` is built from per-page archive sidecars on the
+target, so it lists exactly the archives the target holds, and a purged
+archive keeps its row until its removal is published (Q5).
 
 ## Foundational checks
 
