@@ -164,16 +164,18 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 A fresh Opus 5.5 agent runs the checks, which are lookups and re-reads. A fresh Fable 5.1 agent gives the second opinion. A second opinion needs independence from the author (who runs on Opus 5.5) and at least the author's capability, and Fable 5.1 is the only model with both. It also reads Sourcery's and Seer's comments on the PR: they're inputs, worth turning into questions when they hold, not the opinion itself. If Fable isn't available, a second fresh Opus agent gives the second opinion.
 
-So that it sees Seer's review, the second opinion starts once Seer has posted, or after 15 minutes, whichever comes first; the checker runs meanwhile. After a fix round or an answered question, it runs again only on the decisions whose text changed, and its earlier result stands for the rest.
+So that it sees Seer's review, the second opinion starts once Seer has reacted, commented or reviewed, or after 15 minutes, whichever comes first. On a docs PR with nothing to report, Seer adds a 🎉 reaction within a few minutes and posts nothing else. The checker runs meanwhile. After a fix round or an answered question, the second opinion runs again only on the decisions whose text changed, and its earlier result stands for the rest.
 
-The cost is one Fable pass per design PR, plus one for each decision that changes, at 2.5 times Opus's price per token; a pass can take several minutes. (Prices from the bundled model reference dated 2026-10-06: Fable 5.1 $10 / $50 per million tokens in / out, Opus 5.5 $4 / $20.)
+The cost is one Fable pass per design PR, plus a re-run after each fix round or answered question that covers only the decisions whose text changed, at 2.5 times Opus's price per token; a pass can take several minutes. (Prices from the bundled model reference dated 2026-10-06: Fable 5.1 $10 / $50 per million tokens in / out, Opus 5.5 $4 / $20.)
 
 Decided: maintainer, 2026-10-22 (#1133)
 
 | Rejected | Why |
 |---|---|
-| Start the second opinion as soon as the PR opens | Seer usually posts about 4 minutes after a PR opens, so its comments would be missed |
+| Start the second opinion as soon as the PR opens | Seer finishes a review within a few minutes of a PR opening, so its findings would be missed |
+| Wait for a comment from Seer | On a clean docs PR Seer posts none, only the 🎉 reaction, so most design PRs would wait the full 15 minutes |
 | Run the whole second opinion again after every round | A full Fable pass each time, on decisions that didn't change |
+| Also re-run decisions that cite a changed one | Nearly every decision here cites another, so it comes close to the full re-run; the checker re-checks the whole PR every round, which is where a stale citation shows up |
 | One fresh Opus agent does both | The author's model, so the same blind spots; having just verified everything also anchors its opinion |
 | A second fresh Opus agent gives the second opinion | Still the author's model, with its blind spots (kept as the fallback) |
 | Sonnet 5.5 or Haiku 5.5 gives the second opinion | A weaker reviewer misses what the stronger author missed, and adds false alarms |
@@ -197,7 +199,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 ### Q7 — Which PRs are in scope
 
-The skill's scope is every file that records the maintainer's decisions: everything under `.claude/rules/` and `docs/adr/`, plus the root `CLAUDE.md`, `CONTEXT.md`, `ROADMAP.md`, `docs/non-goals.md`, and `SKILL.md` files under `.claude/skills/`. It's the same review whichever file the decision is in: did the maintainer decide this, and is it recorded faithfully? Folders rather than a list of files, so new design or rule files are covered without updating the skill. `CLAUDE.md` is in because it summarises each design doc's locked decisions, and a design pass adds its line there. None of these files deploy.
+The skill's scope is every file that records the maintainer's decisions: everything under `.claude/rules/` and `docs/adr/`, plus the root `CLAUDE.md`, `bots/README.md`, `CONTEXT.md`, `ROADMAP.md`, `docs/non-goals.md`, and `SKILL.md` files under `.claude/skills/`. It's the same review whichever file the decision is in: did the maintainer decide this, and is it recorded faithfully? Folders rather than a list of files, so new design or rule files are covered without updating the skill. `CLAUDE.md` and `bots/README.md` are in because design passes record decisions there: `CLAUDE.md` summarises each design doc's locked decisions, and `bots/README.md` holds the bots' dev-process rules. None of these files deploy.
 
 Three rules:
 - **A PR that touches any file outside the set is out of scope.** It gets the normal review and the maintainer's merge OK. This keeps code, workflows and anything that deploys out.
@@ -209,6 +211,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 | Rejected | Why |
 |---|---|
 | Leave the root `CLAUDE.md` out | A design PR that adds its doc's line there would fall out of scope (#1133 left the line out for that reason) |
+| Leave `bots/README.md` out | Bot design passes update its rules (its "producer vs consumer" rule is cited as one), so their PRs would fall out of scope |
 | Also let a design PR carry its research or trial-log file under `docs/audits/` | Those hold facts, not decisions (as for the `docs/audits/` row below) |
 | Changes to the skill stay in scope, reviewed with the copy on `main` | Still the one case where the review can't be independent; a handful of PRs a year are cheap to read |
 | Only the design docs rule 33 names: `.claude/rules/design-*.md`, `docs/adr/`, `CONTEXT.md` | Changes to rules, priorities and skills would still wait for the maintainer, though they record decisions the same way |
@@ -285,7 +288,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 |---|---|
 | A section in `design-code-review.md` instead of a new doc | That doc covers the code-review angles (diff, security, tests); reviewing the maintainer's decisions is a different concern |
 | Only the skill, with its design written into `SKILL.md`, plus the rule 33 amendment | The reasons behind the decisions would live in a file loaded on every run, which isn't where design rationale belongs (rule 22) |
-| This doc, plus an ADR | Fails the ADR test "hard to reverse": one clause in rule 33 turns the skill off |
+| This doc, plus an ADR | Fails the ADR test "hard to reverse": removing the rule 33 clause and the lines that hand PRs to the skill in `review-prs` and `feature-design-process.md` turns it off |
 | The script and its tests in the skill folder | Needs CI wiring so its tests run, since no workspace covers that folder |
 
 ### Q12 — Building it and switching it on
@@ -362,7 +365,7 @@ Design PRs opened before this doc (#1120, #1124) get a `## Decisions` list added
 
 ## Open questions
 
-1. **The transcript format isn't a documented interface.** The lookup relies on fields Claude Code writes today (`uuid`, `parentUuid`, `origin`, `toolUseResult`, `sourceToolAssistantUUID`). If they change, lookups come back `not-found` or `broken-link`, which sends decisions to the maintainer instead of approving them: it fails safe, but it would stop the skill being useful until the script is updated.
+1. **The transcript format isn't a documented interface.** The lookup relies on fields Claude Code writes today (`uuid`, `parentUuid`, `origin`, `toolUseResult`, `sourceToolAssistantUUID`). If they change, lookups come back `not-your-input`, `not-found` or `broken-link`, which sends decisions to the maintainer instead of approving them: it fails safe, but it would stop the skill being useful until the script is updated. (Until #1136 lands, a renamed `parentUuid` would instead let every entry pass the chain check.)
 2. ~~**Whether Fable 5.1 is available to sub-agents on the maintainer's plan.**~~ **Answered on the first run:** the second opinion on #1133 ran on Fable 5.1.
 
 ## Future directions
@@ -380,15 +383,15 @@ Choices made while building #1132, each carrying out a decision above.
 |---|---|---|
 | What a typed answer was shown | All of the author's messages since the maintainer's previous input, oldest first | Q2 rule 1; Q9 exact comparison |
 | Pasted text | Replaced by "[pasted text]" and flagged; the maintainer's own words around it still count | Q2 rule 2 |
-| The entry chain | The answer's parent must be an earlier entry, or missing; a session's first entry and its compaction boundaries have no parent | Q9 |
-| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and redirects or tees into it, edits it in place, moves, copies or truncates it, or runs code that writes a file (heredoc bodies are ignored), and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. A read-only scan whose script is written with `cat >` and run with the transcript path is flagged too | Q9 |
+| The entry chain | The answer's parent must be an earlier entry, or absent (no `parentUuid`), as on a session's first entry and its compaction boundaries; a `parentUuid` that names no earlier entry is `broken-link` | Q9 |
+| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and, outside heredoc bodies, has any redirect, `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `truncate` or `dd`, or anywhere, heredoc bodies included, has code that opens a file for writing (`open(…, 'w'/'a'/'x')`, `writeFile`, `appendFile`, `write_text`); and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. Read-only scans can be flagged too | Q9 |
 | Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`, which `/review-prs` reads to find PRs without a passing verdict for their head | Q8 |
 | Merge gate | The head is the one the verdict names, there's no `hold` label, and the verdict is posted; then a rebase-merge with `--admin` | Q6, Q8, Q9; rule 16 |
 | Second opinion's model | `model: "fable"`; if that fails, the default model | Q5 |
 
 ### Current code alignment
 
-Until #1136 lands, #1132's code does less than the decisions above. The author applies the missing rules by hand on each run and says so in the verdict.
+Until #1136 lands, #1132's code does less than the decisions above. The author applies the missing rules by hand on each run and says so in the verdict, since Q9 stays as written and Q12 has the skill finish #1133 and cut 4's runs before #1136 lands.
 - **The lookup (Q9)** accepts four fakes the first run's checker built: an answer appended later with an earlier timestamp, a second result for one picker question, an entry with no parent in the middle of the file, and a script run without naming the transcript. It doesn't scan sub-agent transcripts or the content of Write and Edit calls.
 - **Its output** can be cut at 64 KB when piped to a slow reader, because the script calls `process.exit` right after writing; `transcriptWrites` is the last field.
-- **`SKILL.md`** doesn't put `CLAUDE.md` in scope, take the skill's own files out, or check the PR's author (Q7); its second opinion starts without waiting for Seer and re-runs every round (Q5); and its merge doesn't pass `--match-head-commit` (Q8).
+- **`SKILL.md`** doesn't put `CLAUDE.md` or `bots/README.md` in scope, take the skill's own files out, or check the PR's author (Q7); its second opinion starts without waiting for Seer and re-runs every round (Q5); and its merge doesn't pass `--match-head-commit` (Q8).

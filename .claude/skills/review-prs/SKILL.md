@@ -1,19 +1,19 @@
 ---
 name: review-prs
-description: Walk the open-PR queue end-to-end. For each PR, read the diff + linked issue, fact-check load-bearing claims, run/monitor CI, and recommend merge / close / changes. Asks before merging, except PRs the review-decisions skill approves.
+description: Walk the open-PR queue end-to-end. For each PR, read the diff + linked issue, fact-check load-bearing claims, run/monitor CI, and recommend merge / close / changes. Asks before merging, except PRs the review-decisions skill approves that aren't held.
 disable-model-invocation: true
 allowed-tools: Bash Read Grep Glob Edit Write AskUserQuestion
 argument-hint: [optional PR number to start with]
 ---
 
-Walk every open PR. For each, do a real review (not a summary). Always ask before merging, except a PR the `review-decisions` skill approves (step 2).
+Walk every open PR. For each, do a real review (not a summary). Always ask before merging, except a PR the `review-decisions` skill approves for its head commit and that isn't held (step 2).
 
 ## Loop
 
 1. **List open PRs** — `gh pr list --json number,title,author,isDraft,createdAt,mergeable,reviewDecision,statusCheckRollup` and present a table sorted oldest-first.
 
 2. **For each PR**, in order:
-   - **A PR recording the maintainer's decisions** — if every changed file is in [`review-decisions`](../review-decisions/SKILL.md)' scope and the body has a `## Decisions` list, run that skill instead of the steps below, unless the PR already has its approving verdict for the head commit (`<!-- review-decisions: head=<sha> verdict=approve -->`). It merges the PR itself when it passes ([`design-decision-review.md`](../../rules/design-decision-review.md) Q8)
+   - **A PR recording the maintainer's decisions** — if every changed file is in [`review-decisions`](../review-decisions/SKILL.md)' scope and the body has a `## Decisions` list, run that skill instead of the steps below. If the PR already has its approving verdict for the head commit (`<!-- review-decisions: head=<sha> verdict=approve -->`), only the skill's merge step is left: merge if the head is unchanged and there's no `hold` label. If the skill finds the PR out of scope, carry on with the steps below. The skill merges a PR it passes itself ([`design-decision-review.md`](../../rules/design-decision-review.md) Q6, Q8, Q9)
    - **Read PR metadata** — `gh pr view <N> --json title,body,baseRefName,headRefName,additions,deletions,changedFiles,files,commits`
    - **Read the linked issue** if one exists — `gh issue view <N>` (look for `Closes #X` in body)
    - **Read the diff** — `gh pr diff <N>` (or use Read on changed files for big diffs)
@@ -285,11 +285,11 @@ For bot-authored PRs (see "Reading bot-authored PRs" above), also:
 
 ## Merge protocol
 
-Default: **always ask before merging**. Even with admin bypass available. The one exception: a PR that `review-decisions` approves, which merges without asking ([`design-decision-review.md`](../../rules/design-decision-review.md) Q6).
+Default: **always ask before merging**. Even with admin bypass available. The one exception: a PR that `review-decisions` approves for its head commit and that isn't held, which merges without asking, `--admin` included ([`design-decision-review.md`](../../rules/design-decision-review.md) Q6, Q9).
 
 When merging:
 - **Rebase-merge only** per rule 16 (`gh pr merge <N> --rebase --delete-branch`)
-- Solo maintainer with branch protection requiring 1 review: add `--admin` after explicit user confirmation
+- Solo maintainer with branch protection requiring 1 review: add `--admin` after explicit user confirmation (for a PR `review-decisions` approved, its approval is that confirmation)
 - After merge, `git checkout main && git pull --rebase origin main`
 
 Bot-authored PRs (fix-bot, feature-bot) open as **draft** by design. Before merging:

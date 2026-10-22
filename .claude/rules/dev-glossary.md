@@ -401,7 +401,8 @@ lines in a bot transcript), which records a bot's own reasoning.
 **Decided mark**:
 The line `Decided: maintainer, <date> (#<PR>)` under each locked decision a
 PR adds or changes, or `Follows from <decision>` for one derived from an
-earlier decision. Tells readers and cut-planner who made the decision.
+earlier decision. Tells readers and contributors who made the decision;
+seeding a planner issue copies it into the issue's `## Locked decisions`.
 Older decisions aren't backfilled.
 
 **Hold**:
