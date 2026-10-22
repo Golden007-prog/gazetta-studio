@@ -7,6 +7,7 @@ import { hashManifest } from './hash.js'
 import { scanTemplates, templateHashesFrom, type TemplateInfo } from './templates-scan.js'
 import { listSidecars } from './sidecars.js'
 import { isArchived } from './archive-helpers.js'
+import { publishedPageNoindex } from './seo.js'
 import type { StorageProvider } from './types.js'
 import type { ContentRoot } from './content-root.js'
 
@@ -128,7 +129,7 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
   })
   for (const [name, page] of site.pages) {
     local.set(`pages/${name}`, hashManifest(page, pageHashOpts()))
-    pageNoindex.set(`pages/${name}`, isArchived(page) || !!page.metadata?.robots?.includes('noindex'))
+    pageNoindex.set(`pages/${name}`, publishedPageNoindex(page.metadata, isArchived(page)))
 
     // Per-locale items — each locale variant is compared independently
     const localeEntry = site.pageLocales.get(name)
@@ -136,7 +137,7 @@ export async function compareTargets(opts: CompareOptions): Promise<CompareResul
       for (const [locale, localePage] of localeEntry.locales) {
         const localeKey = `pages/${name}:${locale}`
         local.set(localeKey, hashManifest(localePage, pageHashOpts(locale)))
-        pageNoindex.set(localeKey, isArchived(page) || !!localePage.metadata?.robots?.includes('noindex'))
+        pageNoindex.set(localeKey, publishedPageNoindex(localePage.metadata, isArchived(page)))
       }
     }
   }
