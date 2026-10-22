@@ -28,6 +28,8 @@ import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { loadSite, type Site } from '../src/site-loader.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
 import { starterManifest, starterTargetDir, starterTemplatesDir } from './_helpers/starter.js'
+import { listSidecars } from '../src/sidecars.js'
+import { generateSitemap } from '../src/sitemap.js'
 
 async function loadStarterSite(): Promise<Site> {
   const storage = createFilesystemProvider(starterTargetDir)
@@ -44,6 +46,74 @@ function makeTarget(storage: MemoryStorage, overrides?: Partial<PublishTarget>):
     ...overrides,
   }
 }
+
+describe('publishItemCore — locale indexing', () => {
+  it.each([
+    { type: 'esi', mode: 'page-rendered' },
+    { type: 'static', mode: 'page-static' },
+  ] as const)('uses each locale manifest for $type publish-state and sitemap entries', async ({ type, mode }) => {
+    const site = await loadStarterSite()
+    const storage = memoryStorage()
+    const page = site.pages.get('home')!
+    const fr = site.pageLocales.get('home')!.locales.get('fr')!
+    const publish = (locale?: string) =>
+      publishItemCore({
+        kind: 'page',
+        name: 'home',
+        mode,
+        locale,
+        site,
+        sourceRoot: site.contentRoot,
+        target: makeTarget(storage, { type, manifestHash: 'abcd1234' }),
+      })
+
+    for (const defaultNoindex of [false, true]) {
+      site.pages.set('home', { ...page, metadata: { robots: defaultNoindex ? 'noindex' : 'index' } })
+      site.pageLocales.get('home')!.locales.set('fr', {
+        ...fr,
+        metadata: defaultNoindex ? undefined : { robots: 'noindex, nofollow' },
+      })
+
+      expect((await publish()).ok).toBe(true)
+      expect((await publish('fr')).ok).toBe(true)
+      const states = await listSidecars(storage, 'pages')
+      expect(states.get('home')!.pub!.noindex).toBe(defaultNoindex)
+      expect(states.get('home:fr')!.pub!.noindex).toBe(!defaultNoindex)
+      const entries = await storage.readDir('pages/home')
+      const frenchPub = entries.find(entry => entry.name.startsWith('.pub-') && entry.name.endsWith('.fr'))!
+      expect(frenchPub.name.includes('-noindex')).toBe(!defaultNoindex)
+
+      const sitemap = generateSitemap({ siteUrl: 'https://example.com', pages: states })!
+      expect(sitemap.includes('<loc>https://example.com/</loc>')).toBe(!defaultNoindex)
+      expect(sitemap.includes('<loc>https://example.com/fr</loc>')).toBe(defaultNoindex)
+    }
+  })
+
+  it.each([false, true])(
+    'falls back to the default manifest when a locale file is absent (noindex=%s)',
+    async noindex => {
+      const site = await loadStarterSite()
+      const storage = memoryStorage()
+      const page = site.pages.get('home')!
+      site.pages.set('home', { ...page, metadata: { robots: noindex ? 'noindex' : 'index' } })
+      site.pageLocales.delete('home')
+
+      const result = await publishItemCore({
+        kind: 'page',
+        name: 'home',
+        mode: 'page-rendered',
+        locale: 'fr',
+        site,
+        sourceRoot: site.contentRoot,
+        target: makeTarget(storage, { manifestHash: 'abcd1234' }),
+      })
+
+      expect(result.ok).toBe(true)
+      const states = await listSidecars(storage, 'pages')
+      expect(states.get('home:fr')!.pub!.noindex).toBe(noindex)
+    },
+  )
+})
 
 // ─── Type contract (Cut 1, preserved) ──────────────────────────────
 
