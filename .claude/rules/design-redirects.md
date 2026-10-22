@@ -73,7 +73,8 @@ GitHub Pages, S3 static-website), the marker mechanism doesn't fire.
 Those targets opt into the `_redirects` host-glue file
 (`targets.X.redirects: { format: 'cloudflare' | 'netlify' | 'json' }`)
 which the publish flow emits at the target root by walking archived
-manifests. Cloudflare Pages and Netlify both honor the file at the
+manifests (decided: from the target's archive sidecars instead,
+[`design-target-removal.md`](design-target-removal.md) Q6). Cloudflare Pages and Netlify both honor the file at the
 site root; the `json` format is for custom integrations.
 
 The file has one row per language the target publishes, with the
@@ -289,7 +290,8 @@ mechanism's foundational checks are answered by its owners:
   (validation: `dangling-alias`, `referenced-archived-without-alias`)
 - **Multi-instance** — same as soft-delete: per-edge HTML markers on
   page files; `_redirects` is a publish-time artifact regenerated
-  deterministically from manifests
+  deterministically from the source's manifests today, and from the
+  target's archive sidecars once `design-target-removal.md` Q6 ships
 - **Cache** — 301/410 responses get `Cache-Control: max-age=300` to
   let unarchive propagate quickly; `_redirects` itself is host-cached
   per the host's CDN rules (Cloudflare Pages serves it with the

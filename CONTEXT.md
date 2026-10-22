@@ -117,7 +117,7 @@ The role a Target plays as the destination of a Publish operation — where the 
 _Avoid_: To-target, Target (bare in publish context — ambiguous), Sink.
 
 **Removal**:
-Publishing the absence of a Page or Fragment to a Destination Target: the item exists on the Destination Target but not on the Source Target, and the Operator chooses to take it off, so the Destination Target stops serving it (404). Always chosen per item (or with `gazetta publish --remove`), never automatic: an item missing from the Source Target may have been deleted there or added on the Destination Target. Per [`design-target-removal.md`](.claude/rules/design-target-removal.md).
+Publishing the absence of a Page or Fragment to a Destination Target: the item exists on the Destination Target but not on the Source Target, and the Operator chooses to take it off, so the Destination Target stops serving it (404; for a translation on worker and ESI targets, visitors get the default-language version). Always chosen per item, or for all such items with `gazetta publish --remove`; Gazetta never removes on its own, because an item missing from the Source Target may have been deleted there or added on the Destination Target. A pipeline that passes `--remove` makes it automatic for that target by the Operator's choice. Per [`design-target-removal.md`](.claude/rules/design-target-removal.md).
 _Avoid_: Delete (the Source Target operation: Archive, then Purge), Prune, Sync-delete.
 
 **Source Context** (internal — admin API plumbing):
@@ -199,7 +199,7 @@ _Avoid_: URL Rewrite (different mechanism — Gazetta does not own URL rewriting
 
 **Pure Soft-Delete**:
 An Archive without an `aliasOf` field. Emits `410 Gone` (not `404 Not Found`) at the source URL — search-engine semantics: 410 tells crawlers the URL is permanently retired (drop from index), 404 implies "may come back" (keep in crawl queue). Same HTML marker mechanism as Redirect, different marker grammar (`<!-- gazetta:archived gone -->`).
-_Avoid_: Hard Delete (Purge is the hard-delete operation), Removed (too generic).
+_Avoid_: Hard Delete (Purge is the hard-delete operation), Removed (a Removal takes an item off a Target, a different operation).
 
 ### Composition and resolution
 

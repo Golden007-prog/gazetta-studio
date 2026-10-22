@@ -49,6 +49,8 @@ Content lifecycle:
 Publish lifecycle:
   beforePublish(target, items, ctx) → mutated items | throw to cancel
   afterPublish(target, result, ctx) → void (observe)
+                                    (result gains optional itemsRemoved: design-target-removal.md Q8;
+                                     a beforeRemove phase is reserved)
 
 Asset lifecycle:
   beforeUpload(asset, bytes, ctx)   → mutated bytes | throw to cancel
