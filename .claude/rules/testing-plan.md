@@ -224,9 +224,7 @@ export default { ...base, testDir: '../tests/e2e', reporter: 'line', webServer: 
 
 Then `npx playwright test -c .tmp/pw-dev-only.config.ts --project=dev <spec>`.
 Run it from the main checkout, not a git worktree: a worktree with symlinked
-`node_modules` writes the main checkout's Vite cache. Until #1028 gives each
-dev server its own Vite cache, a run with two or more workers can also fail
-on `504 (Outdated Optimize Dep)`.
+`node_modules` writes the main checkout's Vite cache.
 
 A change to what `tests/e2e/fixtures.ts` gives every worker copy (a template
 field, a page, a config edit) changes the starting state of every `dev` test.

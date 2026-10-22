@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 /**
@@ -12,8 +11,13 @@ import { join, resolve } from 'node:path'
  * running server, whose next dependency request then fails with
  * `504 Outdated Optimize Dep`. Keyed by the site path, the cache survives
  * restarts of the same site and is never shared between sites.
+ *
+ * It sits in the project's own `node_modules`, not the OS temp folder: a
+ * predictable path in a shared `/tmp` lets another account plant optimized
+ * modules that run in the admin, and temp cleaners can delete it under a
+ * running server.
  */
-export function viteCacheDir(siteDir: string, tempRoot: string = tmpdir()): string {
+export function viteCacheDir(siteDir: string, projectRoot: string): string {
   const key = createHash('sha256').update(resolve(siteDir)).digest('hex').slice(0, 16)
-  return join(tempRoot, 'gazetta-vite', key)
+  return join(projectRoot, 'node_modules', '.vite', 'gazetta', key)
 }

@@ -1952,7 +1952,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
           configFile: join(cmsWebDir, 'vite.config.ts'),
           root: cmsWebDir,
           base: '/admin/',
-          cacheDir: viteCacheDir(siteDir),
+          cacheDir: viteCacheDir(siteDir, projectRoot),
           resolve: {
             alias: {
               '@editors': join(adminDir, 'editors'),
