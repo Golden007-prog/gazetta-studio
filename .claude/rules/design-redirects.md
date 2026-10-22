@@ -71,6 +71,13 @@ which the publish flow emits at the target root by walking archived
 manifests. Cloudflare Pages and Netlify both honor the file at the
 site root; the `json` format is for custom integrations.
 
+The file has one row per language the target publishes, with the
+prefixes its routes use (`/landing  /welcome  301` and
+`/fr/landing  /fr/welcome  301`), so plain-static sites redirect the
+same way worker sites do (decided 2026-10-22, #1124). Today's code
+writes default-language rows only
+([#1130](https://github.com/gazetta-studio/gazetta-studio/issues/1130)).
+
 ### 410 Gone for archived items without aliasOf
 
 A page archived without `aliasOf` is a pure soft-delete — the URL

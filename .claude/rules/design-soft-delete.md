@@ -363,7 +363,7 @@ dropped — it would have doubled the surface for no real gain.
 | Target type | Archive with `aliasOf` | Archive without `aliasOf` |
 |---|---|---|
 | **`static`** with worker | HTML carries `<!-- gazetta:archived alias=X -->` marker. Worker reads first 200 bytes; emits 301 to X's route in the request's language (`/fr/about` with alias `home` → `/fr`). | HTML carries `<!-- gazetta:archived gone -->` marker. Worker emits 410. |
-| **`static`** without worker | `_redirects` regenerated at publish from walked archived manifests (host-glue). Plain static can't emit 410; falls to host's natural 404. Operator-config opt-in: emit a 200 "Gone" placeholder page. |
+| **`static`** without worker | `_redirects` regenerated at publish from walked archived manifests (host-glue), one row per language the target publishes (`/fr/landing  /fr/welcome  301`; default-language rows only until #1130). Plain static can't emit 410; falls to host's natural 404. Operator-config opt-in: emit a 200 "Gone" placeholder page. |
 | **`esi`** | Same HTML marker as static — worker reads first 200 bytes of `pages/{name}/index.html` BEFORE composing. Marker present → emit 301 without composing. | Same — marker present → emit 410 without composing. |
 | **`dynamic`** | Origin emits HTML marker OR returns 301 directly. Same marker grammar as static / ESI. | Same — 410. |
 
