@@ -210,6 +210,10 @@ describe('findTranscriptWrites', () => {
     ['an in-place sed', "sed -i '' 's/a/b/' /Users/me/.claude/projects/-x/abc.jsonl"],
     ['a python write', "python3 -c \"open('/Users/me/.claude/projects/-x/abc.jsonl','a').write('x')\""],
     ['a move over the file', 'cd ~/.claude/projects/-x && mv new.jsonl abc.jsonl'],
+    [
+      'a heredoc script that opens the transcript for appending',
+      "python3 - <<'EOF'\nopen('/Users/me/.claude/projects/-x/abc.jsonl', 'a').write('{}')\nEOF",
+    ],
   ])('flags a shell command with %s', (_label, command) => {
     expect(findTranscriptWrites(bash(command))).toHaveLength(1)
   })
@@ -218,6 +222,14 @@ describe('findTranscriptWrites', () => {
     ['a read', 'python3 - ~/.claude/projects/-x/abc.jsonl'],
     ['a read with errors discarded', 'grep -c type ~/.claude/projects/-x/abc.jsonl 2>/dev/null'],
     ['a write to a memory note', 'echo hi >> ~/.claude/projects/-x/memory/MEMORY.md'],
+    [
+      'a heredoc script that only reads, with > in its code',
+      "python3 - <<'EOF'\nfor l in open('/Users/me/.claude/projects/-x/abc.jsonl'):\n    if len(l) > 3 and '<tag>' in l: print(l)\nEOF",
+    ],
+    [
+      'a script file written to the scratchpad that reads the transcript',
+      "cat > /tmp/s/read.py <<'EOF'\nrows = open('/Users/me/.claude/projects/-x/abc.jsonl').read()\nEOF\npython3 /tmp/s/read.py",
+    ],
   ])('ignores %s', (_label, command) => {
     expect(findTranscriptWrites(bash(command))).toEqual([])
   })
