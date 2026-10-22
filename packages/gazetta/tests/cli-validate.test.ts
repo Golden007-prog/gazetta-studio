@@ -66,7 +66,9 @@ describe('gazetta validate (CLI)', () => {
     expect(status).toBe(0)
   })
 
-  it('--verbose prints full Issue messages', () => {
+  // Same CI-parallelism timing hazard as the quality test below (~2s
+  // local, much higher on loaded runners) — use the same override.
+  it('--verbose prints full Issue messages', { timeout: 30_000 }, () => {
     const { stdout } = run(['sites/main', '--severity', 'all', '--verbose'])
     // Verbose surfaces individual issue lines indented under the item.
     expect(stdout).toMatch(/Invalid input|expected string|received undefined/)
