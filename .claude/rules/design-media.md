@@ -1110,7 +1110,7 @@ History is substantially implemented in the codebase — more so than earlier pa
 - `history-provider.ts` — content-addressed blob storage at `.gazetta/history/objects/<hh>/<rest>`, dedupes on `exists()` before write
 - `history-recorder.ts` — `recordWrite()` called from save (pages/fragments routes) and publish route
 - `history-restorer.ts` — rollback restores a revision's content tree
-- `.gazetta/history/index.json` + `revisions/rev-NNNN.json` layout
+- `.gazetta/history/revisions/rev-<ms>.json`, one file per revision and the source of truth; `index.json` is a cache of the list (#1107)
 - Retention via `HistoryRetention.maxRevisions`, default 50 (`DEFAULT_HISTORY_RETENTION`)
 - `/api/history` admin route exists
 

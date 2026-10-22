@@ -143,9 +143,11 @@ keeps the storage interface minimal.
 
 A revision's id is the writing instance's clock time in milliseconds (`rev-<ms>`, then
 `rev-<ms>-2`, `-3` and so on within one millisecond), and history is ordered by id. Each
-revision is its own file, so concurrent writers on one target don't lose each other's
-revisions ([#1089](https://github.com/gazetta-studio/gazetta-studio/issues/1089)). Revisions
-written by instances whose clocks disagree can be listed out of order.
+revision is its own file, so writers don't overwrite each other through a shared list
+([#1089](https://github.com/gazetta-studio/gazetta-studio/issues/1089)), but two writers that
+pick the same id in one millisecond can still lose a revision
+([#1112](https://github.com/gazetta-studio/gazetta-studio/issues/1112)). Revisions written by
+instances whose clocks disagree can be listed out of order.
 
 ### Revision granularity
 
