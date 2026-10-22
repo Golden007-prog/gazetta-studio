@@ -17,9 +17,11 @@ Design and the reasons behind each rule: [`design-decision-review.md`](../../rul
 gh pr view <N> --json number,title,body,headRefOid,files,labels,author
 ```
 
-In scope only when both hold:
-- **Every** changed file is under `.claude/rules/` or `docs/adr/`, is `CONTEXT.md`, `ROADMAP.md` or `docs/non-goals.md`, or is a `SKILL.md` under `.claude/skills/`. One other file (code, workflows, user docs, audits) puts the whole PR out of scope.
-- The PR body has a `## Decisions` table pointing at this machine's transcripts (step 3). Contributor and bot PRs have none and are out of scope.
+In scope only when all of these hold:
+- **Every** changed file is under `.claude/rules/` or `docs/adr/`, is the root `CLAUDE.md`, `bots/README.md`, `CONTEXT.md`, `ROADMAP.md` or `docs/non-goals.md`, or is a `SKILL.md` under `.claude/skills/`. One other file (code, workflows, user docs, audits) puts the whole PR out of scope.
+- The PR doesn't change this skill: not `.claude/skills/review-decisions/`, not `.claude/rules/design-decision-review.md`, and not the `review-decisions` clause of rule 33 in `.claude/rules/team-preferences.md`. A PR that does goes to the maintainer, because this copy of the skill would be reviewing changes to itself.
+- The PR's author is the account this session posts as (`gh api user --jq .login`): PRs from contributors and bots didn't come out of a session with the maintainer.
+- The PR body has a `## Decisions` table pointing at this machine's transcripts (step 3).
 
 Out of scope: say so in one line and stop. The PR gets the normal review and the maintainer's merge OK.
 
@@ -55,7 +57,7 @@ For each session in the list:
 ./node_modules/.bin/tsx bots/_lib/decision-answers.ts --session <id> --at <ts> [--at <ts> ...]
 ```
 
-For each timestamp it returns `status` (`ok`, `not-found`, `not-your-input`, `broken-link`), `kind` (`typed` or `picker`), `answer`, and `shown`: the picker's questions and options as the maintainer saw them, or my messages in the turn a typed reply answered. It also returns `transcriptWrites`, the commands in the session that may have written to a transcript file.
+For each timestamp it returns `status` (`ok`, `not-found`, `not-your-input`, `broken-link`), `kind` (`typed` or `picker`), `answer`, and `shown`: the picker's questions and options as the maintainer saw them, or my messages in the turn a typed reply answered. It also returns `transcriptWrites`: the commands and file edits, in the session and its sub-agents (`source` names the sub-agent's file), that may have written to a transcript. It over-reports on purpose; the checker says which ones could matter.
 
 Only `status: ok` is evidence. The script decides what counts as the maintainer's own input; don't second-guess it in either direction.
 
@@ -86,6 +88,8 @@ Spawn one agent with the Agent tool (no `model` override: it runs on the session
 
 ## 6. Ask for a second opinion (fresh agent, different model)
 
+Start it once Seer (`sentry[bot]`) has reacted to the PR, commented or reviewed, or after 15 minutes, whichever comes first; the checker runs meanwhile. On a clean docs PR Seer posts no comment: a 🎉 reaction (`gh api repos/{owner}/{repo}/issues/<N>/reactions`) is its "reviewed, nothing to say". On a later round (after a fix or an answer), give it only the decisions whose text changed since its last pass; its earlier result stands for the rest.
+
 Spawn a second agent with `model: "fable"` (Claude Fable 5.1). If that fails, use the default model: the second opinion still runs, on Opus. Give it the PR diff, the decision list with the `shown` text for each decision, and the PR's Sourcery and Seer comments (`gh api repos/{owner}/{repo}/pulls/<N>/comments`, plus `.../reviews`), with this brief:
 
 > You are giving a second opinion on decisions a project's maintainer has made, before they're merged into the design docs. You don't decide and you don't block. You raise concrete concerns, and only ones the maintainer wasn't shown when deciding (compare with the `shown` text).
@@ -106,7 +110,7 @@ Spawn a second agent with `model: "fable"` (Claude Fable 5.1). If that fails, us
 
 ## 7. Act on the results
 
-- **Mechanical findings:** fix them in the PR yourself (if you can push to its branch), push, and start again from step 1 for the new commit. Stop after three rounds without passing, and hand the PR to the maintainer with what still fails.
+- **Mechanical findings:** fix them in the PR yourself (if you can push to its branch), push, and start again from step 1 for the new commit (step 6 then covers only the decisions that changed). Stop after three rounds without passing, and hand the PR to the maintainer with what still fails.
 - **Decision findings and concerns:** ask the maintainer, all at once for this PR, with AskUserQuestion (up to four questions per call, more calls if needed). Each question names the decision, says what's wrong or new in a sentence or two, and offers the choices with your recommendation first. Then write the answers into the docs and the decision list (the new answers have their own timestamps), push, and start again from step 1.
 - **No findings and no concerns:** go to step 8.
 
@@ -137,14 +141,17 @@ Then merge, only if all three hold:
 - the comment is posted.
 
 ```bash
-gh pr merge <N> --rebase --delete-branch --admin
+gh pr merge <N> --rebase --delete-branch --admin --match-head-commit <headRefOid>
 ```
+
+`--match-head-commit` makes GitHub refuse the merge if anything was pushed after the verdict.
 
 Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-opinion outcome>."
 
 ## Rules that don't bend
 
 - No evidence, no approval. A decision whose lookup isn't `ok` goes to the maintainer.
+- Never review a PR that changes this skill; it goes to the maintainer.
 - Never merge a held PR, or a commit other than the one the verdict names.
 - The second opinion can't approve or block. Its concerns become questions.
 - Don't run outside this machine: the evidence is here.
