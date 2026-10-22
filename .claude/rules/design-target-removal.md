@@ -70,6 +70,8 @@ Items that exist only on the destination appear in the publish list with a check
 
 Rows keep their place in the list, with the "−" marker and a checkbox that is unchecked by default and labelled "Only on production — remove". "Select all" selects changes only; an "Also select the N removals" link appears only when removals exist. With several destinations, the row says where the item exists ("Only on staging and production — remove"), and checking it removes it from each of them; removing from one destination only means publishing to that destination alone. Which removals need a confirmation: Q14.
 
+Follows from Q14.
+
 | Rejected | Why |
 |---|---|
 | A separate "Only on production" section | One more heading for the same rows; the label and the unchecked default already set them apart. |
@@ -81,6 +83,8 @@ Rows keep their place in the list, with the "−" marker and a checkbox that is 
 Everything compare reports today can be removed. Assets are out: compare doesn't list them, and removing asset bytes safely needs the target's asset index to describe the target (#1077). An image deleted for legal reasons stays downloadable on targets until the asset follow-up ships (Future directions).
 
 Removing an item deletes only its own files: its manifest, its `index*.html`, its sidecars and its rendered files. A nested page's folder stays: `pages/about/team/` survives the removal of `about` (finding 10). Removing a translation (`pages/about:fr`) deletes that variant's files only; on worker and ESI targets visitors then get the default-language page (finding 9), on static targets a 404.
+
+Decided: maintainer, 2026-10-22 (#1120).
 
 | Rejected | Why |
 |---|---|
@@ -99,6 +103,8 @@ The check reads the destination's `fragment-deps` and `alias-targets` indices, w
 
 The panel shows the problem on the row and keeps Publish disabled: "Still used on production by pages/home — select it too", with a link that selects it. When the item that still uses it is unchanged and uses the removed fragment on the source too (after a `git rm` of the fragment), there is nothing to select: the row says "pages/home still uses @promo on local too — fix it there first", and the source fails validation as well. The server repeats the check as a backstop and writes nothing when it fails. Removals run after everything else in the publish (Q15). Static targets bake fragments into pages, so only the redirect check applies there.
 
+Decided: maintainer, 2026-10-22 (#1120). Refusing unknown users follows from Q12, and removals running last from Q15.
+
 | Rejected | Why |
 |---|---|
 | Add the items that use it to the publish automatically | They may carry the author's other unpublished edits, which would ship without anyone choosing to. |
@@ -110,6 +116,8 @@ The panel shows the problem on the row and keeps Publish disabled: "Still used o
 After a purge on the source, a target keeps serving the archive until the author publishes the removal; then the page answers 404 (or, for a translation on worker and ESI targets, the default-language page). On plain-static targets the archive's `_redirects` row stays until then (Q6). On worker and ESI targets, "serving the archive" means 410 or 301 only once #1060 ships; until then they return a blank 200 (finding 3).
 
 The removal row says what changes, from what the target serves: "Only on production: redirects to /welcome, will return 404 after removal", or "returns 410, will return 404 after removal". Docs advise: to tell search engines a page is gone, archive it and publish that before purging.
+
+Decided: maintainer, 2026-10-22 (#1120).
 
 | Rejected | Why |
 |---|---|
@@ -124,6 +132,8 @@ Publishing an archived page also writes a zero-byte sidecar next to it on the ta
 
 `_redirects` is built from the listing the sitemap already reads (`listSidecars(target, 'pages')`). It keeps purged archives until their removal (Q5) and never contains an archive the target doesn't hold (finding 4). Archive sidecars written or deleted in the same publish are merged into that listing in memory, because R2 listings can miss files just written (finding 5). Building it costs no extra read when `siteUrl` is set, because the sitemap lists anyway, and one listing otherwise. As in v1, the default-locale page decides a page's archive state, and the file has one row per language the target publishes (`/fr/landing  /fr/welcome  301`; `design-redirects.md`, #1124, #1130). Only plain-static targets use `_redirects`; worker targets will read the marker instead (#1060).
 
+Decided: maintainer, 2026-10-22 (#1120).
+
 | Rejected | Why |
 |---|---|
 | Read the first 200 bytes of every `noindex` page on each publish | Reads grow with archives, which pile up until purged; seconds per publish on cloud storage. |
@@ -133,6 +143,8 @@ Publishing an archived page also writes a zero-byte sidecar next to it on the ta
 ### Q7 — CLI: list by default, `--remove` to remove all
 
 Without the flag, `gazetta publish` lists items only on the target after its summary and exits 0. With `--remove`, it prints what it will remove and removes all of them, after the Q4 check, which refuses before writing anything and names what still uses them. `--remove` runs compare even with `--force`, which otherwise skips it (finding 11). No individual removals on the CLI in v1, and no prompt, as for any CLI publish to production. A pipeline that passes `--remove` makes removal automatic for that target by the operator's choice (cut 6 does this for gazetta.studio); Gazetta never removes without the flag.
+
+Decided: maintainer, 2026-10-22 (#1120).
 
 | Rejected | Why |
 |---|---|
@@ -153,6 +165,8 @@ Without the flag, `gazetta publish` lists items only on the target after its sum
 ### Q9 — The destination's publish capability
 
 Removing needs the same capability as publishing to that target (`publish:production` or `publish:non-production`). Publishing can already overwrite any page on the target, so removal adds no power; the decision to delete was made on the source, under `delete:*`. On a target that requires publish approval, removals go through the gate like any item (Q13).
+
+Follows from Q13.
 
 | Rejected | Why |
 |---|---|
@@ -181,6 +195,8 @@ See "Cut sequence". The planner issue opens once #1092 cut 2 and #1093 cut 2 hav
 
 Once #1077 lands, public targets keep dependency indices too. `design-public-storage.md` Q5 keeps them off public targets only because, today, they're rebuilt from the source and would reveal unpublished page names; indices that describe the target reveal only which published pages use which fragments. An item staying on the target with no forward record (for example a target-only item kept through #1077's one-time `--force` rebuild) has unknown users: the check refuses, naming it ("pages/old-landing is only on production and can't be checked — remove it too, or keep @promo").
 
+Decided: maintainer, 2026-10-22 (#1120).
+
 | Rejected | Why |
 |---|---|
 | Check from the source: in-sync items through their source manifest, refuse for anything else | Refuses whenever an unpublished page differs, even one that never used the fragment, and adds a second code path beside the indices. |
@@ -190,6 +206,8 @@ Once #1077 lands, public targets keep dependency indices too. `design-public-sto
 ### Q13 — The publish-approval gate sits at the shared target-publish function
 
 The gate moves from `publishRun` step 7 to the start of publish undo's shared target-publish function, which wraps `publishRun`, so it sees items and removals alike. A removal request snapshots "absent on the source, held on the target with hash H"; the approval re-checks both and answers `409 STALE_REQUEST` if either changed; the threshold approval runs the shared function for exactly that removal. Undo keeps publish undo's rule: undoing the latest publish needs no request, rolling back further does. The CLI still refuses gated targets, `--remove` included. `design-review-workflow.md` locks 1, 3, 4 and 5 are amended to match.
+
+Decided: maintainer, 2026-10-22 (#1120).
 
 | Rejected | Why |
 |---|---|
@@ -201,6 +219,8 @@ The gate moves from `publishRun` step 7 to the start of publish undo's shared ta
 
 A confirmation appears whenever a removal is final: the destination is production, keeps no history (public storage, `history.enabled: false`), or holds no recorded version of the item in its history (for example one the CLI published before #1082). It names those items: "These can't be undone on staging: pages/old-landing". Compare reports this per row from the destination's latest revision, one read per destination.
 
+Decided: maintainer, 2026-10-22 (#1120).
+
 | Rejected | Why |
 |---|---|
 | Confirm every removal on every target | A dialog for the common case undo already covers (team rule 23). |
@@ -209,6 +229,8 @@ A confirmation appears whenever a removal is final: the destination is productio
 ### Q15 — Removals run last, and wait for what they rely on
 
 Removals run after everything else in the publish. A removal is skipped when an item its check relied on failed to publish, and the result says why: "@promo was not removed: pages/home failed to publish". Everything else goes ahead; the skipped item stays "Only on production" for the next publish. The up-front check (Q4) still refuses before any write when something can't be accounted for at all.
+
+Decided: maintainer, 2026-10-22 (#1120).
 
 | Rejected | Why |
 |---|---|
@@ -219,6 +241,8 @@ Removals run after everything else in the publish. A removal is skipped when an 
 ### Q16 — Removals travel in their own request field
 
 `POST /api/publish` takes removals in `remove: string[]`, with a Zod schema (MCP discipline). The server checks each entry is absent on the source and present on the destination, and rejects an item missing on the source in `items`. The panel stops sending target-only rows in `items` (finding 1).
+
+Decided: maintainer, 2026-10-22 (#1120).
 
 | Rejected | Why |
 |---|---|
