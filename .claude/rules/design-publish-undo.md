@@ -99,7 +99,7 @@ A render that fails after the check passes (a template that throws) is reported 
 
 The CLI, the admin route and undo are three callers of the same post-publish steps, so they move into one function (team rule 15): render loop (`publishRun`), manifest copy, removals, dependency indices, site manifest, `sitemap.xml`, `robots.txt`, `_redirects`, CDN purge.
 
-**Removal** deletes an item's rendered output (static: its route's `index.html` and locale variants; ESI: `pages/<name>/…` and fragment output), its per-item sidecars and its manifest. Dependency indices are rebuilt by the publish. The item then answers 404, as it did before the publish that added it.
+**Removal** deletes the item's own files only: its rendered output (static: its route's `index.html` and locale variants; ESI: its `index*.html` under `pages/<name>/` and fragment output), its per-item sidecars and its manifest. A nested item's folder stays: removing `about` leaves `pages/about/team/` (follows from `design-target-removal.md` Q3). Dependency indices are rebuilt by the publish. The item then answers 404, as it did before the publish that added it.
 
 **Generated files are always written or deleted, never skipped:** when no URL or redirect remains, the shared function deletes `sitemap.xml` or `_redirects` instead of leaving the previous file live.
 
@@ -168,7 +168,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Extract the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, CDN purge) into one shared target-publish function called by the CLI and the admin route; generated files are written or deleted, never skipped | — | unit + api | Medium |
-| 2 | Removals in the shared function: delete an item's rendered output (static route `index.html` and locale variants; ESI `pages/<name>/…`), sidecars and manifest; removal by route for route changes | 1 | unit + api | Medium |
+| 2 | Removals in the shared function: delete an item's own files (static route `index.html` and locale variants; ESI `index*.html` under `pages/<name>/`; a nested item's folder stays), sidecars and manifest; removal by route for route changes | 1 | unit + api | Medium |
 | 3 | Destinations hold manifests: the CLI copies them before recording history ([#1082](https://github.com/gazetta-studio/gazetta-studio/pull/1082)) | — | api | Low |
 | 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088) | api-first | High |
 | 5 | Admin and CLI: the publish panel flow per the UX table, History Restore through the same flow, CLI output and `--yes`, Storybook stories from the table | 4 | component + e2e | Medium |

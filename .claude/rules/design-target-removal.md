@@ -108,7 +108,7 @@ Before any write, publish refuses when something staying on the destination stil
 - a page or fragment that uses a removed fragment, unless it is published in the same run with a version that no longer uses it, or removed with it;
 - an archive that redirects to a removed page, unless it is also removed or republished pointing elsewhere (it then no longer depends on the removed page, so this follows from the rule above).
 
-Removing a fragment's translation while its default-language version stays breaks nothing, because the runtimes fall back (finding 9); only removing a fragment's default version is checked against its users.
+Removing a fragment's translation while its default-language version stays breaks nothing: the runtimes fall back once #1138 lands (finding 9), and until then those pages answer 404 in that language anyway; only removing a fragment's default version is checked against its users.
 
 The check reads the destination's `fragment-deps` and `alias-targets` indices, which must describe the target (#1077). Where an item staying on the target has no forward record, its users can't be known and the check refuses, naming it (Q12).
 
@@ -139,7 +139,7 @@ A 404 after a 410 costs nothing for search when the archive answered 410 for a w
 
 ### Q6 — `_redirects` describes the target, from per-page archive sidecars
 
-Publishing an archived page also writes a zero-byte sidecar next to it on the target: `.gone`, or `.alias-<name>` with the name encoded as other sidecars encode names (slashes → dots, `encodeRefName`). Writing one deletes the page's other archive sidecar first, so re-pointing an alias (rename flattening, soft-delete Q3) leaves one row; this follows from `_redirects` having one row per page. Publishing a live version over it, or removing the page, deletes it.
+Publishing an archived page also writes a zero-byte sidecar next to it on the target: `.gone`, or `.alias-<name>` with the name encoded as other sidecars encode names (slashes → dots, `encodeRefName`). Writing one deletes the page's other archive sidecar first, so re-pointing an alias (rename flattening, soft-delete Q3) leaves one row; this follows from each page having one archive state. Publishing a live version over it, or removing the page, deletes it.
 
 `_redirects` is built from the listing the sitemap already reads (`listSidecars(target, 'pages')`). It keeps purged archives until their removal (Q5) and never contains an archive the target doesn't hold (finding 4). Archive sidecars written or deleted in the same publish are merged into that listing in memory, because R2 listings can miss files just written (finding 5); merging the deletions follows from never listing an archive the target doesn't hold. Building it costs no extra read when `siteUrl` is set, because the sitemap lists anyway, and one listing otherwise. As in v1, the default-locale page decides a page's archive state, and the file has one row per language the target publishes (`/fr/landing  /fr/welcome  301`; `design-redirects.md`, #1124, #1130). Only plain-static targets use `_redirects`; worker targets read the marker instead (#1118).
 
@@ -251,7 +251,7 @@ Decided: maintainer, 2026-10-22 (#1120).
 
 ### Q16 — Removals travel in their own request field
 
-`POST /api/publish` takes removals in `remove: string[]`, with a Zod schema (MCP discipline). The server checks each entry is absent on the source and present on the destination, and rejects an item missing on the source in `items`. The panel stops sending target-only rows in `items` (finding 1).
+`POST /api/publish` takes removals in `remove: string[]`, with a Zod schema (MCP discipline). The server checks each entry is absent on the source and present on the destination, and rejects such items (absent on the source, present on the destination) in `items`. The panel stops sending target-only rows in `items` (finding 1).
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -306,7 +306,7 @@ The last case exits 1.
 
 - **Multi-instance:** removals are per-item deletes; archive sidecars are per item; `_redirects` is regenerated from a listing (host-glue exception). Two publishes, one removing an item and one publishing it, end with the last writer, as two publishes do today.
 - **Scale:** compare already lists both sides; Q14 adds one revision read per destination. The Q4 check is one directory listing per removed fragment or page in the target's indices. `_redirects` reuses the sitemap's listing when `siteUrl` is set.
-- **Locale:** translations are removed like any item; visitors then get the default language on worker and ESI targets (Q3). Removing a fragment's translation isn't checked against users (Q4). The archive sidecar is written for the default-locale page only (v1 archive state).
+- **Locale:** translations are removed like any item; visitors then get the default language on worker and ESI targets once #1138 lands, and a 404 on static targets (Q3). Removing a fragment's translation isn't checked against users (Q4). The archive sidecar is written for the default-locale page only (v1 archive state).
 - **Themes:** none.
 - **Auth + RBAC:** the destination's publish capability (Q9).
 - **Audit:** `metadata.removed` on the publish event; no new action.
@@ -315,7 +315,7 @@ The last case exits 1.
 - **Render:** removal deletes the item's own rendered output through publish undo's removal step (Q3).
 - **Validation:** the Q4 check is a publish-time integrity check, like asset reference integrity, not a validator; validators run on published items only.
 - **Plugin:** through the hook result.
-- **Cache:** the CDN purge includes removed routes, derived from the item's name, since the source no longer has it (finding 8); compare and sync status refresh after publish as today.
+- **Cache:** the CDN purge includes removed routes, derived from the item's name, since the source no longer has it (finding 8); compare and sync status refresh after publish as today. Decided: maintainer, 2026-10-22 (#1120).
 - **Offline:** publish is online-only.
 - **Collaboration:** none.
 
@@ -331,7 +331,7 @@ Composition with designs in flight:
 |---|---|---|---|---|
 | 1 | Archive sidecars on targets (`.gone`, `.alias-<name>`, one per page): written with the marker, deleted when a live version replaces it; `listSidecars` reports them; `_redirects` built from the target's listing, with this publish's own sidecar writes merged in, in the shared post-publish function | publish undo cut 1 | unit + api | Medium |
 | 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); the approval gate at the shared function (Q13, with review workflow cuts 12–13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093) | api-first | Medium-high |
-| 3 | Publish panel: rows per the UX table; target-only rows no longer sent in `items`; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
+| 3 | Publish panel: rows per the UX table; target-only rows no longer sent in `items`; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table. The translation row's worker and ESI copy waits for #1138 | 2 | component + e2e | Medium |
 | 4 | CLI: list items only on the target; `--remove`, running compare even with `--force` | 2 | integration | Low |
 | 5 | Docs: removals in the publishing docs; purge and 410 guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
 | 6 | Add `--remove` to gazetta.studio's `deploy-site.yml` (maintainer PR; bots can't push workflow files) | 4 | manual | Low |
