@@ -74,7 +74,10 @@ site root; the `json` format is for custom integrations.
 The file has one row per language the target publishes, with the
 prefixes its routes use (`/landing  /welcome  301` and
 `/fr/landing  /fr/welcome  301`), so plain-static sites redirect the
-same way worker sites do (follows from `design-soft-delete.md` Q10). Today's code
+same way worker sites do (follows from `design-soft-delete.md` Q10).
+When the destination has no version in a language, that row points at
+its default-language page (`/fr/landing  /welcome  301`), since static
+publish writes no `/fr/welcome` then (same Q10). Today's code
 writes default-language rows only
 ([#1130](https://github.com/gazetta-studio/gazetta-studio/issues/1130)).
 
