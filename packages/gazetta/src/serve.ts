@@ -5,7 +5,7 @@
  *
  * SOLID breakdown:
  * - extractLocale: strips locale prefix from URL (SRP)
- * - fetchFragment: reads a fragment file with locale fallback (SRP)
+ * - fetchFragmentEntries: reads fragment files with locale fallback + alias handling (SRP)
  * - findPage: resolves a request path to page HTML (SRP)
  * - acceptLanguageRedirect: middleware for language detection (SRP, OCP)
  * - createServer: composes the above into a Hono app
@@ -15,7 +15,9 @@ import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { createHash } from 'node:crypto'
 import type { StorageProvider, TargetType } from './types.js'
-import { assembleEsi, parseCacheComment, splitFragment, findEsiPaths } from './assemble.js'
+import { assembleEsi, parseCacheComment } from './assemble.js'
+import { archiveResponse } from './runtime/archive-response.js'
+import { fetchFragmentEntries } from './runtime/fragment-fetch.js'
 
 export interface ServeOptions {
   storage: StorageProvider
@@ -25,6 +27,8 @@ export interface ServeOptions {
   locales?: string[]
   /** Default locale — requests to the default locale have no URL prefix. Falls back to first in `locales`. */
   defaultLocale?: string
+  /** When true, the default locale also gets a URL prefix (e.g. /en/about). */
+  defaultPrefix?: boolean
   /** When true, redirects unlocalized requests to the best Accept-Language match (302). */
   detection?: boolean
 }
@@ -85,26 +89,21 @@ export function matchAcceptLanguage(header: string | undefined, locales: string[
 // Fragment fetching with locale fallback (SRP)
 // ---------------------------------------------------------------------------
 
-interface FragmentParts {
-  head: string
-  body: string
-}
-
-async function fetchFragment(storage: StorageProvider, path: string): Promise<[string, FragmentParts]> {
+async function readFragmentHtml(storage: StorageProvider, path: string): Promise<string | null> {
   try {
-    return [path, splitFragment(await storage.readFile(path.slice(1)))]
+    return await storage.readFile(path.slice(1))
   } catch {
     // Locale fragment not found — fall back to default locale
     // e.g. /fragments/header/index.fr.html → /fragments/header/index.html
     const localeFallback = path.replace(/\/index\.[a-z-]+\.html$/, '/index.html')
     if (localeFallback !== path) {
       try {
-        return [path, splitFragment(await storage.readFile(localeFallback.slice(1)))]
+        return await storage.readFile(localeFallback.slice(1))
       } catch {
         /* fallback also missing */
       }
     }
-    return [path, { head: '', body: `<!-- fragment not found: ${path} -->` }]
+    return null
   }
 }
 
@@ -185,8 +184,11 @@ export async function findPage(
 // ---------------------------------------------------------------------------
 
 export function createServer(options: ServeOptions) {
-  const { storage, type = 'dynamic', locales, defaultLocale, detection } = options
+  const { storage, type = 'dynamic', locales, defaultLocale, defaultPrefix, detection } = options
   const nonDefaultLocales = locales?.filter(l => l !== (defaultLocale ?? locales?.[0])) ?? []
+  const archiveFor = (html: string, locale: string | undefined) =>
+    archiveResponse(html, { locale, defaultLocale: defaultLocale ?? locales?.[0], defaultPrefix })
+  const readFragment = (path: string) => readFragmentHtml(storage, path)
   const app = new Hono()
 
   app.use(logger())
@@ -207,15 +209,20 @@ export function createServer(options: ServeOptions) {
   if (type === 'static') {
     app.get('*', async c => {
       const requestPath = new URL(c.req.url).pathname
+      const { locale } = extractLocale(requestPath, locales ?? [])
       const filePath = requestPath === '/' ? 'index.html' : `${requestPath.replace(/\/$/, '')}/index.html`
       try {
         const html = await storage.readFile(filePath)
+        const archived = archiveFor(html, locale)
+        if (archived) return archived
         const etag = `"${createHash('sha256').update(html).digest('hex').slice(0, 16)}"`
         if (c.req.header('If-None-Match') === etag) return new Response(null, { status: 304, headers: { ETag: etag } })
         return c.html(html, 200, { 'Cache-Control': 'public, max-age=0, must-revalidate', ETag: etag })
       } catch {
         try {
           const html = await storage.readFile(requestPath.slice(1))
+          const archived = archiveFor(html, locale)
+          if (archived) return archived
           return c.html(html)
         } catch {
           return c.html('<h1>404 — Page not found</h1>', 404)
@@ -250,7 +257,7 @@ export function createServer(options: ServeOptions) {
   })
 
   // Hashed CSS/JS — immutable cache
-  app.get('/pages/*', async c => serveAsset(c, storage))
+  app.get('/pages/*', async c => serveAsset(c, storage, true))
   app.get('/fragments/*', async c => serveAsset(c, storage))
 
   // Accept-Language detection — redirect unlocalized requests to best match
@@ -279,17 +286,20 @@ export function createServer(options: ServeOptions) {
     const result = await findPage(storage, requestPath, locales)
     if (!result) {
       const notFound = await findPage(storage, '/404')
-      if (notFound) {
+      if (notFound && !archiveResponse(notFound.html)) {
         const { html: raw404 } = parseCacheComment(notFound.html)
-        const fragEntries = await Promise.all(findEsiPaths(raw404).map(p => fetchFragment(storage, p)))
-        return c.html(assembleEsi(raw404, new Map(fragEntries)), 404)
+        const fragEntries = await fetchFragmentEntries(readFragment, raw404)
+        return c.html(assembleEsi(raw404, fragEntries), 404)
       }
       return c.html('<h1>404 — Page not found</h1>', 404)
     }
 
+    const archived = archiveFor(result.html, result.locale)
+    if (archived) return archived
+
     const { html: rawHtml, browser, edge } = parseCacheComment(result.html)
-    const fragEntries = await Promise.all(findEsiPaths(rawHtml).map(p => fetchFragment(storage, p)))
-    const html = assembleEsi(rawHtml, new Map(fragEntries))
+    const fragEntries = await fetchFragmentEntries(readFragment, rawHtml)
+    const html = assembleEsi(rawHtml, fragEntries)
 
     const etag = `"${createHash('sha256').update(html).digest('hex').slice(0, 16)}"`
     if (c.req.header('If-None-Match') === etag) {
@@ -311,11 +321,15 @@ export function createServer(options: ServeOptions) {
   return app
 }
 
-async function serveAsset(c: any, storage: StorageProvider) {
+async function serveAsset(c: any, storage: StorageProvider, checkArchive = false) {
   const path = new URL(c.req.url).pathname.slice(1)
   try {
     const content = await storage.readFile(path)
     const ext = path.split('.').pop()
+    if (checkArchive && ext === 'html') {
+      const archived = archiveResponse(content)
+      if (archived) return archived
+    }
     const contentType = ext === 'css' ? 'text/css' : ext === 'js' ? 'text/javascript' : 'text/html'
     return new Response(content, {
       headers: {
