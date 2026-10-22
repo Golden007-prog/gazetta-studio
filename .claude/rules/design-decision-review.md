@@ -162,7 +162,7 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 ### Q5 — Who runs the checks, and who gives the second opinion
 
-A fresh Opus 5.5 agent runs the checks, which are lookups and re-reads. The second opinion is Seer's and Sourcery's comments on the PR: the checker verifies each against the code and turns the ones that hold into questions (Q3a); one pointing at a recording error is fixed by the author instead (Q4). Since it reads Seer's review, the checker starts once Seer has reacted, commented or reviewed, or after 15 minutes, whichever comes first. On a docs PR with nothing to report, Seer adds a 🎉 reaction within a few minutes and posts nothing else. Seer usually reviews only the commit a PR opens with: on #1133 it checked f26f1b75 and none of the three later pushes, and [`ai-code-review-tools.md`](../../docs/audits/ai-code-review-tools.md) records later pushes skipped on #1051 and #1069. So after each fix round or answered question the author asks again with `@sentry review`, and the checker starts once Seer's check on the new head finishes (success means nothing to say), or after 15 minutes.
+A fresh Opus 5.5 agent runs the checks, which are lookups and re-reads. The second opinion is Seer's and Sourcery's comments on the PR: the checker verifies each against the code and turns the ones that hold into questions (Q3a); one pointing at a recording error is fixed by the author instead (Q4). Since it reads Seer's review, the checker starts once Seer has reacted, commented or reviewed, or after 15 minutes, whichever comes first. On a docs PR with nothing to report, Seer adds a 🎉 reaction within a few minutes and posts nothing else. Seer usually reviews only the commit a PR opens with: on #1133 it checked d9e403ff, the commit it opened with, and none of the three later pushes (f26f1b75, ef36226f, 81cf756c), and [`ai-code-review-tools.md`](../../docs/audits/ai-code-review-tools.md) records later pushes skipped on #1051 and #1069. So after each fix round or answered question the author asks again with `@sentry review`, and the checker starts once Seer's check on the new head finishes (success means nothing to say), or after 15 minutes.
 
 A fresh Fable 5.1 agent adds a second opinion of its own only when the maintainer asks for one on a PR ("second opinion #N"), or says yes when the checker recommends one. The checker says whether a Fable pass would help the PR and why, for example a new design doc, a decision that's hard to reverse or touches production, or many new decisions with silent AI reviewers; the PR's batch of questions then asks the maintainer to run it or skip. Fable 5.1 is the model with both independence from the author (who runs on Opus 5.5) and at least the author's capability. On a later round it runs again only on the decisions whose text changed, and its earlier result stands for the rest. If Fable isn't available, a fresh Opus agent runs instead.
 
@@ -228,8 +228,9 @@ Decided: maintainer, 2026-10-22 (#1133)
 
 Right after the author opens an in-scope PR, in the same session, so escalations arrive while the decisions are fresh and the maintainer is still there. And `/review-prs` runs it on any in-scope PR still open without a passing verdict for its latest commit, which picks up PRs from a session that ended and ones that changed after their verdict.
 
-Two rules:
+Three rules:
 - **Each verdict names the commit it checked.** If anything is pushed afterwards, the skill runs again before merge, so an approval of an older version doesn't count: the "check against the PR's head" lesson from #1122.
+- **Only the skill's own verdict counts.** `/review-prs` counts a verdict only in a comment posted by the account the session posts as, on a PR that account opened; otherwise it runs the skill in full. The repo is public, so anyone can post the marker, and a forged one would get a PR merged unreviewed (Seer on #1133). Merged rule files load into every later session, including the bots, which run with `--dangerously-skip-permissions` (`bots/_lib/claude.ts`).
 - **The maintainer can ask for a run at any time** ("review #1120").
 
 Decided: maintainer, 2026-10-22 (#1133)
@@ -240,6 +241,8 @@ Decided: maintainer, 2026-10-22 (#1133)
 | Only when the author is about to merge | Escalations can arrive after the maintainer has left, so the PR waits for the next session |
 | Only in `/review-prs` passes | Design PRs wait until the maintainer runs one |
 | On a schedule, from a bot | Not possible: the transcripts are on this machine (Q2) |
+| Any comment carrying the approval marker for the head counts | Anyone can post one: a contributor's PR, or the maintainer's PR still waiting for answers, would be merged unreviewed |
+| `/review-prs` never trusts a verdict and always runs the skill in full | About 25 minutes each time it meets a PR that already has a passing verdict for its head |
 
 ### Q9 — How the lookup works
 
@@ -350,8 +353,8 @@ A dev-process skill: it reads docs and a transcript, and writes PR comments. Lik
 
 ## UX check
 
-Rule 23: a clean PR is silent until it's merged, and the maintainer sees only what needs a decision.
-- A clean PR costs the maintainer nothing but one line after the merge (Q6).
+Rule 23: a clean PR is silent until it's merged, apart from a run-or-skip question when the checker recommends a Fable pass (Q5), and the maintainer sees only what needs a decision.
+- A clean PR costs the maintainer nothing but one line after the merge (Q6), plus that run-or-skip question when the checker recommends a Fable pass (Q5).
 - Questions come only when something needs the maintainer: an unanswered or changed decision, a wrong fact a decision rests on, a contradiction, a concrete concern from the second opinion (Q3a, Q4), or, when the checker recommends one, whether to run a Fable pass (Q5).
 - Questions arrive as pickers, one batch per PR, each with options and a recommendation (Q1, Q4).
 - The verdict comment is for spot-checks, not for reading (Q1).
@@ -394,8 +397,8 @@ Choices made while building #1132, each carrying out a decision above.
 | What a typed answer was shown | All of the author's messages since the maintainer's previous input, oldest first | Q2 rule 1; Q9 exact comparison |
 | Pasted text | Replaced by "[pasted text]" and flagged; the maintainer's own words around it still count | Q2 rule 2 |
 | The entry chain | The answer's parent must be an earlier entry, or absent (no `parentUuid`), as on a session's first entry and its compaction boundaries; a `parentUuid` that names no earlier entry is `broken-link` | Q9 |
-| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and, outside heredoc bodies, has any redirect, `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `truncate` or `dd`, or anywhere, heredoc bodies included, has code that opens a file for writing (`open(…, 'w'/'a'/'x')`, `writeFile`, `appendFile`, `write_text`); and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. Read-only scans can be flagged too | Q9 |
-| Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`, which `/review-prs` reads to find PRs without a passing verdict for their head | Q8 |
+| Writes to a transcript | Flagged when a Bash command names a `.jsonl` file under `.claude/projects` and, outside heredoc bodies, names a `.jsonl` file and has a redirect (other than to `/dev/null` or between descriptors, such as `2>&1`), `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `truncate` or `dd`, or anywhere, heredoc bodies included, has code that opens a file for writing (`open(…, 'w'/'a'/'x')`, `writeFile`, `appendFile`, `write_text`); and when any other tool call, Read included, names a transcript in `file_path` or `notebook_path`. Read-only scans can be flagged too | Q9 |
+| Verdict marker | `<!-- review-decisions: head=<sha> verdict=approve -->`, which `/review-prs` reads to find PRs without a passing verdict for their head; it counts only in a comment by the account the session posts as, on a PR that account opened | Q8 |
 | Merge gate | The head is the one the verdict names, there's no `hold` label, and the verdict is posted; then a rebase-merge with `--admin` | Q6, Q8, Q9; rule 16 |
 | The Fable agent's model | `model: "fable"`; if that fails, the default model | Q5 |
 
