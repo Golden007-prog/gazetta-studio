@@ -109,9 +109,13 @@ describe.each(Object.entries(edits))('a restored %s draft', (_lane, edit) => {
   it('saves when the page is unchanged', async () => {
     await leaveDraft()
     const actions = await openSession()
+    expect(actions.hasPendingEdits.value).toBe(true)
 
     expect(await actions.save()).toBe(true)
     expect(useSaveConflictsStore().has(PATH)).toBe(false)
+    // The draft was written, against the version it was made on.
+    expect(api.updatePage).toHaveBeenCalledWith('home', expect.anything(), expect.objectContaining({ ifMatch: 'v1' }))
+    expect(server.etag).toBe('ours-1')
   })
 })
 
