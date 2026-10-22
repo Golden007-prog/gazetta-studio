@@ -63,7 +63,9 @@ Only `status: ok` is evidence. The script decides what counts as the maintainer'
 
 ## 5. Run the checks (fresh agent)
 
-Seer's and Sourcery's comments on the PR are the second opinion, and the checker reads them, so start it once Seer (`sentry[bot]`) has reacted to the PR, commented or reviewed, or after 15 minutes, whichever comes first. On a clean docs PR Seer posts no comment: a 🎉 reaction (`gh api repos/{owner}/{repo}/issues/<N>/reactions`) is its "reviewed, nothing to say".
+Seer's and Sourcery's comments on the PR are the second opinion, and the checker reads them, so start it once Seer (`sentry[bot]`) has reviewed the PR's head, or after 15 minutes, whichever comes first. Seer's `Seer Code Review` check on the head (`gh api repos/{owner}/{repo}/commits/<headRefOid>/check-runs`) ends `success` when it has nothing to say, and `neutral` when it left comments. On a clean docs PR Seer posts no comment, only a 🎉 reaction to the PR.
+
+Seer usually reviews only the commit a PR opens with, and its 🎉 stays from that first review. So on a later round (after a fix or an answer), post `@sentry review` on the PR first, then wait for its check on the new head, or 15 minutes.
 
 Spawn one agent with the Agent tool (no `model` override: it runs on the session's Opus). Give it the PR diff (`gh pr diff <N>`), the decision list, the lookup output, the PR's Sourcery and Seer comments (`gh api repos/{owner}/{repo}/pulls/<N>/comments`, plus `.../pulls/<N>/reviews` and `.../issues/<N>/comments`), and this brief:
 
