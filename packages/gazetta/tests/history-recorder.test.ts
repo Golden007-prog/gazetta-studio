@@ -3,8 +3,12 @@
  * behavior: first revision scans the tree, subsequent revisions
  * overlay deltas from the previous snapshot.
  */
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createContentRoot } from '../src/content-root.js'
+import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { createHistoryProvider } from '../src/history-provider.js'
 import { recordWrite } from '../src/history-recorder.js'
 import { memoryStorage } from './_helpers/memory-storage.js'
@@ -194,6 +198,43 @@ describe('recordWrite', () => {
     const baseline = await history.readRevision(list[1].id)
     expect(Object.keys(baseline.snapshot)).toContain('pages/home/page.json')
   })
+
+  // chmod-based: only meaningful where permissions are enforced and the
+  // test runner is not root (root ignores 0o000).
+  const canChmod = process.platform !== 'win32' && typeof process.getuid === 'function' && process.getuid() !== 0
+
+  it.skipIf(!canChmod)(
+    'a scan location under an unsearchable ancestor fails the baseline instead of recording it empty (#1105 review)',
+    async () => {
+      // Real filesystem provider: an EACCES from readDir must not be
+      // downgraded to "location missing" by exists() - that recorded an
+      // empty baseline over existing content, and a later restore would
+      // DELETE the real manifests. Reproduced end-to-end on #1105.
+      const base = mkdtempSync(join(tmpdir(), 'gaz-rec-eacces-'))
+      mkdirSync(join(base, 'site/pages/home'), { recursive: true })
+      writeFileSync(join(base, 'site.config.ts'), "export default { name: 'demo' }\n")
+      writeFileSync(join(base, 'site/pages/home/page.json'), 'home')
+      chmodSync(join(base, 'site'), 0o000)
+      try {
+        const storage = createFilesystemProvider(base)
+        const history = createHistoryProvider({ storage })
+        const contentRoot = createContentRoot(storage)
+        await expect(
+          recordWrite({
+            history,
+            contentRoot,
+            operation: 'save',
+            items: [{ path: 'site/pages/home/page.json', content: 'home-v2' }],
+            scanLocations: [{ dir: 'site/pages', manifest: 'page.json' }],
+            scanRootFiles: [],
+          }),
+        ).rejects.toThrow(/EACCES/)
+        expect(await history.listRevisions()).toHaveLength(0)
+      } finally {
+        chmodSync(join(base, 'site'), 0o755)
+      }
+    },
+  )
 
   it('custom scan-location manifest names with regex metacharacters match literally (#1098 review)', async () => {
     storage.seed({
