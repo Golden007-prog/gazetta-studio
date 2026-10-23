@@ -16,6 +16,22 @@ describe('archiveResponse', () => {
     expect(res.headers.get('cache-control')).toBe('max-age=300')
   })
 
+  it('fills a dotted param name and encodes its captured value once', () => {
+    const res = archiveResponse(archiveMarker({ kind: 'alias', target: 'posts/[post.slug]' }), {
+      params: { 'post.slug': 'a%2Fb' },
+    })!
+    expect(res.status).toBe(301)
+    expect(res.headers.get('location')).toBe('/posts/a%2Fb')
+  })
+
+  it('fills a non-ASCII param name and encodes its captured value once', () => {
+    const res = archiveResponse(archiveMarker({ kind: 'alias', target: 'posts/[slúg]' }), {
+      params: { slúg: 'h%C3%A9llo' },
+    })!
+    expect(res.status).toBe(301)
+    expect(res.headers.get('location')).toBe('/posts/h%C3%A9llo')
+  })
+
   it('percent-encodes non-Latin-1 targets in Location', () => {
     const res = archiveResponse(archiveMarker({ kind: 'alias', target: 'café' }))!
     expect(res.status).toBe(301)

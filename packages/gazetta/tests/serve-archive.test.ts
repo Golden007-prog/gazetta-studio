@@ -28,6 +28,7 @@ function esiSeed(): Record<string, string> {
       archiveMarker({ kind: 'alias', target: 'home' }) + '<!--esi:/fragments/header/index.html-->',
     'pages/legacy/index.html': archiveMarker({ kind: 'gone' }),
     'pages/old-docs/index.html': archiveMarker({ kind: 'alias', target: 'blog/[slug]' }),
+    'pages/blog/[café]/index.html': archiveMarker({ kind: 'alias', target: 'posts/[café]' }),
     'pages/cafe/index.html': archiveMarker({ kind: 'alias', target: 'café' }),
     'pages/café/index.html': LIVE_PAGE,
     'pages/with-aliased-fragment/index.html':
@@ -62,6 +63,14 @@ describe('serve archive markers (dynamic/ESI)', () => {
     const res = await app.request('http://localhost/old-docs')
 
     expect(res.status).toBe(410)
+  })
+
+  it('redirects an archived dynamic page filling a non-ASCII param name', async () => {
+    const app = buildServer(esiSeed())
+    const res = await app.request('http://localhost/blog/x')
+
+    expect(res.status).toBe(301)
+    expect(res.headers.get('location')).toBe('/posts/x')
   })
 
   it('percent-encodes non-Latin-1 alias targets', async () => {

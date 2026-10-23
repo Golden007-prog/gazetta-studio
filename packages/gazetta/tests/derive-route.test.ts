@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveRoute, fillRouteParams } from '../src/runtime/derive-route.js'
+import { deriveRoute, encodeRoutePattern, fillRouteParams } from '../src/runtime/derive-route.js'
 
 describe('fillRouteParams param names (#1126)', () => {
   it('fills a hyphenated param name — `posts/[post-slug]` does not 410', () => {
@@ -19,9 +19,22 @@ describe('fillRouteParams param names (#1126)', () => {
     expect(fillRouteParams('/x/:constructor', { constructor: 'real' })).toBe('/x/real')
   })
 
+  it('fills param names from the full deriveRoute grammar — dotted and non-ASCII included', () => {
+    expect(fillRouteParams('/posts/:post.slug', { 'post.slug': 'a%2Fb' })).toBe('/posts/a%2Fb')
+    expect(fillRouteParams('/posts/:slúg', { slúg: 'h%C3%A9llo' })).toBe('/posts/h%C3%A9llo')
+  })
+
   it('routes without parameters are unchanged; a parameter with no captured value answers null', () => {
     expect(fillRouteParams('/posts/hello')).toBe('/posts/hello')
     expect(fillRouteParams('/blog/:slug')).toBeNull()
     expect(fillRouteParams('/blog/:slug', {})).toBeNull()
+  })
+})
+
+describe('encodeRoutePattern (#1126)', () => {
+  it('encodes literal page names but leaves param placeholders byte-identical', () => {
+    expect(encodeRoutePattern('/blö g/:slúg')).toBe('/bl%C3%B6%20g/:slúg')
+    expect(encodeRoutePattern('/posts/:post.slug')).toBe('/posts/:post.slug')
+    expect(encodeRoutePattern('/about')).toBe('/about')
   })
 })

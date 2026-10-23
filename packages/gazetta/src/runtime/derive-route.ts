@@ -24,7 +24,7 @@ export function deriveRoute(pageName: string): string {
 export function fillRouteParams(route: string, params?: Record<string, string>): string | null {
   const captured = params ?? {}
   let missing = false
-  const filled = route.replace(/:([A-Za-z0-9_-]+)/g, (segment, name: string) => {
+  const filled = route.replace(/:([^/]+)/g, (segment, name: string) => {
     if (!Object.hasOwn(captured, name)) {
       missing = true
       return segment
@@ -32,4 +32,19 @@ export function fillRouteParams(route: string, params?: Record<string, string>):
     return captured[name]
   })
   return missing ? null : filled
+}
+
+/**
+ * Percent-encode a derived route for use as a redirect target, leaving
+ * `:param` placeholders byte-identical. A placeholder's name is the page
+ * folder's bracketed name — `posts/[post.slug]`, `posts/[slúg]` — and the
+ * captured values are keyed by that exact name, so encoding it here would
+ * break the match in `fillRouteParams`. Only the literal parts (the page
+ * names) carry characters that need encoding (#1126).
+ */
+export function encodeRoutePattern(route: string): string {
+  return route
+    .split(/(:[^/]+)/g)
+    .map(part => (part.startsWith(':') ? part : encodeURI(part)))
+    .join('')
 }

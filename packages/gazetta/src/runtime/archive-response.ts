@@ -13,7 +13,7 @@
  */
 import { localeRoutePrefix } from '../locale.js'
 import { parseArchiveMarker } from './archive-marker.js'
-import { deriveRoute, fillRouteParams } from './derive-route.js'
+import { deriveRoute, encodeRoutePattern, fillRouteParams } from './derive-route.js'
 
 export const ARCHIVE_CACHE_CONTROL = 'max-age=300'
 
@@ -48,7 +48,7 @@ export function archiveResponse(input: Uint8Array | string, options: ArchiveResp
   // Encode the route pattern first, then fill it: captured values arrive
   // percent-encoded from the request URL, so encoding after the fill
   // would escape their '%' a second time (#1126).
-  const route = fillRouteParams(encodeURI(rawRoute), options.params)
+  const route = fillRouteParams(encodeRoutePattern(rawRoute), options.params)
   if (route === null) return archiveGoneResponse()
   const requestLocale = options.locale ?? (options.defaultPrefix ? options.defaultLocale : undefined)
   const localePrefix = requestLocale
