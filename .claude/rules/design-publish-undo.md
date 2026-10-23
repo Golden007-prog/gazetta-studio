@@ -104,7 +104,7 @@ The CLI, the admin route and undo are three callers of the same post-publish ste
 
 **The publish generation** (`.gazetta/publish-generation`, #1125, #1201) is written before the CDN purge, as the CLI and the admin route write it today. The Cloudflare worker's cache key reads it, and undo publishes only through this function, so an undo gets a new generation like any publish; without one, the worker would serve the pre-undo pages from its cache for up to a day.
 
-Decided: maintainer, 2026-10-23 (#PR)
+Decided: maintainer, 2026-10-23 (#1220)
 
 **Removal** deletes the item's own files only: its rendered output (static: its route's `index.html` and locale variants; ESI: its `index*.html` under `pages/<name>/` and fragment output), its per-item sidecars and its manifest. A nested item's folder stays: removing `about` leaves `pages/about/team/` (follows from `design-target-removal.md` Q3). Dependency indices are rebuilt by the publish. The item then answers 404, as it did before the publish that added it.
 
