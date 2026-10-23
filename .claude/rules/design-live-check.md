@@ -80,7 +80,7 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - site files the publish wrote (`sitemap.xml`, `robots.txt`, `_redirects` behaviour);
 - always the root and one unknown URL (`404`).
 
-**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status`, an archive without an alias is expected to answer `404`. Without `redirects`, that is on a static target without `redirects.format` (unset or `none`), an alias's old route is expected to answer either a `301` to the alias's route (when `gazetta serve` answers) or `200` with the redirect page, judged by its refresh pointing at the alias's route; a leftover blank marker file has no refresh and is flagged (`design-soft-delete.md` Q10, #1152; built in cut 4, the route planner). The redirect page carries the published-version marker (Q4), so a current one reads `live`.
+**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status` (a static target without a worker), an archive without an alias is expected to answer `404`, or `410` when `gazetta serve` answers: config can't tell which server serves a static target (#1165). Without `redirects`, that is on a static target without `redirects.format` (unset or `none`), an alias's old route is expected to answer either a `301` to the alias's route (when `gazetta serve` answers) or `200` with the redirect page, judged by its refresh pointing at the alias's route; a leftover blank marker file has no refresh and is flagged (`design-soft-delete.md` Q10, #1152; built in cut 4, the route planner). The redirect page carries the published-version marker (Q4), so a current one reads `live`.
 
 Decided: maintainer, 2026-10-23 (#1163): the redirect-page answer.
 
@@ -88,6 +88,12 @@ Decided: maintainer, 2026-10-23 (#1163): the redirect-page answer.
 |---|---|
 | Keep those alias routes `not-checked` | The redirect page would never be checked after a publish, and a leftover blank marker file at an alias route would go unflagged. |
 | Expect only the `200` redirect page, judged by its first-line marker | `gazetta serve` answers `301` there, so its targets would need `redirects.format: 'json'`, a requirement operators wouldn't know about; and a host that strips comments would fail a working page. |
+
+Decided: maintainer, 2026-10-23 (#1166): `410` passes too for an archive without an alias where `gazetta serve` may answer.
+
+| Rejected | Why |
+|---|---|
+| A target field naming what serves it (`servedBy: 'gazetta-serve'`) | Precise, but one more setting operators would have to know to set; alias routes already accept either server's answer. |
 
 **Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location`, resolved against the request URL, has the expected alias route as its path (the query string is ignored: a host may carry the cache-bypass value into the redirect), and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
 
