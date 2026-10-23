@@ -93,6 +93,13 @@ export interface RevisionInput {
    * provider can dedupe via content-addressing.
    */
   items: Map<string, BlobContent>
+  /**
+   * Paths this write affected, recorded as `Revision.items`. Defaults
+   * to every snapshot key — the baseline revision captures the whole
+   * tree, so listing it all is accurate there. A delete names the
+   * deleted path even though it is absent from the snapshot (#1078).
+   */
+  changed?: readonly string[]
 }
 
 /**
