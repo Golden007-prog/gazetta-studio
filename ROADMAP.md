@@ -45,12 +45,11 @@ The back end ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515
 
 ### Bug backlog
 
-User-visible publishing, editor and onboarding bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
+User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
 
 - [#1068](https://github.com/gazetta-studio/gazetta-studio/issues/1068) closing the tab during a publish stops it
 - [#1108](https://github.com/gazetta-studio/gazetta-studio/issues/1108), [#1109](https://github.com/gazetta-studio/gazetta-studio/issues/1109) restored drafts: lost fragment edits, false conflicts
 - [#1125](https://github.com/gazetta-studio/gazetta-studio/issues/1125) a page read during a publish can be cached again after the purge
-- [#1126](https://github.com/gazetta-studio/gazetta-studio/issues/1126) archived dynamic-route pages redirect to a route pattern (PR [#1172](https://github.com/gazetta-studio/gazetta-studio/pull/1172))
 - [#1146](https://github.com/gazetta-studio/gazetta-studio/issues/1146) publish and serving ignore a target's language settings
 - [#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149) `_redirects`: 410 rows hosts don't support, and no warning past 2,000 rows
 - [#1159](https://github.com/gazetta-studio/gazetta-studio/issues/1159) the publish panel sends target-only rows
@@ -62,6 +61,10 @@ User-visible publishing, editor and onboarding bugs, all with fix-bot except [#1
 - [#1182](https://github.com/gazetta-studio/gazetta-studio/issues/1182) the capability-gap warning on a new site links to a page that answers 404
 - [#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183) a new site fails its own broken-links check
 - [#1184](https://github.com/gazetta-studio/gazetta-studio/issues/1184) `gazetta dev` on a busy port prints a Node stack trace
+- [#1190](https://github.com/gazetta-studio/gazetta-studio/issues/1190) archive redirects answer 410 when a route parameter's name has non-ASCII characters or dots
+- [#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191) an editor can publish to production: `publish:production` is never checked
+- [#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192) denied admin requests (401 and 403) aren't recorded in the audit log
+- [#1193](https://github.com/gazetta-studio/gazetta-studio/issues/1193) the offline docs say offline saves are sent later, and "Send now" only checks the connection
 
 Decided: maintainer, 2026-10-23 (#1179)
 
@@ -117,9 +120,9 @@ What remains wrong or undecided on static targets:
 
 [#91](https://github.com/gazetta-studio/gazetta-studio/issues/91).
 
-### Offline mode e2e tests
+### Offline save queue and e2e tests
 
-[#253](https://github.com/gazetta-studio/gazetta-studio/issues/253): the two scenarios no e2e test covers yet: editing offline, reloading, then reconnecting and saving; and the offline save conflict. The reload step also needs the editor to open offline, which doesn't work yet ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)). Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving an online reload are covered.
+The save queue (`design-offline-implementation.md`, "Cut 9b: Save queue"): a save made offline goes out by itself once the connection returns, which `design-offline.md` designs but which isn't built. Its audit events carry replay metadata (Cut 15). Built this quarter together with the e2e tests in [#253](https://github.com/gazetta-studio/gazetta-studio/issues/253): the two scenarios no e2e test covers yet: editing offline, reloading, then reconnecting and saving; and the offline save conflict. The reload step also needs the editor to open offline, which doesn't work yet ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)). Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving an online reload are covered.
 
 ### MCP server build
 
@@ -296,7 +299,7 @@ All 19 `design-{feature}-implementation.md` docs shipped: ai, audit, auth-rbac, 
 | RBAC ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194)) | ✓ shipped 2026-05-13 (capabilities, built-in and custom roles, route gates; [`docs/auth.md`](docs/auth.md)) |
 | Component IDs | ✓ shipped (`component-ids.ts`; called from page + fragment save handlers) |
 | AdminCache abstraction | ✓ shipped (interface + `MemoryCache` + per-site + 6 test files) |
-| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). External sinks are demand-driven; CSV export, role and config-change events and a target filter are in `design-audit.md`'s future directions |
+| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). Denied requests aren't recorded yet ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). External sinks are demand-driven; CSV export, role and config-change events and a target filter are in `design-audit.md`'s future directions |
 | Hooks lifecycle | ✓ shipped (factory contributions via `admin.hooks` per ADR-0009; 10 test files) |
 | Deploy adapter contract (#203) | ✓ shipped 2026-05-14 ([`design-deploy.md`](.claude/rules/design-deploy.md) + [ADR-0010](docs/adr/0010-deploy-publish-independence.md) + [`docs/deploy.md`](docs/deploy.md); `cloudflareWorkersDeploy()` + 2 validators + `target.worker` deleted; verified end-to-end against `sites/gazetta.studio` — real CF deploy, live worker on https://gazetta.studio) |
 | NotificationProvider (in-admin) | ☐ pending — see Next |
