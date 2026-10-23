@@ -148,7 +148,7 @@ The blessed registration path. Operators (and plugin authors) export a factory t
 
 ## Validation gate (definition of done)
 
-- [ ] All 10 cuts merged (Cut 3 marked superseded; Cuts 1-2, 4-8 shipped; Cuts 9-10 to land)
+- [x] All 10 cuts merged (Cut 3 superseded by Cut 9)
 - [ ] At least one example hook factory exists in `examples/starter/admin/hooks/` and runs in the starter site
 - [ ] Audit log records hook firings correctly (composing with audit foundation)
 - [ ] No file walker code remains in `packages/gazetta/src/hooks/`

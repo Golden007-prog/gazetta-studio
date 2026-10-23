@@ -11,7 +11,7 @@ paths:
 
 Foundational dimension #4 of 13. Authentication identity model (Gazetta consumes upstream identity, never does auth itself) + role-based access control + capability-based authorization gates.
 
-**Status**: design pass complete (2026-05); implementation shipped 2026-05 ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194); operator guide [`docs/auth.md`](../../docs/auth.md)).
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194); operator guide [`docs/auth.md`](../../docs/auth.md)), except the per-target `publish:production` check at the publish endpoint ([#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191)).
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Auth/RBAC check** every new feature design must answer

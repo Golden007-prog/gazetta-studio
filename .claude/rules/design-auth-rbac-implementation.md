@@ -151,7 +151,7 @@ Branch: `auth-rbac-v1` off `main` (after TS config migration is shipped per Phas
 
 Cut 1-9 ship the implementation. Cut 10-11 are validation + docs. The foundation is "shipped" when:
 
-- [ ] All 11 cuts merged
+- [x] All 11 cuts merged
 - [ ] Integration tests pass for all 6 trust modes
 - [ ] `audit/` foundation (next in Phase 1) has at least one consumer of the `Principal` type — proves the contract works for downstream foundations
 - [ ] Operator can configure auth for at least one trust mode following only the public docs
