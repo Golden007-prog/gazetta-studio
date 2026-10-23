@@ -57,12 +57,11 @@ describe('serve archive markers (dynamic/ESI)', () => {
     expect(res.headers.get('cache-control')).toBe(ARCHIVE_CACHE_CONTROL)
   })
 
-  it('uses the derived route for non-trivial page names', async () => {
+  it('answers 410 for a plain page whose alias route needs a parameter', async () => {
     const app = buildServer(esiSeed())
     const res = await app.request('http://localhost/old-docs')
 
-    expect(res.status).toBe(301)
-    expect(res.headers.get('location')).toBe('/blog/:slug')
+    expect(res.status).toBe(410)
   })
 
   it('percent-encodes non-Latin-1 alias targets', async () => {
@@ -344,6 +343,59 @@ describe('serve archive markers (static)', () => {
 
     expect(res.status).toBe(301)
     expect(res.headers.get('location')).toBe('/')
+    expect(res.headers.get('cache-control')).toBe(ARCHIVE_CACHE_CONTROL)
+  })
+})
+
+describe('serve archived dynamic-route aliases (#1126)', () => {
+  const dynamicAliasSeed = (): Record<string, string> => ({
+    'pages/blog/[slug]/index.html': archiveMarker({ kind: 'alias', target: 'posts/[slug]' }),
+    'pages/news/[slug]/index.html': archiveMarker({ kind: 'alias', target: 'posts/[year]/[slug]' }),
+  })
+
+  it('redirects to the alias route with the captured params filled', async () => {
+    const app = buildServer(dynamicAliasSeed())
+    const res = await app.request('http://localhost/blog/hello')
+
+    expect(res.status).toBe(301)
+    expect(res.headers.get('location')).toBe('/posts/hello')
+    expect(res.headers.get('cache-control')).toBe(ARCHIVE_CACHE_CONTROL)
+  })
+
+  it('keeps the request locale on the filled alias route', async () => {
+    const seed = dynamicAliasSeed()
+    seed['pages/blog/[slug]/index.fr.html'] = seed['pages/blog/[slug]/index.html']
+    const app = buildLocaleServer(seed)
+
+    const res = await app.request('http://localhost/fr/blog/hello')
+
+    expect(res.status).toBe(301)
+    expect(res.headers.get('location')).toBe('/fr/posts/hello')
+  })
+
+  it('answers 410 when an alias route segment has no captured value', async () => {
+    const app = buildServer(dynamicAliasSeed())
+    const res = await app.request('http://localhost/news/hello')
+
+    expect(res.status).toBe(410)
+    expect(res.headers.get('cache-control')).toBe(ARCHIVE_CACHE_CONTROL)
+  })
+
+  it('inserts an encoded slug without encoding it a second time', async () => {
+    const app = buildServer(dynamicAliasSeed())
+    const res = await app.request('http://localhost/blog/h%C3%A9llo')
+
+    expect(res.status).toBe(301)
+    expect(res.headers.get('location')).toBe('/posts/h%C3%A9llo')
+  })
+
+  it('answers 410 for a plain page archived with a parameterized alias', async () => {
+    const app = buildServer({
+      'pages/promo/index.html': archiveMarker({ kind: 'alias', target: 'posts/[slug]' }),
+    })
+    const res = await app.request('http://localhost/promo')
+
+    expect(res.status).toBe(410)
     expect(res.headers.get('cache-control')).toBe(ARCHIVE_CACHE_CONTROL)
   })
 })

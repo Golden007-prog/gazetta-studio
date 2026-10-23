@@ -82,7 +82,7 @@ async function findPage(
   bucket: R2Bucket,
   requestPath: string,
   locales?: string[],
-): Promise<{ html: string; locale: string | undefined } | null> {
+): Promise<{ html: string; locale: string | undefined; params?: Record<string, string> } | null> {
   const { locale, path: resolvedPath } = locales?.length
     ? extractLocale(requestPath, locales)
     : { locale: undefined, path: requestPath }
@@ -111,13 +111,14 @@ async function findPage(
       if (segment.startsWith('[') && segment.endsWith(']')) {
         const dynamicParts = [...parts]
         dynamicParts[i] = segment
+        const params = { [segment.slice(1, -1)]: parts[i] }
         const dynamicPath = `pages/${dynamicParts.join('/')}/${indexFile}`
         const dynObj = await bucket.get(dynamicPath)
-        if (dynObj) return { html: await dynObj.text(), locale }
+        if (dynObj) return { html: await dynObj.text(), locale, params }
         // Dynamic route locale fallback
         if (locale) {
           const dynFallback = await bucket.get(`pages/${dynamicParts.join('/')}/index.html`)
-          if (dynFallback) return { html: await dynFallback.text(), locale }
+          if (dynFallback) return { html: await dynFallback.text(), locale, params }
         }
       }
     }
@@ -136,8 +137,8 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
   const defaultLocale = options?.defaultLocale
   const defaultPrefix = options?.defaultPrefix
   const nonDefaultLocales = locales?.filter(l => l !== (defaultLocale ?? locales?.[0])) ?? []
-  const archiveFor = (html: string, locale: string | undefined) =>
-    archiveResponse(html, { locale, defaultLocale: defaultLocale ?? locales?.[0], defaultPrefix })
+  const archiveFor = (html: string, locale: string | undefined, params?: Record<string, string>) =>
+    archiveResponse(html, { locale, defaultLocale: defaultLocale ?? locales?.[0], defaultPrefix, params })
 
   const app = new Hono<{ Bindings: Record<string, R2Bucket> }>()
 
@@ -194,7 +195,7 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
       return c.html('<h1>404 — Page not found</h1>', 404)
     }
 
-    const archived = archiveFor(result.html, result.locale)
+    const archived = archiveFor(result.html, result.locale, result.params)
     if (archived) {
       c.executionCtx.waitUntil(cache.put(request, archived.clone()))
       return archived

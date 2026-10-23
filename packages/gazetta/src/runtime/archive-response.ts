@@ -13,7 +13,7 @@
  */
 import { localeRoutePrefix } from '../locale.js'
 import { parseArchiveMarker } from './archive-marker.js'
-import { deriveRoute } from './derive-route.js'
+import { deriveRoute, fillRouteParams } from './derive-route.js'
 
 export const ARCHIVE_CACHE_CONTROL = 'max-age=300'
 
@@ -21,6 +21,12 @@ export interface ArchiveResponseOptions {
   locale?: string
   defaultLocale?: string
   defaultPrefix?: boolean
+  /** Values captured from the request's dynamic route segments — already
+   * percent-encoded, since they come from the request URL. Substituted
+   * into the alias's route after the route itself is encoded, so they are
+   * encoded exactly once. An alias route segment without a captured value
+   * answers 410: there is no URL to redirect to (#1126). */
+  params?: Record<string, string>
 }
 
 export function archiveGoneResponse(): Response {
@@ -33,7 +39,17 @@ export function archiveResponse(input: Uint8Array | string, options: ArchiveResp
 
   if (marker.kind === 'gone') return archiveGoneResponse()
 
-  const route = deriveRoute(marker.target)
+  const rawRoute = deriveRoute(marker.target)
+  // Fail closed on an unsafe target before encoding: encodeURI would
+  // hide a backslash as %5C and sneak it past the location guard.
+  if (!rawRoute.startsWith('/') || rawRoute.startsWith('//') || rawRoute.includes('\\')) {
+    return archiveGoneResponse()
+  }
+  // Encode the route pattern first, then fill it: captured values arrive
+  // percent-encoded from the request URL, so encoding after the fill
+  // would escape their '%' a second time (#1126).
+  const route = fillRouteParams(encodeURI(rawRoute), options.params)
+  if (route === null) return archiveGoneResponse()
   const requestLocale = options.locale ?? (options.defaultPrefix ? options.defaultLocale : undefined)
   const localePrefix = requestLocale
     ? localeRoutePrefix(requestLocale, {
@@ -52,7 +68,7 @@ export function archiveResponse(input: Uint8Array | string, options: ArchiveResp
   try {
     const headers: Record<string, string> = {
       'Cache-Control': ARCHIVE_CACHE_CONTROL,
-      Location: encodeURI(location).replace(/#/g, '%23').replace(/\?/g, '%3F'),
+      Location: location.replace(/#/g, '%23').replace(/\?/g, '%3F'),
     }
     return new Response(null, { status: 301, headers })
   } catch {

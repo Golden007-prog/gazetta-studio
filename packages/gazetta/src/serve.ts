@@ -17,9 +17,9 @@ import { createHash } from 'node:crypto'
 import type { SiteManifest, StorageProvider, TargetType } from './types.js'
 import { assembleEsi, parseCacheComment } from './assemble.js'
 import { isPublicSitePath } from './public-site-path.js'
-import { archiveResponse } from './runtime/archive-response.js'
+import { archiveGoneResponse, archiveResponse } from './runtime/archive-response.js'
 import { aliasTargetIssue, parseArchiveMarker } from './runtime/archive-marker.js'
-import { deriveRoute } from './runtime/derive-route.js'
+import { deriveRoute, fillRouteParams } from './runtime/derive-route.js'
 import { resolveSiteLocales } from './locale.js'
 import { fetchFragmentEntries } from './runtime/fragment-fetch.js'
 
@@ -133,6 +133,8 @@ async function readFragmentHtml(storage: StorageProvider, path: string): Promise
 export interface FindPageResult {
   html: string
   locale: string | undefined
+  /** Values captured from the request's dynamic route segments. */
+  params?: Record<string, string>
 }
 
 /**
@@ -176,13 +178,14 @@ export async function findPage(
         if (entry.isDirectory && entry.name.startsWith('[') && entry.name.endsWith(']')) {
           const dynamicParts = [...parts]
           dynamicParts[i] = entry.name
+          const params = { [entry.name.slice(1, -1)]: parts[i] }
           const dynamicPath = `pages/${dynamicParts.join('/')}/${indexFile}`
           try {
-            return { html: await storage.readFile(dynamicPath), locale }
+            return { html: await storage.readFile(dynamicPath), locale, params }
           } catch {
             if (locale) {
               try {
-                return { html: await storage.readFile(`pages/${dynamicParts.join('/')}/index.html`), locale }
+                return { html: await storage.readFile(`pages/${dynamicParts.join('/')}/index.html`), locale, params }
               } catch {
                 /* fallback also missing */
               }
@@ -205,8 +208,8 @@ export async function findPage(
 export function createServer(options: ServeOptions) {
   const { storage, type = 'dynamic', locales, defaultLocale, defaultPrefix, detection } = options
   const nonDefaultLocales = locales?.filter(l => l !== (defaultLocale ?? locales?.[0])) ?? []
-  const archiveFor = (html: string, locale: string | undefined) =>
-    archiveResponse(html, { locale, defaultLocale: defaultLocale ?? locales?.[0], defaultPrefix })
+  const archiveFor = (html: string, locale: string | undefined, params?: Record<string, string>) =>
+    archiveResponse(html, { locale, defaultLocale: defaultLocale ?? locales?.[0], defaultPrefix, params })
 
   // Static targets store each language's version at the language's route,
   // so an alias redirect keeps the request's language only when the
@@ -219,7 +222,8 @@ export function createServer(options: ServeOptions) {
     if (locale && locale !== siteDefault) {
       const marker = parseArchiveMarker(html)
       if (marker?.kind === 'alias' && aliasTargetIssue(marker.target) === null) {
-        const route = deriveRoute(marker.target)
+        const route = fillRouteParams(deriveRoute(marker.target))
+        if (route === null) return archiveGoneResponse()
         const rel = `${locale}${route === '/' ? '' : route}/index.html`
         let hasVersion = false
         for (const candidate of [`/${rel}`, rel]) {
@@ -349,7 +353,7 @@ export function createServer(options: ServeOptions) {
       return c.html('<h1>404 — Page not found</h1>', 404)
     }
 
-    const archived = archiveFor(result.html, result.locale)
+    const archived = archiveFor(result.html, result.locale, result.params)
     if (archived) return archived
 
     const { html: rawHtml, browser, edge } = parseCacheComment(result.html)
