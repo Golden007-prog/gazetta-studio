@@ -67,7 +67,11 @@ strong caching (`Cache-Control: max-age=300`) so unarchive propagates
 quickly.
 
 For plain-static targets (no worker — Cloudflare Pages plain assets,
-GitHub Pages, S3 static-website), the marker mechanism doesn't fire.
+GitHub Pages, S3 static-website), the marker mechanism doesn't fire. Once #1152's cuts ship, publish
+writes no marker file at an archived route there (`design-soft-delete.md`
+Q10): where the target has no `redirects.format`, an alias's old route
+gets a redirect page instead (instant meta refresh, canonical link, a
+visible link), whose first line is the marker for `gazetta serve`.
 Those targets opt into the `_redirects` host-glue file
 (`targets.X.redirects: { format: 'cloudflare' | 'netlify' | 'json' }`)
 which the publish flow emits at the target root by walking archived
@@ -81,8 +85,9 @@ prefixes its routes use (`/landing  /welcome  301` and
 same way worker sites do (follows from `design-soft-delete.md` Q10).
 When the destination has no version in a language, that row points at
 its default-language page (`/fr/landing  /welcome  301`), since static
-publish writes no `/fr/welcome` then (same Q10). On Netlify, the
-archived page's marker file at its route blocks these rows today
+publish writes no `/fr/welcome` then (same Q10). On Netlify, a file
+at the route would block these rows unless forced, which is one reason
+publish writes none there
 ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)).
 
 **Cloudflare Pages limits.** Pages takes at most 2,000 static rows
@@ -94,9 +99,9 @@ With a row per language, a four-language target reaches 2,000 rows at
 `format: 'cloudflare'` to write no 410 rows
 ([#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149));
 until then it writes them and doesn't warn. Without a 410 row, Pages
-serves an archive without an alias from its marker file, a blank page
-with status 200; what publish should write there is
-[#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152).
+shows the target's `404.html` for an archive without an alias, once
+static publish writes no file at the route and writes that page
+([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)).
 
 Decided: maintainer, 2026-10-22 (#1124)
 
@@ -107,22 +112,22 @@ Decided: maintainer, 2026-10-22 (#1124)
 ### 410 Gone for archived items without aliasOf
 
 A page archived without `aliasOf` is a pure soft-delete — the URL
-should return `410 Gone`, not `404 Not Found`. The two HTTP status
-codes carry different SEO semantics: 410 tells crawlers the URL is
-permanently retired (drop from index), 404 implies "we couldn't find
-it but maybe it'll come back" (keep the URL in the crawl queue).
+should return `410 Gone` where the runtime can, the more precise
+answer. Google treats 404 and 410 alike and drops the URL from its
+index either way
+([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)).
 
 Same mechanism: HTML marker `<!-- gazetta:archived gone -->` on
-worker-served targets, and a `_redirects` 410 row for
-`format: 'netlify'` (whether Netlify honours it isn't verified, and the
-marker file at the route blocks it today, #1152). Cloudflare Pages
-can't return 410 from `_redirects`, so `format: 'cloudflare'` is to
-write no such row (Cloudflare Pages limits, above).
+worker-served targets. `_redirects` writes no 410 rows: Cloudflare
+Pages can't return 410 from `_redirects` (Cloudflare Pages limits,
+above) and Netlify doesn't document it, so a removed page on a plain
+host answers 404 (#1149, #1152). `gone-status` is a worker capability.
 
-Plain-static hosts that don't support 410 status codes (Cloudflare
-Pages, basic S3 static website, etc.) fall to natural 404 behavior.
-Today they serve the archived page's marker file instead, a blank page
-with status 200 ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)). The capability
+Plain-static hosts (Cloudflare Pages, Netlify, GitHub Pages, S3
+static websites) show the target's `404.html` with status 404 once
+static publish writes it and leaves no file at the route
+([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)); until then they serve the
+archived page's marker file, a blank page with status 200. The capability
 gap is surfaced at four points (per `design-soft-delete.md` Q10):
 boot validate, author-time modal, validator scanner, publish gate.
 
