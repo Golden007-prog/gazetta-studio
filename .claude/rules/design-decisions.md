@@ -279,8 +279,10 @@ provider-native versioning (S3 object versions, git commits).
 - **History on the destination, not the source.** Undo needs to work after the source of a
   publish has moved on. Example: publish staging → prod, then edit staging — prod still
   needs to roll back. Storing history on prod itself is the only way.
-- **Separate namespace from content.** `.gazetta/` is invisible to the runtime — no
-  performance or correctness cost on request serving. Content tree stays clean.
+- **Separate namespace from content.** History in `.gazetta/` is invisible to the runtime — no
+  performance or correctness cost on request serving. Content tree stays clean. (Since #1201
+  the Cloudflare worker reads one other file there, `.gazetta/publish-generation`, for its
+  cache key; #1125.)
 - **Uniform across providers.** The storage interface is already "read/write bytes at paths."
   Layering provider-specific versioning (S3 object versions, git commits) would balloon the
   adapter contract and create behavioral differences. Content-addressed blobs work identically

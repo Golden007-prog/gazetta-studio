@@ -119,8 +119,9 @@ write-and-render pipeline as publish.
 
 ### Storage shape
 
-History lives inside the target in a reserved `.gazetta/` namespace that the runtime never
-reads. Content-addressed blobs are shared across revisions — unchanged items deduplicate.
+History lives inside the target in a reserved `.gazetta/` namespace. The runtime never reads
+history; the one file it reads there is `.gazetta/publish-generation`, the Cloudflare
+worker's cache key (#1125, #1201). Content-addressed blobs are shared across revisions — unchanged items deduplicate.
 
 ```
 target root/
