@@ -45,7 +45,7 @@ The back end shipped ([#515](https://github.com/gazetta-studio/gazetta-studio/is
 
 ### Bug backlog
 
-User-visible publishing and editor bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
+User-visible publishing, editor and onboarding bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
 
 - [#1068](https://github.com/gazetta-studio/gazetta-studio/issues/1068) closing the tab during a publish stops it
 - [#1108](https://github.com/gazetta-studio/gazetta-studio/issues/1108), [#1109](https://github.com/gazetta-studio/gazetta-studio/issues/1109) restored drafts: lost fragment edits, false conflicts
@@ -57,6 +57,11 @@ User-visible publishing and editor bugs, all with fix-bot except [#1162](https:/
 - [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162) component tree: a fast second keyboard move acts on the old order
 - [#1165](https://github.com/gazetta-studio/gazetta-studio/issues/1165) capability checks don't know `gazetta serve` serves a static target
 - [#1174](https://github.com/gazetta-studio/gazetta-studio/issues/1174) a translation-only admin publish leaves the old manifest on the target
+- [#1180](https://github.com/gazetta-studio/gazetta-studio/issues/1180) `gazetta publish` and `gazetta history` wait 10 seconds after they finish
+- [#1181](https://github.com/gazetta-studio/gazetta-studio/issues/1181) the `.gitignore` from `gazetta init` doesn't cover what publish writes
+- [#1182](https://github.com/gazetta-studio/gazetta-studio/issues/1182) the capability-gap warning on a new site links to a page that answers 404
+- [#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183) a new site fails its own broken-links check
+- [#1184](https://github.com/gazetta-studio/gazetta-studio/issues/1184) `gazetta dev` on a busy port prints a Node stack trace
 
 Decided: maintainer, 2026-10-23 (#1179)
 
@@ -72,6 +77,12 @@ Reduce time-to-first-deploy for new operators. Moved from Now on 2026-10-23.
 - Function-based adapters on the v1 contract: [#204](https://github.com/gazetta-studio/gazetta-studio/issues/204) Cloudflare Pages + Functions, [#206](https://github.com/gazetta-studio/gazetta-studio/issues/206) Vercel Edge
 - [#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177) a new site's first publish (in discovery)
 - [#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178) docs, npm and gazetta.studio describe different versions (in discovery)
+- Found on the 2026-10-23 onboarding walk, each waiting for a decision or a test on a real host:
+  - [#1185](https://github.com/gazetta-studio/gazetta-studio/issues/1185) a site with an R2 target can't run `gazetta dev` without the R2 keys
+  - [#1186](https://github.com/gazetta-studio/gazetta-studio/issues/1186) docs and code disagree on a cloud target's default environment
+  - [#1187](https://github.com/gazetta-studio/gazetta-studio/issues/1187) the generated `wrangler.toml` uses a subdomain as `zone_name` (needs a test on a real account)
+  - [#1188](https://github.com/gazetta-studio/gazetta-studio/issues/1188) docs and `init` put pages in different folders, and new pages need a `gazetta dev` restart
+  - [#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189) the README's quick start is for contributors
 - [#1171](https://github.com/gazetta-studio/gazetta-studio/issues/1171) starter themes
 - [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209) Netlify static, after [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)'s cuts 1–2 and [#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149)
 
