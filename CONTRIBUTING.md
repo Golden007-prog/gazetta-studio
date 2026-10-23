@@ -18,6 +18,8 @@ New to the codebase? The [README](README.md) explains how Gazetta works,
 [CONTEXT.md](CONTEXT.md) defines its vocabulary, and [AGENTS.md](AGENTS.md) has the
 repository layout, every command and the conventions. Coding agents read AGENTS.md too.
 
+Found a security problem? Don't open an issue; report it privately as [SECURITY.md](SECURITY.md) describes.
+
 ## Picking an issue
 
 Issues labelled [`ready-for-agent`](https://github.com/gazetta-studio/gazetta-studio/labels/ready-for-agent)
