@@ -37,7 +37,7 @@ Every target keeps Gazetta's own files in a `.gazetta/` folder next to the publi
 
 ## Discovery
 
-What lives in `.gazetta/` (shipped and designed): `history/` (every past version, plus asset bytes), `audit/` (actor IDs and emails), `review/` (review state, approvers' IDs), `fragment-deps/`, `asset-refs/`, `alias-targets/` (dependency indices), and from designs: `live-check/`, `scheduled/`, `comments/`, `notifications/`, `publish-requests/`, `cache/`, `audit-index/`, `page-index/`, `built-config/`. Per-item sidecars (`.{hash}.hash`, `.pub-{ts}`) sit next to each page.
+What lives in `.gazetta/` (shipped and designed): `history/` (every past version, plus asset bytes), `audit/` (actor IDs and emails), `review/` (review state, approvers' IDs), `fragment-deps/`, `asset-refs/`, `alias-targets/` (dependency indices), and from designs: `deps-of/` (the indices' forward records, #1077), `live-check/`, `scheduled/`, `comments/`, `notifications/`, `publish-requests/`, `cache/`, `audit-index/`, `page-index/`, `built-config/`. Per-item sidecars (`.{hash}.hash`, `.pub-{ts}`) sit next to each page.
 
 No reader is on the serving path: the worker (`workers/cloudflare-r2.ts`) and `serve.ts` never mention `.gazetta`. Static `gazetta serve` does serve any stored file (#1071); the worker and ESI `serve` serve any file under `/pages/` and `/fragments/`, sidecars included (read from code, not tested). R2 public access exposes the whole bucket and is off by default; a path can be blocked only on a custom domain with a WAF rule and `r2.dev` off ([Cloudflare](https://developers.cloudflare.com/r2/buckets/public-buckets/)). gazetta.studio's domain returns 404 for `/.gazetta/…` (checked 2026-10-21).
 
@@ -116,7 +116,7 @@ The operator states one fact; Gazetta applies the consequences, and validation p
 | `review/` | Not written (a public target can't be editable, Q6) |
 | `publish-requests/` (designed) | Recorded on the source, so approval works for a public production target |
 | `scheduled/` (designed) | Not supported: scheduling against a public target is a validation error naming the copy-deploy setup |
-| `fragment-deps/`, `asset-refs/`, `alias-targets/` | Not written until #1093's cuts 1–2 land ([#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077)): they're rebuilt from the whole source site, so they'd reveal **unpublished** page names. Written once those cuts land (cut 9), because they then describe only what the target holds; target removal's check needs them (`design-target-removal.md` Q12). The live-check planner falls back to the published items when a target has no indices |
+| `fragment-deps/`, `asset-refs/`, `alias-targets/`, and `deps-of/` (their forward records) | Not written until #1093's cuts 1–2 land ([#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077)): they're rebuilt from the whole source site, so they'd reveal **unpublished** page names. Written once those cuts land (cut 9), because they then describe only what the target holds; target removal's check needs them (`design-target-removal.md` Q12). The live-check planner falls back to the published items when a target has no indices |
 | `live-check/` | Written. No personal data (live-check Q5); holds the probe result |
 | Page, fragment and asset manifests (outside `.gazetta/`) | Not written |
 | `comments/`, `notifications/` (designed) | Not written |
@@ -245,7 +245,7 @@ Publish panel, `data-testid="publish-locked"`: "Publishing to `production` is pa
 | 6 | Probe and lock: one byte-exact probe per sensitive folder present, on `siteUrl` and `liveCheck.storageUrls`, independent of `liveCheck: false`, hourly with Re-check forcing it; result written into the report as soon as known; lock from the newest probe result; lock check before the first write in every publish path; publish-panel copy and CLI error | 2, 3, live-check cuts 2 and 5 ([#1081](https://github.com/gazetta-studio/gazetta-studio/issues/1081)) | integration + component | Medium-high |
 | 7 | Worker and ESI `gazetta serve` use `isPublicSitePath` (sidecars stop being served) | 1 | unit + api | Low |
 | 8 | Docs (`audit.md`, `self-hosted.md`, `deploy.md`, `runtime-capabilities.md`), **Public storage** in `CONTEXT.md`, the discipline line in `feature-design-process.md`, ADR-0017 | 2 | docs | Low |
-| 9 | Dependency indices on public targets: mark `fragment-deps/`, `asset-refs/` and `alias-targets/` safe on public targets in the state folder registry and drop cut 4's index gate (Q5's folder table; `design-target-removal.md` Q12) | 3, 4, #1093's cuts 1–2 | unit + api | Low |
+| 9 | Dependency indices on public targets: mark `fragment-deps/`, `asset-refs/`, `alias-targets/` and `deps-of/` (their forward records) safe on public targets in the state folder registry and drop cut 4's index gate (Q5's folder table; `design-target-removal.md` Q12) | 3, 4, #1093's cuts 1–2 | unit + api | Low |
 
 Cuts 2 and 3 run in parallel; 7 any time after 1; 9 once #1093's cuts 1–2 (target indices) have landed. The static deploy adapters (#208, #209, #211) take "upload only paths where `isPublicSitePath` is true" as part of their contract, not as a cut here.
 
@@ -257,6 +257,7 @@ Decided: maintainer, 2026-10-23 (#1120).
 |---|---|
 | A last target indices cut (#1093) does it | The rule is public storage's (Q5's folder table), and that cut would wait for public storage cuts 3–4. |
 | Whichever of cut 4 and #1093's cut 2 lands second | Each spec would depend on what has landed when it's built. |
+| Mark the index folders safe but keep `deps-of/` off public targets | Per-item edge replacement needs each item's record, and target removal's check would refuse every removal on public targets (Q12). |
 
 ## Migration
 
