@@ -9,6 +9,15 @@
       "reasonNote": "Cuts 4-9, 11-18, and 20 have not shipped; only cuts 1-3 (#515-517) and 10 (#524) are in git log. Writing the operator guide and marking ROADMAP \"shipped\" would describe and announce features that don't exist.",
       "addedAt": "2026-06-09T08:53:51.317Z",
       "addedBy": "bot"
+    },
+    {
+      "fingerprint": {
+        "issueNumber": 521
+      },
+      "reason": "needs-human",
+      "reasonNote": "Loop exhausted after 2 attempts. Last reviewer note: `tests/admin-api-review-routes.test.ts:294` fails in 4 of 5 local runs (`npx vitest run tests/admin-api-review-routes.test.ts` five times): expected `[review-submit, review-reject, review-submit]`, received `[review-submit, review-submit, review-reject]`. The cause is in `packages/gazetta/src/admin-api/routes/review.ts` `readHistory` (lines ~196-215). Audit timestamps have millisecond resolution (`audit/context.ts:131`), so three back-to-back requests often share a timestamp. `entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp))` then leaves tied events in query-concatenation order (all submits, then all rejects), not in the order they happened. The dedup key `timestamp|actor.id|action` has the same root cause: two same-action events by the same actor in the same millisecond are silently collapsed into one. Fix:\n- Give history a stable newest-first order that survives same-millisecond ties. Options: a monotonic tiebreaker stored with the event (for example a per-record sequence or event id, if the provider exposes one), or one merged query where provider order is preserved for ties. Don't depend on timestamps being distinct.\n- Don't dedup on `timestamp|actor|action`. Dedupe only across providers, by a real event identity, or not at all if each provider returns distinct events.\n- Make the test deterministic and non-symmetric. `[submit, reject, submit]` reads the same in both directions, so it can't prove newest-first. Use, for example, submit → approve (by bob) or submit → reject → submit → withdraw, and assert the exact reversed order. Run it at least 5 times to confirm it never flakes.",
+      "addedAt": "2026-10-23T23:46:04.688Z",
+      "addedBy": "bot"
     }
   ]
 }
