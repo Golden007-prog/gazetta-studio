@@ -1,0 +1,169 @@
+/**
+ * Sync planner for the roadmap board.
+ *
+ * Compares what ROADMAP.md says (parse.ts) with the project's current items
+ * and returns the changes, without touching GitHub, per
+ * design-roadmap-board.md "The sync":
+ * - every issue the file mentions gets its bucket (Done once closed),
+ *   section and area;
+ * - every open issue the file doesn't mention is on the board with no
+ *   Status and no Section, so only the "Not in ROADMAP.md" view shows it;
+ * - an issue that is neither is removed, and so is a draft the file no
+ *   longer has; anything else (a pull request added by hand) is left alone;
+ * - a run that would remove more than REMOVAL_LIMIT items is blocked, since
+ *   a ROADMAP format change the parser misses would otherwise empty the board.
+ */
+import type { Bucket, Draft, ParsedRoadmap } from './parse.js'
+
+export type Status = Bucket | 'Done'
+
+export interface Fields {
+  status: Status | null
+  section: string | null
+  area: string | null
+}
+
+export interface IssueInfo {
+  number: number
+  /** Node id, for adding the issue to the project. */
+  id: string
+  state: 'OPEN' | 'CLOSED'
+  labels: string[]
+}
+
+export type ProjectItem =
+  | { itemId: string; type: 'issue'; number: number; fields: Fields }
+  | { itemId: string; type: 'draft'; draftId: string; title: string; body: string; fields: Fields }
+  | { itemId: string; type: 'other'; label: string }
+
+export interface PlanInput {
+  roadmap: ParsedRoadmap
+  /** Every mentioned number that is an issue, and every open issue. */
+  issues: Map<number, IssueInfo>
+  items: ProjectItem[]
+  allowRemovals: boolean
+}
+
+export interface SyncPlan {
+  addIssues: Array<{ number: number; contentId: string; fields: Fields }>
+  addDrafts: Array<{ title: string; body: string; fields: Fields }>
+  updates: Array<{ itemId: string; label: string; fields: Partial<Fields>; body?: { draftId: string; body: string } }>
+  removals: Array<{ itemId: string; label: string; reason: string }>
+  /** Items the sync doesn't own, by label. */
+  untouched: string[]
+  /** Mentioned numbers that aren't issues: pull requests, or missing. */
+  notIssues: number[]
+  /** Issues with more than one area label; triage gives each issue one. */
+  multiArea: number[]
+  /** Why the run must stop before writing, or null. */
+  blocked: string | null
+}
+
+export const REMOVAL_LIMIT = 10
+export const AREA_ORDER: readonly string[] = ['cms', 'renderer', 'cli', 'storage', 'templates']
+
+const AREA_PREFIX = 'area: '
+
+/** The issue's area label; with two, the first in AREA_ORDER. */
+export function areaOf(labels: readonly string[]): string | null {
+  const rank = (area: string) => {
+    const i = AREA_ORDER.indexOf(area)
+    return i === -1 ? AREA_ORDER.length : i
+  }
+  const areas = labels.filter(l => l.startsWith(AREA_PREFIX)).map(l => l.slice(AREA_PREFIX.length))
+  return areas.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))[0] ?? null
+}
+
+export function planSync(input: PlanInput): SyncPlan {
+  const plan: SyncPlan = {
+    addIssues: [],
+    addDrafts: [],
+    updates: [],
+    removals: [],
+    untouched: [],
+    notIssues: [],
+    multiArea: [],
+    blocked: null,
+  }
+
+  const wanted = new Map<number, { info: IssueInfo; fields: Fields }>()
+  for (const p of input.roadmap.placements.values()) {
+    const info = input.issues.get(p.number)
+    if (!info) {
+      plan.notIssues.push(p.number)
+      continue
+    }
+    const status: Status = info.state === 'CLOSED' ? 'Done' : p.bucket
+    wanted.set(p.number, { info, fields: { status, section: p.section, area: areaOf(info.labels) } })
+  }
+  for (const info of input.issues.values()) {
+    if (info.state === 'OPEN' && !wanted.has(info.number)) {
+      wanted.set(info.number, { info, fields: { status: null, section: null, area: areaOf(info.labels) } })
+    }
+  }
+  for (const { info } of wanted.values()) {
+    if (info.labels.filter(l => l.startsWith(AREA_PREFIX)).length > 1) plan.multiArea.push(info.number)
+  }
+
+  const wantedDrafts = new Map<string, Draft>()
+  for (const d of input.roadmap.drafts) if (!wantedDrafts.has(d.title)) wantedDrafts.set(d.title, d)
+
+  const seenIssues = new Set<number>()
+  const seenDrafts = new Set<string>()
+  for (const item of input.items) {
+    if (item.type === 'issue') {
+      const w = wanted.get(item.number)
+      if (!w) {
+        plan.removals.push({ itemId: item.itemId, label: `#${item.number}`, reason: 'closed and not in ROADMAP.md' })
+        continue
+      }
+      seenIssues.add(item.number)
+      const changes = changedFields(item.fields, w.fields)
+      if (Object.keys(changes).length > 0)
+        plan.updates.push({ itemId: item.itemId, label: `#${item.number}`, fields: changes })
+    } else if (item.type === 'draft') {
+      const d = wantedDrafts.get(item.title)
+      if (!d || seenDrafts.has(item.title)) {
+        plan.removals.push({ itemId: item.itemId, label: item.title, reason: 'no longer in ROADMAP.md' })
+        continue
+      }
+      seenDrafts.add(item.title)
+      const changes = changedFields(item.fields, draftFields(d))
+      const bodyChanged = item.body !== d.body
+      if (Object.keys(changes).length > 0 || bodyChanged) {
+        plan.updates.push({
+          itemId: item.itemId,
+          label: item.title,
+          fields: changes,
+          ...(bodyChanged ? { body: { draftId: item.draftId, body: d.body } } : {}),
+        })
+      }
+    } else {
+      plan.untouched.push(item.label)
+    }
+  }
+
+  for (const [number, w] of wanted) {
+    if (!seenIssues.has(number)) plan.addIssues.push({ number, contentId: w.info.id, fields: w.fields })
+  }
+  for (const [title, d] of wantedDrafts) {
+    if (!seenDrafts.has(title)) plan.addDrafts.push({ title, body: d.body, fields: draftFields(d) })
+  }
+
+  if (plan.removals.length > REMOVAL_LIMIT && !input.allowRemovals) {
+    plan.blocked = `The sync would remove ${plan.removals.length} items, more than ${REMOVAL_LIMIT}. Check the plan, then rerun with --allow-removals.`
+  }
+  return plan
+}
+
+function draftFields(d: Draft): Fields {
+  return { status: d.bucket, section: d.section, area: null }
+}
+
+function changedFields(current: Fields, wanted: Fields): Partial<Fields> {
+  const out: Partial<Fields> = {}
+  if (current.status !== wanted.status) out.status = wanted.status
+  if (current.section !== wanted.section) out.section = wanted.section
+  if (current.area !== wanted.area) out.area = wanted.area
+  return out
+}
