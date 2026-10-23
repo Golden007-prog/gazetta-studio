@@ -80,13 +80,14 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - site files the publish wrote (`sitemap.xml`, `robots.txt`, `_redirects` behaviour);
 - always the root and one unknown URL (`404`).
 
-**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status`, an archive without an alias is expected to answer `404`; without `redirects`, alias routes are `not-checked`, except on a static target without `redirects.format`: there an alias's old route is expected to answer 200 with the redirect page, its first line the archive marker and an instant refresh to the alias's route (`design-soft-delete.md` Q10, #1152), so a leftover blank marker file is flagged too.
+**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status`, an archive without an alias is expected to answer `404`. Without `redirects`, that is on a static target without `redirects.format` (unset or `none`), an alias's old route is expected to answer either a `301` to the alias's route (when `gazetta serve` answers) or `200` with the redirect page, judged by its refresh pointing at the alias's route; a leftover blank marker file has no refresh and is flagged (`design-soft-delete.md` Q10, #1152; built in cut 4, the route planner). The redirect page carries the published-version marker (Q4), so a current one reads `live`.
 
-Decided (the redirect-page answer): maintainer, 2026-10-23 (#1163).
+Decided: maintainer, 2026-10-23 (#1163): the redirect-page answer.
 
 | Rejected | Why |
 |---|---|
 | Keep those alias routes `not-checked` | The redirect page would never be checked after a publish, and a leftover blank marker file at an alias route would go unflagged. |
+| Expect only the `200` redirect page, judged by its first-line marker | `gazetta serve` answers `301` there, so its targets would need `redirects.format: 'json'`, a requirement operators wouldn't know about; and a host that strips comments would fail a working page. |
 
 **Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location`, resolved against the request URL, has the expected alias route as its path (the query string is ignored: a host may carry the cache-bypass value into the redirect), and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
 
@@ -204,7 +205,7 @@ Every failure is an `Issue` (`design-validation.md`), so severity words and draw
 | `unreachable` | DNS, TLS or connection failure for the site as a whole | error |
 | `needs-credentials` | A login redirect, a 401, or a 403 on a route expected to answer 200 | error |
 | `status-only` | Expected status, but the version couldn't be compared: no marker (published before this feature, or the host strips comments) or rendered per request | info |
-| `not-checked` | Skipped: past the cap, a dynamic template route, or a host that can't produce the expected answer (e.g. an S3 website can't redirect) | info |
+| `not-checked` | Skipped: past the cap, or a dynamic template route (alias routes on targets without `redirects` are checked against the redirect page: Q3) | info |
 | `incomplete` | The run stopped before finishing (its `running` report passed its deadline) | warn |
 
 ## UX check
@@ -264,7 +265,7 @@ A warning icon on a target (`target-live-check-warning`) appears only when its l
 | 1 | Published-version marker at the end of `<head>` in pages and (ESI) fragment bodies, rendered-output hash; parser in `runtime/`; render-format version in the publish hash input (`sidecars.md` updated); changelog notes for HTML snapshot tests and the one full republish | — | unit-first | Medium |
 | 2 | Thin slice: check engine with the smoke set, two views, wait and retries, `Issue[]`; `gazetta check <target>`; `liveCheck` config basics (`waitSeconds`, `headers`); CLI docs. Integration test against CI's `e2e-prod` server, including a deliberately broken route | 1 | integration | Medium |
 | 3 | gazetta.studio: replace `deploy-site.yml`'s check step with `gazetta check production` (maintainer PR: workflow file) | 2 | (CI) | Low |
-| 4 | Route planner: affected routes from the target's `fragment-deps`, `alias-targets` and `asset-refs`; publish writes `alias-targets` to targets; removals, changed languages, dynamic-route instances, priority order, `maxRequests` | 2 | unit + api | Medium-high |
+| 4 | Route planner: affected routes from the target's `fragment-deps`, `alias-targets` and `asset-refs`; publish writes `alias-targets` to targets; removals, changed languages, dynamic-route instances, priority order, `maxRequests`; alias routes on static targets without `redirects.format` (Q3, #1152) | 2 | unit + api | Medium-high |
 | 5 | Reports on the target, retention, `.gitignore` line, `live-check` audit event; `--json` | 2 | api-first | Low |
 | 6 | Checks after `gazetta publish` and `gazetta deploy` (CLI layer only); `--no-check`, `--check-strict`, `--all`, `--max-requests`, deferred plans from `--no-check` publishes and `gazetta check --last-publish`; plus a maintainer PR adding `--no-check` to `deploy-site.yml`'s publish step and `--last-publish` to its check | 4, 5 | integration | Medium |
 | 7a | CLI commands load hook contributions; changelog note and `docs/hooks.md` line (existing `afterPublish` hooks now fire for CLI publishes) | — | api-first | Medium |

@@ -135,7 +135,7 @@ Decided: maintainer, 2026-10-22 (#1120).
 | Removing a purged archive keeps its 410 marker | The row never clears, so the sync count stays behind (or needs a special case), and markers pile up forever. To keep a 410, keep the archive. |
 | Purges reach targets automatically | The automatic removal Q1 rejects; an archive only on production may have been made there. |
 
-A removal costs nothing in search, whether or not the archive answered 410 first: Google treats 404 and 410 alike ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes); `design-soft-delete.md` Q14). So the docs don't advise publishing an archive before purging it.
+Google treats 404 and 410 alike ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes); `design-soft-delete.md` Q14), so answering 410 before a removal gains nothing in search, and the docs don't advise publishing an archive before purging it.
 
 Decided: maintainer, 2026-10-23 (#1163): the search advice is dropped.
 

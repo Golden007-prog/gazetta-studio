@@ -30,7 +30,7 @@ This replaces the prior shape where `DELETE /api/pages/:name` hard-removed the d
 - [`feature-design-process.md`](feature-design-process.md) — defines the foundational-checks process every new feature must respect; soft-delete is foundational
 - [`design-publishing.md`](design-publishing.md) — history-recorder is the existing primitive; archive transitions are saves recorded normally
 - [`design-validation.md`](design-validation.md) — validators surface archive-related issues (dangling alias, archived ref without alias, etc.)
-- [`design-rendering.md`](design-rendering.md) — runtime archive-aware composition; HTML comment marker is the universal mechanism (worker reads first 200 bytes of page HTML)
+- [`design-rendering.md`](design-rendering.md) — runtime archive-aware composition; HTML comment marker on ESI and dynamic targets (worker reads first 200 bytes of page HTML); on static targets, the page's archive sidecar or a redirect page's first line (Q10, #1152)
 - [`design-audit.md`](design-audit.md) — `archive`/`unarchive`/`purge`/`rename` are new closed-enum action values
 - [`design-review-workflow.md`](design-review-workflow.md) — archive auto-withdraws pending-review state; restore returns to draft
 - [`design-auth-rbac.md`](design-auth-rbac.md) — capability gates (`delete:pages`, `delete:fragments`); admin-only `?force=true` escape hatch
@@ -64,7 +64,7 @@ Designing now keeps each surface uniform across all three primitives (pages, fra
 - Admin-only `?force=true` escape hatch for purge
 - Tree filter "Show archived" toggle
 - `_redirects` host-glue for static targets on Cloudflare/Netlify
-- HTML comment marker is the universal mechanism (worker reads first 200 bytes of page HTML)
+- HTML comment marker on ESI and dynamic targets (worker reads first 200 bytes of page HTML); on static targets, the page's archive sidecar or a redirect page's first line (Q10, #1152)
 - Validators (P1-P5 from grilling): `referenced-archived-without-alias`, `dangling-alias`, `circular-alias`, `archive-not-supported-on-target`, `aliasOf-points-to-archived`
 - CLI surface: `gazetta archive list / purge / restore / rename` (composable; cron-friendly)
 - Capability-gap UX surfaced at four points (boot validate, author-time modal, validator scanner, publish gate)
@@ -420,7 +420,7 @@ Decided: maintainer, 2026-10-23 (#1163).
 | Keep the marker file at the route | Plain hosts keep serving it: Netlify needs forced rows (`301!`), and where a host can't redirect, the best it can show is a "page removed" page with status 200 (per its docs, Pages can't turn a path that has a file into a 404 or 410). |
 | Targets with `redirects.format` are for plain hosts only | `gazetta serve` would answer 404 at archived routes there, so a local preview of such a target no longer shows the redirects. |
 
-**2. Every static target; a redirect page where the host has no rules.** No static target gets the marker file. With `redirects.format`, the host's rows do the work and nothing is written at the route. Without it (GitHub Pages, an S3 website, a plain web server), an archived page with an alias gets a redirect page at its old route (decision 6); a removed page gets no file, so the host's own 404 (decision 3).
+**2. Every static target; a redirect page where the host has no rules.** No static target gets the marker file. With `redirects.format`, the host's rows do the work and nothing is written at the route. Without it, unset or `none` (GitHub Pages, an S3 website, a plain web server), an archived page with an alias gets a redirect page at its old route (decision 6); a removed page gets no file, so the host's own 404 (decision 3).
 
 Decided: maintainer, 2026-10-23 (#1163).
 
@@ -448,7 +448,7 @@ Decided: maintainer, 2026-10-23 (#1163).
 | Keep 410 rows on Netlify and test them first | Netlify's docs don't list 410, and Google treats 404 and 410 alike, so a working 410 would gain nothing in search. |
 | Keep 410 rows on Netlify untested | Rows that may not work, resting on old forum posts. |
 
-**5. Locked from the hosts' docs.** The host behaviour above is from the hosts' docs, not tested on the hosts. None of the hosts' docs states the status code of `404.html`, nor Pages' docs that of its homepage fallback, so the 404 status in these decisions is expected, not documented. The Netlify and Pages deploy adapters (#209, #210) test it on real deploys, and the live check (designed, not built) will flag any difference after a publish: on every target with a `siteUrl`, GitHub Pages included, it requests an unknown URL and expects 404, and on a target without `redirects.format` it expects the redirect page at an alias's old route (`design-live-check.md` Q3).
+**5. Locked from the hosts' docs.** The host behaviour above is from the hosts' docs, not tested on the hosts. None of the hosts' docs states the status code of `404.html`, nor Pages' docs that of its homepage fallback, so the 404 status in these decisions is expected, not documented. The Netlify and Pages deploy adapters (#209, #210) test the host behaviour above on real deploys, the 404 status included, and the live check (designed, not built) will flag any difference after a publish: on every target with a `siteUrl`, GitHub Pages included, it requests an unknown URL and expects 404, and on a target without `redirects.format` it expects the redirect page at an alias's old route, or the `301` when `gazetta serve` answers (`design-live-check.md` Q3).
 
 Decided: maintainer, 2026-10-23 (#1163).
 
@@ -457,7 +457,7 @@ Decided: maintainer, 2026-10-23 (#1163).
 | Test on throwaway Netlify, Pages and GitHub Pages sites before locking | Needs a Netlify account and a Cloudflare token that can deploy Pages, while no one deploys to these hosts through Gazetta before those adapters exist. |
 | Also test GitHub Pages on a real deploy in its adapter cut (#208) | Once built, the live check's request for an unknown URL will flag a GitHub Pages target that answers 200, after every publish. |
 
-**6. The redirect page.** At an alias's old route on a target without `redirects.format`: the archive marker as its first line (decision 8), an instant meta refresh to the new address, a canonical link to it, and a short line with a link ("This page has moved to /welcome") for visitors whose browser doesn't follow the refresh. No noindex, so search engines take it as a redirect. Publish writes a redirect page in each language the archived page has, at the routes it really had; a language the page never had gets none, since static publish never wrote that route. A redirect page in a language points at the destination in that language when it has a version there, else at its default-language page (the rule above). This is the shape of WCAG's technique H76: a zero-second refresh, a line with a link to the new address, and nothing on the page that isn't about the redirect ([H76](https://www.w3.org/WAI/WCAG22/Techniques/html/H76)).
+**6. The redirect page.** At an alias's old route on a target without `redirects.format`: the archive marker as its first line (decision 8), an instant meta refresh to the new address, a canonical link to it, and a short line with a link ("This page has moved to /welcome") for visitors whose browser doesn't follow the refresh. No noindex, so search engines take it as a redirect. Publish writes a redirect page in each language the archived page has, at the routes it really had; a language the page never had gets none, since static publish never wrote that route. A redirect page in a language points at the destination in that language when it has a version there, else at its default-language page (the rule above). Once the live check's published-version marker ships, the redirect page carries it at the end of its `<head>` too, so the live check reads a current one as `live` (`design-live-check.md` Q3, Q4). This is the shape of WCAG's technique H76: a zero-second refresh, a line with a link to the new address, and nothing on the page that isn't about the redirect ([H76](https://www.w3.org/WAI/WCAG22/Techniques/html/H76)).
 
 Decided: maintainer, 2026-10-23 (#1163).
 
@@ -472,7 +472,7 @@ Decided: maintainer, 2026-10-23 (#1163).
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | `404.html` at every static target's root: the site's `/404` page in the default language, or a minimal noindex "Page not found" page; static `gazetta serve` answers a missing path with it and status 404 (decision 9). Docs: `docs/runtime-capabilities.md` says plain hosts show it, and drops the claim that search engines keep a 404 URL in their crawl queue; `docs/soft-delete.md` drops its claims that 410 is better for search (Q14) | — | api-first | Low |
-| 2 | No file at archived routes on static targets: publishing an archive deletes the page's file at its route in each language (its live HTML, or a marker written before this cut), as a step of the page's publish: if the delete fails, the item fails (`STORAGE_WRITE_FAILED`, no hash sidecar), so the next publish retries it; the redirect page, starting with the marker, at an alias's old route in each language the page has, on targets without `redirects.format`; when a route has no file, static `gazetta serve` takes the page's name from the route (the reverse of `deriveRoute`, after the language prefix) and lists `pages/{name}/` for its archive sidecar; `inspectTarget`'s gap messages say what plain hosts now serve. Docs: `docs/soft-delete.md` and `docs/runtime-capabilities.md` say what plain hosts serve at archived routes | target removal cut 1 | api-first | Medium |
+| 2 | No file at archived routes on static targets: publishing an archive deletes the page's file at its route in each language (its live HTML, or a marker written before this cut), as a step of the page's publish: if the delete fails, the item fails (`STORAGE_WRITE_FAILED`, no hash sidecar), so the next publish retries it; the redirect page, starting with the marker, at an alias's old route in each language the page has, on targets without `redirects.format`; when a route has no file, static `gazetta serve` takes the page's name from the route (the reverse of `deriveRoute`, after the language prefix) and lists `pages/{name}/` for its archive sidecar; `inspectTarget`'s gap messages say what plain hosts now serve; on static targets an archive's hash includes its destination's languages, so its redirect pages are rewritten when they change (decision 10). Docs: `docs/soft-delete.md` and `docs/runtime-capabilities.md` say what plain hosts serve at archived routes, and `sidecars.md`'s "Hash input" names the destination's languages | target removal cut 1 | api-first | Medium |
 
 Each cut updates the user docs its change affects (team rule 8). The 410 rows for `netlify` go with #1149, which drops them for `cloudflare` in the same builder, together with `docs/runtime-capabilities.md`'s `gone-status` column (decision 4). Static targets published before cut 2 keep their marker files until each archive is published again; a one-time `gazetta publish <target> --force` clears them, the same step target removal cut 1 needs. `--force` republishes only items on the source, so an archive already purged there keeps its marker file until its removal is published (target removal cut 2).
 
@@ -500,6 +500,15 @@ Decided: maintainer, 2026-10-23 (#1163).
 | Rejected | Why |
 |---|---|
 | Leave serve as is | A local preview shows serve's one-line "Page not found" while the host shows the site's 404 page. |
+
+**10. Redirect pages follow their destination's languages.** A redirect page's refresh target is fixed when the archive is published. So on static targets an archive's hash includes its destination's languages, as static page hashes include their fragments' (`sidecars.md`, "Hash input"): when the destination gains or loses a language, compare shows the archive as changed, and publishing it rewrites its redirect pages. Without this, `/fr/landing` would keep sending French visitors to `/welcome` after `welcome` gains French, or to `/fr/welcome`, a 404, after it loses French. `_redirects` rows need nothing: the file is rebuilt on every publish. Part of cut 2.
+
+Decided: maintainer, 2026-10-23 (#1163).
+
+| Rejected | Why |
+|---|---|
+| Always point redirect pages at the destination's default-language page | French visitors would land on the English page, which #1124 rejected for redirects. |
+| Keep, and document that a stale refresh target lasts until the archive is published again | A redirect page could keep sending visitors to a 404 that nothing reports. |
 
 **Archived page HTML body content:**
 
@@ -618,7 +627,7 @@ Renames produce permanent (301) redirects. Temporary (302), scheduled (date-base
 4. HTML marker grammar is extensible (new markers land additively)
 5. Capability gap surfaced at four points (future redirect-lifecycle features inherit the pattern)
 
-Invariant 2 was scoped by #1152: plain hosts don't send 410 from `_redirects` (Cloudflare Pages doesn't support it, and Netlify doesn't document it, so Gazetta writes no such rows), so they answer 404 (Q10, #1152 decision 4). Google treats 404 and 410 alike ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)), so 410 is the more precise answer, not a search-engine requirement.
+Invariant 2 was scoped by #1152: plain hosts don't send 410 from `_redirects` (Cloudflare Pages doesn't support it, and Netlify doesn't document it, so Gazetta writes no such rows once #1149 lands), so they answer 404 (Q10, #1152 decision 4). Google treats 404 and 410 alike ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)), so 410 is the more precise answer, not a search-engine requirement.
 
 Decided: maintainer, 2026-10-23 (#1163).
 
