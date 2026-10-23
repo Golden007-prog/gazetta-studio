@@ -9,7 +9,16 @@
  * and set their layout, filter and visible fields, but not their columns or
  * grouping; those are set once by hand (the project's README lists them).
  */
-import type { Fields, IssueInfo, ProjectItem, Status, SyncPlan } from './plan.js'
+import { WRITE_CAP } from './pace.js'
+import {
+  addWrites,
+  type Fields,
+  type IssueInfo,
+  type ProjectItem,
+  type Status,
+  type SyncPlan,
+  updateWrites,
+} from './plan.js'
 
 export type GraphQL = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>
 
@@ -121,6 +130,11 @@ The API can't set a view's columns or grouping, or the auto-add rule, so they're
 - Now, Next and Later: column by Section, and in the column menu hide the other buckets' sections, so each tab shows only its own.
 - All: group by Section.
 - Workflows, "Auto-add to project": repository \`${repo}\`, filter \`is:issue is:open\`.
+
+## After a sync
+
+- The sync prints each Section option it creates (a new \`###\` heading in ROADMAP.md). In the Now, Next and Later tabs, keep each tab to its own bucket's sections: hide the new option in the other two tabs, or show it in its own.
+- A run stops before ${WRITE_CAP} writes, under GitHub's 500 an hour, and prints when to rerun. The description names the last sync that finished.
 `
 }
 
@@ -283,19 +297,37 @@ export async function readOpenIssues(gql: GraphQL, repo: string): Promise<IssueI
   return out
 }
 
-/** Make Status, Section and Area hold exactly these options, keeping existing ids. */
-export async function ensureFields(
-  gql: GraphQL,
+export interface WantedOptions {
+  status: readonly OptionSpec[]
+  section: readonly OptionSpec[]
+  area: readonly OptionSpec[]
+}
+
+/** The fields whose options a sync creates or changes: one write each. */
+export function fieldsToWrite(
   state: ProjectState,
-  wanted: { status: readonly OptionSpec[]; section: readonly OptionSpec[]; area: readonly OptionSpec[] },
-): Promise<void> {
+  wanted: WantedOptions,
+): Array<{ field: SingleSelectField | null; name: string; options: readonly OptionSpec[] }> {
+  return (
+    [
+      [state.status, 'Status', wanted.status],
+      [state.section, 'Section', wanted.section],
+      [state.area, 'Area', wanted.area],
+    ] as const
+  )
+    .filter(([field, , options]) => options.length > 0 && (!field || !sameOptions(field.options, options)))
+    .map(([field, name, options]) => ({ field, name, options }))
+}
+
+/** Section options a sync would create: the wanted ones the field doesn't have yet (Q12). */
+export function newSections(state: ProjectState, wanted: readonly OptionSpec[]): OptionSpec[] {
+  return wanted.filter(w => !state.section?.options.some(o => o.name === w.name))
+}
+
+/** Make Status, Section and Area hold exactly these options, keeping existing ids. */
+export async function ensureFields(gql: GraphQL, state: ProjectState, wanted: WantedOptions): Promise<void> {
   if (!state.status) throw new Error('The project has no Status field')
-  for (const [field, name, options] of [
-    [state.status, 'Status', wanted.status],
-    [state.section, 'Section', wanted.section],
-    [state.area, 'Area', wanted.area],
-  ] as const) {
-    if (options.length === 0) continue
+  for (const { field, name, options } of fieldsToWrite(state, wanted)) {
     if (!field) {
       await gql(
         `mutation($project: ID!, $name: String!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
@@ -303,7 +335,7 @@ export async function ensureFields(
         }`,
         { project: state.id, name, options },
       )
-    } else if (!sameOptions(field.options, options)) {
+    } else {
       await gql(
         `mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
           updateProjectV2Field(input: { fieldId: $field, singleSelectOptions: $options }) { clientMutationId }
@@ -314,15 +346,20 @@ export async function ensureFields(
   }
 }
 
+/** The board's views the project doesn't have yet; each takes two writes (create, then filter). */
+export function missingViews(state: ProjectState): typeof VIEWS {
+  const names = new Set(state.views.map(v => v.name))
+  return VIEWS.filter(v => !names.has(v.name))
+}
+
 /** Create the views the board needs that don't exist yet; existing views are left as they are. */
 export async function ensureViews(gql: GraphQL, state: ProjectState): Promise<string[]> {
   const created: string[] = []
   const visibleFieldIds = VISIBLE_FIELDS.map(n => state.fieldIds.get(n)).filter((id): id is string => !!id)
-  const names = new Set(state.views.map(v => v.name))
+  const missing = missingViews(state)
   // A new project comes with one empty table view; it becomes the first board view.
-  const spare = !VIEWS.some(v => names.has(v.name)) && state.views.length === 1 ? state.views[0] : null
-  for (const view of VIEWS) {
-    if (names.has(view.name)) continue
+  const spare = missing.length === VIEWS.length && state.views.length === 1 ? state.views[0] : null
+  for (const view of missing) {
     let viewId = spare && view === VIEWS[0] ? spare.id : null
     if (viewId) {
       await gql(
@@ -349,14 +386,21 @@ export async function ensureViews(gql: GraphQL, state: ProjectState): Promise<st
   return created
 }
 
-/** Write a plan. `state` must be read after ensureFields, so every option it needs exists. */
+/**
+ * Write a plan, a card at a time while `fits` allows that card's writes, so a
+ * run that reaches the cap never leaves a card added without its fields (Q13).
+ * Returns false when it stopped early. `state` must be read after
+ * ensureFields, so every option it needs exists.
+ */
 export async function applyPlan(
   gql: GraphQL,
   state: ProjectState,
   plan: SyncPlan,
   log: (line: string) => void,
-): Promise<void> {
+  fits: (writes: number) => boolean = () => true,
+): Promise<boolean> {
   for (const r of plan.removals) {
+    if (!fits(1)) return false
     await gql(
       `mutation($project: ID!, $item: ID!) { deleteProjectV2Item(input: { projectId: $project, itemId: $item }) { deletedItemId } }`,
       { project: state.id, item: r.itemId },
@@ -364,6 +408,7 @@ export async function applyPlan(
     log(`removed ${r.label} (${r.reason})`)
   }
   for (const a of plan.addIssues) {
+    if (!fits(addWrites(a.fields))) return false
     const data = await gql<{ addProjectV2ItemById: { item: { id: string } } }>(
       `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } } }`,
       { project: state.id, content: a.contentId },
@@ -373,6 +418,7 @@ export async function applyPlan(
     log(`added #${a.number}`)
   }
   for (const d of plan.addDrafts) {
+    if (!fits(addWrites(d.fields))) return false
     const data = await gql<{ addProjectV2DraftIssue: { projectItem: { id: string } } }>(
       `mutation($project: ID!, $title: String!, $body: String) {
         addProjectV2DraftIssue(input: { projectId: $project, title: $title, body: $body }) { projectItem { id } }
@@ -383,6 +429,7 @@ export async function applyPlan(
     log(`added draft "${d.title}"`)
   }
   for (const u of plan.updates) {
+    if (!fits(updateWrites(u))) return false
     await setFields(gql, state, u.itemId, u.fields, { clearEmpty: true })
     if (u.body) {
       await gql(
@@ -392,6 +439,7 @@ export async function applyPlan(
     }
     log(`updated ${u.label}`)
   }
+  return true
 }
 
 async function setFields(

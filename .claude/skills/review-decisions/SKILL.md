@@ -169,9 +169,9 @@ git checkout main && git pull --ff-only
 GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots -- --apply
 ```
 
-If it stops because more than 10 cards would leave the roadmap, show the maintainer the plan it printed and ask before rerunning with `--allow-removals` (Q8).
+If it stops because more than 10 cards would leave the roadmap, show the maintainer the plan it printed and ask before rerunning with `--allow-removals` (Q8). If it stops at the write cap, it prints when to rerun; rerun it then (Q13). If it prints new Section options, hide or show them in the Now, Next and Later tabs as the project's README says (Q12).
 
-Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-opinion outcome>." Add "board synced" when the sync ran.
+Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-opinion outcome>." Add "board synced" when the sync ran, or "board sync continues at <time>" when it stopped at the cap.
 
 ## Rules that don't bend
 

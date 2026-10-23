@@ -14,6 +14,8 @@
  *   is blocked (Q8). A misread file shows up that way: a lost section's open
  *   issues lose their Section, its closed issues and drafts are removed.
  *   Closed issues the file never listed leave without counting.
+ * - drafts are matched by title, so of several rows with one title only the
+ *   first gets a card; the plan lists them (Q3).
  */
 import type { Bucket, Draft, ParsedRoadmap } from './parse.js'
 
@@ -59,6 +61,8 @@ export interface SyncPlan {
   notIssues: number[]
   /** Issues with more than one area label; triage gives each issue one. */
   multiArea: number[]
+  /** Draft titles the file has more than once, with where each is; only the first gets a card (Q3). */
+  collidingDrafts: Array<{ title: string; places: string[] }>
   /** Why the run must stop before writing, or null. */
   blocked: string | null
 }
@@ -88,6 +92,7 @@ export function planSync(input: PlanInput): SyncPlan {
     untouched: [],
     notIssues: [],
     multiArea: [],
+    collidingDrafts: [],
     blocked: null,
   }
 
@@ -111,7 +116,12 @@ export function planSync(input: PlanInput): SyncPlan {
   }
 
   const wantedDrafts = new Map<string, Draft>()
-  for (const d of input.roadmap.drafts) if (!wantedDrafts.has(d.title)) wantedDrafts.set(d.title, d)
+  const draftPlaces = new Map<string, string[]>()
+  for (const d of input.roadmap.drafts) {
+    if (!wantedDrafts.has(d.title)) wantedDrafts.set(d.title, d)
+    draftPlaces.set(d.title, [...(draftPlaces.get(d.title) ?? []), `${d.bucket} / ${d.section}`])
+  }
+  for (const [title, places] of draftPlaces) if (places.length > 1) plan.collidingDrafts.push({ title, places })
 
   const seenIssues = new Set<number>()
   const seenDrafts = new Set<string>()
@@ -163,6 +173,25 @@ export function planSync(input: PlanInput): SyncPlan {
     plan.blocked = `The sync would take ${plan.offRoadmap.length} cards off the roadmap, more than ${OFF_ROADMAP_LIMIT}. Check the plan, then rerun with --allow-removals.`
   }
   return plan
+}
+
+/** Writes to add a card: the card, then each field it gets (an empty one isn't cleared on a new card, Q13). */
+export function addWrites(fields: Fields): number {
+  return 1 + Object.values(fields).filter(v => v !== null).length
+}
+
+/** Writes to update a card: each field set or cleared, and a draft's body. */
+export function updateWrites(update: SyncPlan['updates'][number]): number {
+  return Object.keys(update.fields).length + (update.body ? 1 : 0)
+}
+
+/** Writes the plan takes once the fields exist; the cap and the dry run count with it (Q13). */
+export function planWrites(plan: SyncPlan): number {
+  let n = plan.removals.length
+  for (const a of plan.addIssues) n += addWrites(a.fields)
+  for (const d of plan.addDrafts) n += addWrites(d.fields)
+  for (const u of plan.updates) n += updateWrites(u)
+  return n
 }
 
 function draftFields(d: Draft): Fields {

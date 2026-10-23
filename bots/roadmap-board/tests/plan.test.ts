@@ -2,12 +2,20 @@
  * Sync planner tests.
  *
  * Derived from design-roadmap-board.md ("The sync", Q3, Q7 the Area rule,
- * Q8 the stop), NOT from observing the implementation (team-preferences
- * rule 31).
+ * Q8 the stop, Q13 the write count), NOT from observing the implementation
+ * (team-preferences rule 31).
  */
 import { describe, expect, it } from 'vitest'
 import type { ParsedRoadmap } from '../parse.js'
-import { areaOf, type Fields, type IssueInfo, OFF_ROADMAP_LIMIT, type ProjectItem, planSync } from '../plan.js'
+import {
+  areaOf,
+  type Fields,
+  type IssueInfo,
+  OFF_ROADMAP_LIMIT,
+  type ProjectItem,
+  planSync,
+  planWrites,
+} from '../plan.js'
 
 const roadmap = (over: Partial<ParsedRoadmap> = {}): ParsedRoadmap => ({
   placements: new Map(),
@@ -150,6 +158,28 @@ describe('planSync — drafts (Q3)', () => {
     ])
     expect(plan.removals).toEqual([{ itemId: 'PVTI_d2', label: 'Gone row', reason: 'no longer in ROADMAP.md' }])
   })
+
+  it('gives only the first of several rows with one title a card, and lists them', () => {
+    const later = { ...draft, body: 'another row', bucket: 'Later' as const, section: 'Onboarding' }
+    const plan = planSync({
+      roadmap: roadmap({ drafts: [draft, later, { ...draft, title: 'Other row' }] }),
+      issues: new Map(),
+      items: [],
+      allowRemovals: false,
+    })
+    expect(plan.addDrafts.map(d => [d.title, d.body])).toEqual([
+      [draft.title, draft.body],
+      ['Other row', draft.body],
+    ])
+    expect(plan.collidingDrafts).toEqual([
+      { title: draft.title, places: ['Deferred / Deferred', 'Later / Onboarding'] },
+    ])
+  })
+
+  it('lists no collisions when every title is different', () => {
+    const plan = planSync({ roadmap: roadmap({ drafts: [draft] }), issues: new Map(), items: [], allowRemovals: false })
+    expect(plan.collidingDrafts).toEqual([])
+  })
 })
 
 describe('planSync — what it leaves alone', () => {
@@ -271,5 +301,47 @@ describe('areaOf — the Area rule', () => {
       allowRemovals: false,
     })
     expect(plan.multiArea).toEqual([1061])
+  })
+})
+
+describe('planWrites (Q13)', () => {
+  it('counts a write per card added and per field it gets, but none for an empty field on a new card', () => {
+    const plan = planSync({
+      roadmap: roadmap({
+        placements: new Map([[1, { number: 1, bucket: 'Now', section: 'Offline' }]]),
+        drafts: [{ title: 'Row', body: '', bucket: 'Later', section: 'Onboarding' }],
+      }),
+      issues: new Map([
+        [1, info(1, 'OPEN')],
+        [2, info(2, 'OPEN', [])],
+      ]),
+      items: [],
+      allowRemovals: false,
+    })
+    // #1: card + Status + Section + Area; #2 (not in the file, no area): card only; the draft: card + Status + Section.
+    expect(planWrites(plan)).toBe(4 + 1 + 3)
+  })
+
+  it('counts each field an update sets or clears, a draft body, and each removal', () => {
+    const plan = planSync({
+      roadmap: roadmap({ drafts: [{ title: 'Row', body: 'new', bucket: 'Now', section: 'Offline' }] }),
+      issues: new Map([[5, info(5, 'OPEN')]]),
+      items: [
+        issueItem(5, fields('Now', 'Offline', 'cms')),
+        issueItem(6, fields('Done', 'Offline', 'cms')),
+        {
+          itemId: 'PVTI_d',
+          type: 'draft',
+          draftId: 'DI',
+          title: 'Row',
+          body: 'old',
+          fields: fields('Later', 'Offline', null),
+        },
+      ],
+      allowRemovals: false,
+    })
+    // #5 left the file but is open: Status and Section cleared (2). #6 is closed and gone: removed (1).
+    // The draft moved to Now with a new body: Status (1) and body (1).
+    expect(planWrites(plan)).toBe(2 + 1 + 2)
   })
 })

@@ -9,25 +9,30 @@
  *
  * The token needs the `project` scope (`gh auth refresh -s project`).
  * `--allow-removals` lets a run take more than OFF_ROADMAP_LIMIT cards off the
- * roadmap (Q8).
+ * roadmap (Q8). A run stops before WRITE_CAP writes and prints when to rerun
+ * (Q13).
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { octokitFromEnv } from '../_lib/github.js'
-import { paceMutations } from './pace.js'
+import { isRateLimitError, type PacedWrites, paceWrites, WRITE_CAP, WriteCapReached } from './pace.js'
 import { type Bucket, type ParsedRoadmap, parseRoadmap } from './parse.js'
-import { AREA_ORDER, areaOf, type IssueInfo, planSync, type SyncPlan } from './plan.js'
+import { AREA_ORDER, areaOf, type IssueInfo, planSync, planWrites, type SyncPlan } from './plan.js'
 import {
   applyPlan,
   BUCKET_COLORS,
   type Color,
   ensureFields,
   ensureViews,
+  fieldsToWrite,
   findProject,
   type GraphQL,
+  missingViews,
+  newSections,
   type OptionSpec,
+  type ProjectState,
   readIssues,
   readme,
   readOpenIssues,
@@ -35,6 +40,7 @@ import {
   STATUS_OPTIONS,
   shortDescription,
   updateProjectText,
+  type WantedOptions,
 } from './project.js'
 
 const OWNER = 'gazetta-studio'
@@ -60,9 +66,10 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const octokit = octokitFromEnv()
-  const gql = withRetry(
-    paceMutations(<T>(query: string, variables?: Record<string, unknown>) => octokit.graphql<T>(query, variables)),
+  const writes = paceWrites(<T>(query: string, variables?: Record<string, unknown>) =>
+    octokit.graphql<T>(query, variables),
   )
+  const gql = withRetry(writes.gql)
   const projectId = await findProject(gql, OWNER, TITLE)
   if (!projectId) {
     console.error(
@@ -75,8 +82,13 @@ async function main(argv: string[]): Promise<number> {
   for (const i of await readOpenIssues(gql, REPO)) if (!issues.has(i.number)) issues.set(i.number, i)
 
   let state = await readProject(gql, projectId, REPO)
+  const wanted: WantedOptions = {
+    status: STATUS_OPTIONS,
+    section: sectionOptions(roadmap, issues),
+    area: areaOptions(issues),
+  }
   let plan = planSync({ roadmap, issues, items: state.items, allowRemovals })
-  report(roadmap, plan, commit, state.url, state.items.length)
+  report(roadmap, plan, commit, state, wanted)
   if (plan.blocked) {
     console.error(plan.blocked)
     return 1
@@ -86,25 +98,49 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
 
-  await ensureFields(gql, state, {
-    status: STATUS_OPTIONS,
-    section: sectionOptions(roadmap, issues),
-    area: areaOptions(issues),
-  })
-  // Option changes can clear values, so plan again against what the fields hold now.
-  state = await readProject(gql, projectId, REPO)
-  plan = planSync({ roadmap, issues, items: state.items, allowRemovals })
-  if (plan.blocked) {
-    console.error(plan.blocked)
-    return 1
+  try {
+    await ensureFields(gql, state, wanted)
+    // Option changes can clear values, so plan again against what the fields hold now.
+    state = await readProject(gql, projectId, REPO)
+    plan = planSync({ roadmap, issues, items: state.items, allowRemovals })
+    if (plan.blocked) {
+      console.error(plan.blocked)
+      return 1
+    }
+    const views = await ensureViews(gql, state)
+    if (views.length > 0)
+      console.log(`Created views: ${views.join(', ')}. Set their columns and grouping by hand once (see the README).`)
+    // Keep one write for the description, so a run that finishes can always write it.
+    const finished = await applyPlan(
+      gql,
+      state,
+      plan,
+      line => console.log(`  ${line}`),
+      n => writes.fits(n + 1),
+    )
+    if (!finished) {
+      console.log(stopped(writes))
+      return 0
+    }
+    await updateProjectText(
+      gql,
+      projectId,
+      shortDescription(commit, new Date().toISOString().slice(0, 10)),
+      readme(REPO),
+    )
+  } catch (err) {
+    if (!(err instanceof WriteCapReached)) throw err
+    console.log(stopped(writes))
+    return 0
   }
-  await applyPlan(gql, state, plan, line => console.log(`  ${line}`))
-  const views = await ensureViews(gql, state)
-  if (views.length > 0)
-    console.log(`Created views: ${views.join(', ')}. Set their columns and grouping by hand once (see the README).`)
-  await updateProjectText(gql, projectId, shortDescription(commit, new Date().toISOString().slice(0, 10)), readme(REPO))
-  console.log(`Synced ${state.url}`)
+  console.log(`Synced ${state.url} (${writes.written()} writes)`)
   return 0
+}
+
+/** A run that reached the cap: GitHub's hour starts with this run's first write (Q13). */
+function stopped(writes: PacedWrites): string {
+  const rerun = new Date((writes.firstWriteAt() ?? Date.now()) + 61 * 60_000)
+  return `Stopped after ${writes.written()} writes, before the ${WRITE_CAP}-write cap (GitHub allows 500 an hour). Rerun after ${rerun.toTimeString().slice(0, 5)} to finish; the description still names the last sync that finished.`
 }
 
 /** Section options in file order, only for sections that hold an item; coloured by bucket. */
@@ -138,11 +174,17 @@ function key(bucket: Bucket, section: string): string {
   return `${bucket} / ${section}`
 }
 
-function report(roadmap: ParsedRoadmap, plan: SyncPlan, commit: string, url: string, itemCount: number): void {
+function report(
+  roadmap: ParsedRoadmap,
+  plan: SyncPlan,
+  commit: string,
+  state: ProjectState,
+  wanted: WantedOptions,
+): void {
   console.log(
     `ROADMAP.md at ${commit}: ${roadmap.placements.size} references, ${roadmap.drafts.length} items without an issue`,
   )
-  console.log(`Project ${url}: ${itemCount} items`)
+  console.log(`Project ${state.url}: ${state.items.length} items`)
   const onRoadmap = plan.addIssues.filter(a => a.fields.section !== null).length
   console.log(
     `Plan: add ${plan.addIssues.length} issues (${onRoadmap} on the roadmap, ${plan.addIssues.length - onRoadmap} not in ROADMAP.md) and ${plan.addDrafts.length} drafts; update ${plan.updates.length}; remove ${plan.removals.length}`,
@@ -168,6 +210,22 @@ function report(roadmap: ParsedRoadmap, plan: SyncPlan, commit: string, url: str
   if (plan.notIssues.length > 0)
     console.log(`Not issues (pull requests or missing): ${plan.notIssues.map(n => `#${n}`).join(', ')}`)
   if (plan.untouched.length > 0) console.log(`Left alone: ${plan.untouched.join(', ')}`)
+  if (!state.section) console.log(`Creates the Section field with ${wanted.section.length} options.`)
+  else {
+    const created = newSections(state, wanted.section)
+    if (created.length > 0)
+      console.log(
+        `New Section options: ${created.map(s => `${s.name} (${s.description})`).join(', ')}. Hide or show them in the Now, Next and Later tabs, as the project's README says.`,
+      )
+  }
+  for (const d of plan.collidingDrafts)
+    console.log(`Drafts with the same title, only the first gets a card: "${d.title}" in ${d.places.join(', ')}`)
+  // Fields and views first, then the cards, then the description.
+  const total = fieldsToWrite(state, wanted).length + 2 * missingViews(state).length + planWrites(plan) + 1
+  const runs = Math.ceil(total / WRITE_CAP)
+  console.log(
+    `Writes: about ${total}; a run stops before ${WRITE_CAP} (GitHub allows 500 an hour)${runs > 1 ? `, so this takes ${runs} runs an hour apart` : ''}.`,
+  )
 }
 
 /** Retry on GitHub's rate limits, waiting at least a minute as its docs ask; writes are paced besides (Q13). */
@@ -177,7 +235,7 @@ function withRetry(gql: GraphQL): GraphQL {
       try {
         return await gql<T>(query, variables)
       } catch (err) {
-        if (attempt >= 5 || !/rate limit/i.test(String(err))) throw err
+        if (attempt >= 5 || !isRateLimitError(err)) throw err
         const seconds = 60 * attempt
         console.error(`Rate limited; retrying in ${seconds}s`)
         await new Promise(resolve => setTimeout(resolve, seconds * 1000))
