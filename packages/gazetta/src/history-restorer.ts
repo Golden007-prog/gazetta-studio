@@ -117,6 +117,7 @@ export async function restoreRevision(opts: RestoreRevisionOptions): Promise<Rev
     restoredFrom: revisionId,
     author: opts.author,
     message: opts.message,
+    changed: [...toDelete, ...toWrite.map(([path]) => path)],
   })
 }
 
@@ -132,7 +133,13 @@ export async function restoreRevision(opts: RestoreRevisionOptions): Promise<Rev
 async function recordFromSnapshot(
   history: HistoryProvider,
   target: RevisionManifest,
-  meta: { operation: RevisionOperation; restoredFrom?: string; author?: string; message?: string },
+  meta: {
+    operation: RevisionOperation
+    restoredFrom?: string
+    author?: string
+    message?: string
+    changed?: readonly string[]
+  },
 ): Promise<Revision> {
   const items = new Map<string, Uint8Array>()
   for (const [path, hash] of Object.entries(target.snapshot)) {
@@ -144,6 +151,7 @@ async function recordFromSnapshot(
     message: meta.message,
     restoredFrom: meta.restoredFrom,
     items,
+    changed: meta.changed,
   })
 }
 
