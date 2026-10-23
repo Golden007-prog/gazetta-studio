@@ -66,7 +66,7 @@ A crash midway leaves the target like a crashed publish: rerunning the undo, or 
 
 **Authorization:** undo and rollback need `restore:history` **and** the target's publish capability (`publish:production` or `publish:non-production`), so a role that can't publish to production can't change it through history.
 
-**Approval:** undoing the latest publish creates no publish request on an approval-required target: it's an emergency rollback of content that was approved minutes before. Rolling back to any older revision on such a target creates one publish request for the whole rollback, run as one call of the shared function ([`design-target-removal.md`](design-target-removal.md) Q13). The approval gate itself sits at the start of the shared target-publish function (Q4; [`design-target-removal.md`](design-target-removal.md) Q13).
+**Approval:** undoing the latest publish creates no publish request on an approval-required target: it's an emergency rollback of content that was approved minutes before. Rolling back to any older revision on such a target creates one publish request for the whole rollback, run as one call of the shared function; the request records the target's history head and the revision to restore, and the approval that reaches the threshold answers `409 STALE_REQUEST` if the head has moved ([`design-target-removal.md`](design-target-removal.md) Q13). Cut 4 adds rollback requests and the undo-latest rule to the gate. The approval gate itself sits at the start of the shared target-publish function (Q4; [`design-target-removal.md`](design-target-removal.md) Q13).
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -172,13 +172,13 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 | 1 | The shared target-publish function (Q4), called by the CLI and the admin route: it wraps `publishRun`, takes over the admin route's history record and manifest copy, has the approval gate's place at its start (`design-review-workflow.md` lock 1), and runs the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, CDN purge); generated files are written or deleted, never skipped | — | unit + api | Medium |
 | 2 | Removals in the shared function: delete an item's own files (static route `index.html` and locale variants; ESI `index*.html` under `pages/<name>/`; a nested item's folder stays), sidecars and manifest; removal by route for route changes | 1 | unit + api | Medium |
 | 3 | Destinations hold manifests: the CLI copies them before recording history ([#1082](https://github.com/gazetta-studio/gazetta-studio/pull/1082)) | — | api | Low |
-| 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088) | api-first | High |
+| 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, rollback requests and the undo-latest rule at the approval gate (`design-review-workflow.md` locks 3–5), hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088), review workflow cuts 12–13 (#526, #527) | api-first | High |
 | 5 | Admin and CLI: the publish panel flow per the UX table, History Restore through the same flow, CLI output and `--yes`, Storybook stories from the table | 4 | component + e2e | Medium |
 | 6 | Docs: "undo restores content, not templates" (History help and docs), `docs/hooks.md` trigger field, alignment note in `design-publishing.md` | 4 | docs | Low |
 
 Cuts 1 and 3 run in parallel. If #1082 stalls, cut 3 is filed for fix-bot.
 
-Cut 1 builds the whole function Q4 describes, so review workflow cuts 12–13, which wait for it, build the approval gate in its final place.
+Cut 1 builds the function itself: everything Q4 lists except removals, which cut 2 adds. Review workflow cuts 12–13, which wait for it, then build the approval gate in its final place.
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -186,6 +186,15 @@ Decided: maintainer, 2026-10-23 (#1120).
 |---|---|
 | A new cut after cut 1 wraps `publishRun` | One more cut for publish undo cut 2 and review workflow cuts 12–13 to wait for, where Q4 describes one function. |
 | Keep cut 1 as scoped | The admin route records history and copies manifests before `publishRun`, so a gate at the start of cut 1's function would come after both: a gated target would receive manifests and a revision before the request is created. |
+
+Cut 4 adds rollback requests and the undo-latest rule to the approval gate, so it waits for review workflow cuts 12–13, as target removal cut 2 does for removals.
+
+Decided: maintainer, 2026-10-23 (#1120).
+
+| Rejected | Why |
+|---|---|
+| Ship undo first and refuse rollbacks on targets that need approval | Undo there would be refused until a later cut adds rollback requests and the undo-latest rule. |
+| Whichever of cut 4 and review workflow cut 12 lands second | Each spec would depend on what has landed when it's built. |
 
 ## Migration
 

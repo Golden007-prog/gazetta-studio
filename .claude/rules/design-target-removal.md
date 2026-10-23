@@ -195,7 +195,9 @@ Items only on the target keep counting toward "N behind". Each now has an action
 
 ### Q11 — Cut sequence, queued after its prerequisites
 
-See "Cut sequence". The planner issue opens once #1092 cut 2, #1093 cut 2 and review workflow cuts 12–13 (#526, #527) have landed; #1092 and #1093 have a comment pointing here.
+See "Cut sequence". The planner issue opens once #1092 cut 2, #1093 cut 2 and review workflow cuts 12–13 (#526, #527) have landed; #1092 and #1093 have a comment pointing here. The wait for review workflow cuts 12–13 was added on 2026-10-23 (Cut sequence).
+
+Decided: maintainer, 2026-10-23 (#1120).
 
 | Rejected | Why |
 |---|---|
@@ -214,14 +216,15 @@ Decided: maintainer, 2026-10-22 (#1120).
 | Skip the check on public targets and warn | Public is the default for cloud storage; the common case would get no protection. |
 | Read the target's manifests | Public targets receive none; on private ones about 5K reads. |
 
-Items saved directly on an editable target, such as a production that accepts hotfixes, have forward records too: the save writes the item's forward record along with its edges (`sidecars.md`), so they're checked like published ones.
+Every write that writes an item's edges also writes its forward record: saves, creates, renames and move-asides on an editable target (such as a production that accepts hotfixes), and every whole-index rebuild (history restore, the source's first rebuild after a fresh clone, `gazetta assets reindex`). Only items a rebuild never saw stay unknown (`sidecars.md`).
 
 Decided: maintainer, 2026-10-23 (#1120).
 
 | Rejected | Why |
 |---|---|
 | Read the manifest of an item without a record (editable targets are private and hold manifests) | A second way to find users beside the indices. |
-| Leave them unknown until a `--force` publish | Every page saved there blocks the removals Q4 checks, and fetching the hotfix back doesn't help: the next publish skips the page as unchanged. |
+| Records from saves only | Items created or renamed on the target, or covered by a whole-index rebuild, block removals until they're republished or a `--force` publish runs. |
+| Records from publish only | Items written any other way block removals until republished, and a saved item's record goes stale, so a later publish can leave the save's extra edges behind (a false "still used"). |
 
 ### Q13 — The publish-approval gate sits at the shared target-publish function
 
@@ -235,7 +238,7 @@ Decided: maintainer, 2026-10-22 (#1120).
 | Removals skip the gate | An approval-gated production would lose pages with no one approving. |
 | No removals on gated targets | No supported way to remove anything there. |
 
-**Removals that rely on other items of the run.** On a gated target each item and each removal becomes its own request, approved and run alone (`design-review-workflow.md` locks 4–5), so the run Q4 relies on is split. The author still submits once. A removal request records the requests from the same run it relies on (removing @promo relies on the request that publishes pages/home without it) and runs only after they have run; approving it earlier refuses with Q4's message. A rollback on a gated target is one request, run as one call of the shared function (`design-publish-undo.md` Q2).
+**Removals that rely on other items of the run.** On a gated target each item and each removal becomes its own request, approved and run alone (`design-review-workflow.md` locks 4–5), so the run Q4 relies on is split. The author still submits once. A removal request records the requests from the same run it relies on (removing @promo relies on the request that publishes pages/home without it) and runs only after they have run; approving it earlier refuses with Q4's message. When a request it relies on is rejected, withdrawn, or runs and fails, the removal request is withdrawn too, with the reason, as Q15 gives one for a failed publish ("@promo was not removed: pages/home's request was rejected"), and the row shows "Only on production" again for the next publish. A rollback on a gated target is one request, run as one call of the shared function; it records the target's history head and the revision to restore when it's made, and the approval that reaches the threshold answers `409 STALE_REQUEST` if the head has moved (`design-publish-undo.md` Q2).
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -244,6 +247,8 @@ Decided: maintainer, 2026-10-23 (#1120).
 | One request per run on a gated target | Replaces lock 5's one request per item; approvers could no longer approve items separately. |
 | Refuse same-run removals on gated targets | The author publishes pages/home, waits for its approval, then removes @promo in a second publish. |
 | Keep the requests independent | If the removal's approval runs first, Q4's check still sees pages/home using @promo and refuses; a rollback split into requests can't keep publish undo's head check. |
+| Leave a removal request pending when a request it relies on fails | It can never run: approving it always refuses with Q4's message. |
+| A rollback request that records nothing | It runs against whatever the target holds when approved, so approvers could approve one rollback and another would run (lock 3). |
 
 ### Q14 — Confirm when a removal can't be undone
 
@@ -268,7 +273,7 @@ Decided: maintainer, 2026-10-22 (#1120).
 | Skip all removals if anything fails | One bad page blocks unrelated removals. |
 | Abort the whole publish | Fights `publishRun`'s per-item model, and other items are already written by then. |
 
-An item's edges and forward record are replaced only after its render and write succeed; a failed item keeps its old edges, which describe what the target still serves, so the next publish's check doesn't see a used fragment as unused (`sidecars.md`).
+An item's edges and forward record are replaced only after its render and HTML write succeed, and before its `.{hash}.hash` sidecar is written. A failed item keeps its old edges, which describe what the target still serves, so the next publish's check doesn't see a used fragment as unused; a crash between the edges and the sidecar leaves the item changed, so the next publish redoes it (`sidecars.md`).
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -276,10 +281,11 @@ Decided: maintainer, 2026-10-23 (#1120).
 |---|---|
 | Delete a failed item's forward record | The next check treats it as unknown and refuses the removals it might rely on until it publishes successfully. |
 | Replace the edges of every item in the run | A failed render can make a used fragment look unused at the next publish. |
+| Replace the edges after the hash sidecar | A crash in between leaves stale edges on an item whose hash already matches, so the next publish skips it; only `--force` repairs them. |
 
 ### Q16 — Removals travel in their own request field
 
-`POST /api/publish` takes removals in `remove: string[]`, with a Zod schema (MCP discipline). The server checks each entry is absent on the source and present on the destination, and rejects such items (absent on the source, present on the destination) in `items`. The panel stops sending target-only rows in `items` (finding 1).
+`POST /api/publish` takes removals in `remove: string[]`, with a Zod schema (MCP discipline). The server checks each entry is absent on the source and present on the destination, and rejects such items (absent on the source, present on the destination) in `items`. The panel stops sending target-only rows in `items` (finding 1); that is fixed on its own, before these cuts ([#1159](https://github.com/gazetta-studio/gazetta-studio/issues/1159)).
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -367,7 +373,7 @@ Composition with designs in flight:
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Archive sidecars on targets (`.gone`, `.alias-<name>`, one per page): written with the marker, deleted when a live version replaces it; `listSidecars` reports them; `_redirects` built from the target's listing, with this publish's own sidecar writes merged in, in the shared post-publish function | publish undo cut 1 | unit + api | Medium |
-| 2 | Removal in publish: the `remove` request field, and the panel no longer sending target-only rows in `items` (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (#526, #527) | api-first | Medium-high |
+| 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (#526, #527) | api-first | Medium-high |
 | 3 | Publish panel: rows per the UX table; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
 | 4 | CLI: list items only on the target; `--remove`, running compare even with `--force` | 2 | integration | Low |
 | 5 | Docs: removals in the publishing docs; purge and 410 guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
@@ -382,7 +388,7 @@ Decided: maintainer, 2026-10-23 (#1120).
 | Review workflow cut 12 waits for cut 2 | The approval gate, waiting since June, would also wait for publish undo cut 2 and #1093's cuts 1–2. |
 | A new review workflow cut after cut 13 and cut 2 | One more cut, in another feature, for what only removals need. |
 
-Cut 2 also makes the panel stop sending target-only rows in `items`, so the server's Q16 check and the panel ship together: today's panel pre-selects those rows and sends them, and once cut 2 rejects them a publish from the admin would otherwise fail until cut 3 lands. Cut 3 keeps the removal rows, the select-removals link and the confirmation.
+The panel's selection of target-only rows is a bug today (it selects and sends them, and each fails as "not found in source"), so it is fixed on its own, before these cuts ([#1159](https://github.com/gazetta-studio/gazetta-studio/issues/1159)): the panel stops selecting and sending them. Cut 2 then adds only the remove field and the server check, and nothing breaks between cuts 2 and 3. Cut 3 keeps the removal rows, the select-removals link and the confirmation.
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -390,6 +396,7 @@ Decided: maintainer, 2026-10-23 (#1120).
 |---|---|
 | Cut 2 ignores target-only entries in `items`, as today, and cut 3 adds the rejection | Splits Q16's server checks across two cuts. |
 | Merge cuts 2 and 3 | One bigger cut (server, panel rows and their stories) to close a gap a small change closes. |
+| Keep the panel change in cut 2 | The bug stays until cut 2 lands, which waits for publish undo cut 2, #1093 and review workflow cuts 12–13. |
 
 ## Migration
 

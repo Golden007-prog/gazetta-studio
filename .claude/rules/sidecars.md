@@ -79,7 +79,7 @@ work for either source or target storage:
 3. write the new edges, computed from the manifest being published (in memory);
 4. write the new record last.
 
-These steps run only once the item's render and write have succeeded; an item that fails keeps its old edges and record, which describe what the target still serves (`design-target-removal.md` Q15). A save on an editable target, such as a production that accepts hotfixes, writes the item's forward record along with its edges, so items saved there directly are checked like published ones (`design-target-removal.md` Q12).
+These steps run only once the item's render and HTML write have succeeded, and before its `.{hash}.hash` sidecar is written: an item that fails keeps its old edges and record, which describe what the target still serves, and a crash between the edges and the sidecar leaves the item changed, so the next publish redoes it (`design-target-removal.md` Q15). Every other write of an item's edges writes its forward record too: saves, creates, renames and move-asides on an editable target, and every whole-index rebuild (history restore, the source's first rebuild after a fresh clone, `gazetta assets reindex`), so only items a rebuild never saw stay unknown (`design-target-removal.md` Q12).
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -107,7 +107,7 @@ No target manifest is read, so the order of the manifest copy and missing manife
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
-| 1 | Per-item edge replacement with forward records on publish (all three relations, per locale, removals; only for items whose render and write succeeded) and on saves to an editable target, replacing the whole-source rebuild in `publishDepIndices`; a full `--force` publish wipes and rebuilds; history restore rebuilds all three relations | — | api-first | Medium |
+| 1 | Per-item edge replacement with forward records on publish (all three relations, per locale, removals; only for items whose render and HTML write succeeded, before their `.{hash}.hash` sidecar) and on every other write of an item's edges (saves, creates, renames and move-asides on an editable target; whole-index rebuilds), replacing the whole-source rebuild in `publishDepIndices`; a full `--force` publish wipes and rebuilds; history restore rebuilds all three relations | — | api-first | Medium |
 | 2 | Static targets: flattened page → fragment and page → asset edges from the in-memory site's fragment references | 1 | unit + api | Medium |
 | 3 | Run `gazetta publish production --force` for gazetta.studio once cuts 1–2 ship (maintainer step) | 1, 2 | (manual) | Low |
 | 4 | Update this section and the "Where sidecars live" table to the shipped state | 1–3 | docs | Low |

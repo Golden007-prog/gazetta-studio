@@ -245,7 +245,7 @@ Publish panel, `data-testid="publish-locked"`: "Publishing to `production` is pa
 | 6 | Probe and lock: one byte-exact probe per sensitive folder present, on `siteUrl` and `liveCheck.storageUrls`, independent of `liveCheck: false`, hourly with Re-check forcing it; result written into the report as soon as known; lock from the newest probe result; lock check before the first write in every publish path; publish-panel copy and CLI error | 2, 3, live-check cuts 2 and 5 ([#1081](https://github.com/gazetta-studio/gazetta-studio/issues/1081)) | integration + component | Medium-high |
 | 7 | Worker and ESI `gazetta serve` use `isPublicSitePath` (sidecars stop being served) | 1 | unit + api | Low |
 | 8 | Docs (`audit.md`, `self-hosted.md`, `deploy.md`, `runtime-capabilities.md`), **Public storage** in `CONTEXT.md`, the discipline line in `feature-design-process.md`, ADR-0017 | 2 | docs | Low |
-| 9 | Dependency indices on public targets: mark `fragment-deps/`, `asset-refs/`, `alias-targets/` and `deps-of/` (their forward records) safe on public targets in the state folder registry and drop cut 4's index gate (Q5's folder table; `design-target-removal.md` Q12) | 3, 4, #1093's cuts 1–2 | unit + api | Low |
+| 9 | Dependency indices on public targets: mark `fragment-deps/`, `asset-refs/`, `alias-targets/` and `deps-of/` (their forward records) safe on public targets in the state folder registry and drop cut 4's index gate (Q5's folder table; `design-target-removal.md` Q12); afterwards each existing public target needs the one-time `gazetta publish <target> --force` (Migration) | 3, 4, #1093's cuts 1–2 | unit + api | Low |
 
 Cuts 2 and 3 run in parallel; 7 any time after 1; 9 once #1093's cuts 1–2 (target indices) have landed. The static deploy adapters (#208, #209, #211) take "upload only paths where `isPublicSitePath` is true" as part of their contract, not as a cut here.
 
@@ -257,11 +257,14 @@ Decided: maintainer, 2026-10-23 (#1120).
 |---|---|
 | A last target indices cut (#1093) does it | The rule is public storage's (Q5's folder table), and that cut would wait for public storage cuts 3–4. |
 | Whichever of cut 4 and #1093's cut 2 lands second | Each spec would depend on what has landed when it's built. |
+| Leave the one-time `--force` out | Operators would find out from target removal's refusal on their public targets. |
 | Mark the index folders safe but keep `deps-of/` off public targets | Per-item edge replacement needs each item's record, and target removal's check would refuse every removal on public targets (Q12). |
 
 ## Migration
 
-No production users, so changes are hard cutovers (ADR-0005, ADR-0008 precedent). After cut 2, cloud targets without `publicStorage: false` stop keeping history and audit; the starter and gazetta.studio set it in the same PR. A target moved to public storage that still holds history or audit fails validation until `gazetta state remove` runs.
+No production users, so changes are hard cutovers (ADR-0005, ADR-0008 precedent). After cut 2, cloud targets without `publicStorage: false` stop keeping history and audit; the starter and gazetta.studio set it in the same PR. A target moved to public storage that still holds history or audit fails validation until `gazetta state remove` runs. After cut 9, run `gazetta publish <target> --force` once for each existing public target: the forced publish #1093's cuts ask for wrote no indices there while cut 4 kept them off, and an ordinary publish writes records only for the items it changes.
+
+Decided: maintainer, 2026-10-23 (#1120).
 
 ## Open questions
 
