@@ -116,6 +116,15 @@ describe('gazetta history / undo / rollback', { timeout: 60000 }, () => {
     expect(baselineAt).toBeGreaterThan(firstSaveAt)
   })
 
+  it('`history` shows only the changed item for a single-page save (#1078)', async () => {
+    await seedHistory(projectDir, 1)
+    const res = await runCli(projectDir, ['history', 'local', 'sites/main'])
+    expect(res.code).toBe(0)
+    // Newest-first: the save's items line is the first one in the output.
+    const firstItems = res.stdout.match(/^\s+items: (.+)$/m)![1]
+    expect(firstItems).toBe('pages/home/page.json')
+  })
+
   it('`history` reports friendly message on a target with no history', async () => {
     const res = await runCli(projectDir, ['history', 'local', 'sites/main'])
     expect(res.code).toBe(0)
