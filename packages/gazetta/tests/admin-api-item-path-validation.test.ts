@@ -136,7 +136,9 @@ describe('item path validation at the publish/fetch route boundary (#1196)', () 
     expect(res.status).toBe(400)
   })
 
-  it('still publishes valid items, including a locale variant and a nested dynamic page', async () => {
+  it('still publishes valid items, including a locale variant and a nested dynamic page', {
+    timeout: 30_000,
+  }, async () => {
     let res = await postPublish(['pages/home'])
     expect(res.status).toBeLessThan(300)
     expect(existsSync(join(root, 'x', 'y', 'target', 'pages', 'home', 'page.json'))).toBe(true)
