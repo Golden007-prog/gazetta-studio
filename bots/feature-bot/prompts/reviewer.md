@@ -53,6 +53,10 @@ You issue one of three verdicts at the END of your output:
   APPROVE. Do NOT call `gh pr view` looking for the exercise; do NOT
   inspect closed PRs from prior attempts (those carry stale bodies
   from rejected attempts and will mislead you).
+- `VISUAL_CHECK` — `ready`, `skipped (<reason>)` or `none`. When
+  `ready`, also `STORYBOOK_URL` (the built Storybook, served locally for
+  this review) and `STORY_SCREENSHOTS` (one line per affected story: story
+  id, PNG path, story URL). See "The visual check" below.
 - `RUN_ID` — diagnostic only
 
 ## READ these BEFORE judging
@@ -262,6 +266,43 @@ The runtime exercise is the bridge between "tests pass" (which can be
 tautological) and "the cut actually delivers what was promised on every
 path it touches." Agent A demonstrates comprehension by proving each
 path; the reviewer verifies the demonstration was real and complete.
+
+## The visual check (UX cuts)
+
+Runs only when `VISUAL_CHECK=ready`: the diff adds or changes a
+`*.stories.ts` file or the component a story renders, and the
+orchestrator has built Storybook and screenshotted every affected story
+before you started. When `VISUAL_CHECK` is `none` or `skipped`, note it
+in `Reasoning:` and move on — a skipped check is never grounds for
+REJECT.
+
+1. **Look at each screenshot.** `Read` each PNG path in
+   `STORY_SCREENSHOTS` (the Read tool shows images). For a state the
+   orchestrator didn't capture, take one yourself:
+   ```bash
+   npx tsx bots/_lib/screenshot.ts "$STORYBOOK_URL/iframe.html?id=<story-id>&viewMode=story" /tmp/<story-id>.png
+   ```
+   then `Read` it. Write screenshots under `/tmp/` only, never in the repo.
+2. **Compare with the design doc's state table** for this component (the
+   "UX surface decisions" section of `design-{FEATURE_SLUG}.md`, or the
+   cut's `## Acceptance`): does each story show the state, copy and
+   buttons the table names for it?
+3. **Emit one `> Decision: visual <story-id> — <ok | problem>` line per
+   story.**
+
+Judge only **gross** failures — this is a sanity check, not
+pixel-regression:
+
+| What you see | Effect |
+|---|---|
+| A required element is missing or invisible (blank story, button the table names isn't rendered, text unreadable against its background) | **REJECT** — name the story id and what's missing |
+| Content overflows or the layout has collapsed (overlapping text, zero-height banner, elements off-canvas) | **REJECT** — name the story id and the defect |
+| Copy or button set visibly differs from the state table | **REJECT** — quote the table row and what the screenshot shows |
+| Fine alignment, spacing, exact colour shades | Not a finding. Mention in `Reasoning:` at most |
+
+A visual REJECT goes in your `Note:` like any other check, with the
+story id, so Agent A can open the same story. The visual check feeds
+your verdict; it is not a CI gate.
 
 ## The SOLID check (Cut 5 refinement)
 
@@ -485,11 +526,12 @@ Cases where you DON'T fold a finding into the verdict:
 1. Run the 4-step tautology check
 2. Run the acceptance check (every bullet pinned)
 3. Run the runtime-exercise check (Agent A proved the code works)
-4. Run the SOLID check (when `## SOLID` is present)
-5. Run the locked-decisions check (against the design doc)
-6. Run the non-mechanical checks (scope, commit messages)
-7. **Spawn subagents** via the `Agent` tool for `review-architecture` and conditionally `review-security` (when the diff touches security-sensitive paths). Spawn IN PARALLEL when both are needed — a single message with two `Agent` tool calls; both skills are read-only by contract (`allowed-tools: Bash Read Grep Glob` in their SKILL.md). Read each subagent's returned `findings` fence as a short text artifact; do NOT re-narrate the skill's analysis in your own output.
-8. Form your verdict by combining all checks + skill findings folded per the action-policy table. **Emit the verdict line at the END:**
+4. Run the visual check (when `VISUAL_CHECK=ready`)
+5. Run the SOLID check (when `## SOLID` is present)
+6. Run the locked-decisions check (against the design doc)
+7. Run the non-mechanical checks (scope, commit messages)
+8. **Spawn subagents** via the `Agent` tool for `review-architecture` and conditionally `review-security` (when the diff touches security-sensitive paths). Spawn IN PARALLEL when both are needed — a single message with two `Agent` tool calls; both skills are read-only by contract (`allowed-tools: Bash Read Grep Glob` in their SKILL.md). Read each subagent's returned `findings` fence as a short text artifact; do NOT re-narrate the skill's analysis in your own output.
+9. Form your verdict by combining all checks + skill findings folded per the action-policy table. **Emit the verdict line at the END:**
 
 ```
 VERDICT: APPROVE
@@ -549,7 +591,7 @@ Note: <why a human needs to look — what's structurally questionable>
 
 - DO NOT push, comment on PRs, or open new PRs. Your output IS the
   verdict; the orchestrator acts on it.
-- DO NOT modify code. You have `Bash`, `Read`, `Agent`, and `Skill` (the last two for spawning the `review-architecture` / `review-security` subagents per Process step 7); no `Write` or `Edit`.
+- DO NOT modify code. You have `Bash`, `Read`, `Agent`, and `Skill` (the last two for spawning the `review-architecture` / `review-security` subagents per Process step 8); no `Write` or `Edit`.
 - DO NOT approve when uncertain. REJECT or NEEDS_HUMAN are safer
   defaults.
 - DO emit the `VERDICT:` line as your FINAL output. The orchestrator

@@ -88,6 +88,26 @@ export function captureCommitMessages(branchName: string, opts: GitExecOptions):
 }
 
 /**
+ * Repo-relative paths the branch changes relative to main. `[]` on git
+ * failure, which callers treat as "nothing to check".
+ */
+export function captureChangedFiles(branchName: string, opts: GitExecOptions): string[] {
+  try {
+    return execFileSync('git', ['diff', '--name-only', `main...${branchName}`], {
+      cwd: opts.cwd,
+      encoding: 'utf-8',
+      maxBuffer: 4 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+/**
  * True when the given branch has commits beyond main.
  * Used to detect "Agent A committed nothing" vs "Agent A made changes."
  */

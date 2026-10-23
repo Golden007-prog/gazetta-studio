@@ -104,15 +104,15 @@ describe('feature-bot reviewer prompt — structural contracts', () => {
     expect(prompt).toMatch(/VERDICT: NEEDS_HUMAN/)
   })
 
-  it('keeps the Process list with eight steps', () => {
-    // Eight numbered items: tautology / acceptance / runtime-exercise /
-    // SOLID / locked-decisions / non-mechanical / spawn-subagents /
-    // form-verdict.
+  it('keeps the Process list with nine steps', () => {
+    // Nine numbered items: tautology / acceptance / runtime-exercise /
+    // visual / SOLID / locked-decisions / non-mechanical /
+    // spawn-subagents / form-verdict.
     const processMatch = prompt.match(/## Process\n\n([\s\S]+?)(?=\n##|\n```)/)
     expect(processMatch, 'Process section missing').toBeTruthy()
     const body = processMatch![1]
     const numbered = body.split('\n').filter(l => /^\d+\.\s/.test(l))
-    expect(numbered).toHaveLength(8)
+    expect(numbered).toHaveLength(9)
   })
 
   it('declares Agent tool as needed (documented in prose)', () => {

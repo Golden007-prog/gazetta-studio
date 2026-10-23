@@ -38,7 +38,13 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { detectInfraStop, detectRateLimit, detectTransientAuthError, runClaude } from '../_lib/claude.js'
-import { branchHasCommits, captureCommitMessages, captureDiff, resetToMain } from '../_lib/git-tree.js'
+import {
+  branchHasCommits,
+  captureChangedFiles,
+  captureCommitMessages,
+  captureDiff,
+  resetToMain,
+} from '../_lib/git-tree.js'
 import { describeClaim, fetchIssueClaim } from '../_lib/issue-claim.js'
 import { type DeliveryResult, deliveryFailureComment, pushBranch, runGh, savePatch } from '../_lib/delivery.js'
 import {
@@ -51,6 +57,7 @@ import {
   repoFromEnv,
   type RepoIdentity,
 } from '../_lib/github.js'
+import { reconcileScreenshotAssets } from '../_lib/release-assets.js'
 import { parseReviewerTranscript } from '../_lib/reviewer-verdict.js'
 import { collectAssistantTexts, extractSummary } from '../_lib/transcript.js'
 import {
@@ -81,6 +88,7 @@ import {
   writeSkipList,
 } from './skip-list.js'
 import { validateCutSubIssue } from './validate-cut-sub-issue.js'
+import { prepareVisualCheck, reviewerVisualInputs, storyScreenshotsSection, type VisualCheck } from './visual-check.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PROMPT_PATH = resolve(HERE, 'prompts/per-cut.md')
@@ -154,6 +162,8 @@ const MAX_HANDOFFS = Number(process.env.MAX_HANDOFFS ?? '3')
 async function main(): Promise<void> {
   const repo = repoFromEnv()
   const octokit = octokitFromEnv()
+
+  if (!DRY_RUN) pruneScreenshots(repo)
 
   const issueNumberStr = process.env.ISSUE_NUMBER
   if (issueNumberStr) {
@@ -491,6 +501,7 @@ async function fixOneCut(
     }
     printNotice(`Attempt ${attempt}/${MAX_ATTEMPTS}: invoking Agent A…`)
     resetToMain(branchName, { cwd: REPO_ROOT })
+    let visualCheck: VisualCheck = { kind: 'none' }
 
     const agentATranscript = resolve(
       TRANSCRIPTS_DIR,
@@ -588,6 +599,17 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
           printTranscriptPath(reviewerTranscript)
 
           const agentASummary = extractSummary(agentATranscript)
+          visualCheck = await prepareVisualCheck({
+            cwd: REPO_ROOT,
+            changedFiles: captureChangedFiles(branchName, { cwd: REPO_ROOT }),
+            issueNumber,
+            attempt,
+          })
+          if (visualCheck.kind === 'ready') {
+            printNotice(`Visual check: ${visualCheck.shots.length} story screenshot(s) at ${visualCheck.storybookUrl}`)
+          } else if (visualCheck.kind === 'skipped') {
+            printWarning(`Visual check skipped; the review runs without it: ${visualCheck.reason.slice(0, 300)}`)
+          }
           const reviewerPrompt = `${reviewerPromptTemplate}
 
 ISSUE_NUMBER=${issueNumber}
@@ -607,6 +629,8 @@ ${commitMessages}
 AGENT_A_SUMMARY=
 ${agentASummary || '(no SUMMARY block captured from Agent A — REJECT with note: your run did not emit a SUMMARY block; emit one per the per-cut prompt APPROVE-path step 10)'}
 
+${reviewerVisualInputs(visualCheck)}
+
 RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
 
           const bResult = await runClaude({
@@ -624,7 +648,7 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
             //     can invoke the skills they need
             // Explicitly NOT Write/Edit — reviewer doesn't modify code.
             allowedTools: ['Bash', 'Read', 'Agent', 'Skill'],
-          })
+          }).finally(() => (visualCheck.kind === 'ready' ? visualCheck.stop() : undefined))
           if (!bResult.success && detectInfraStop(reviewerTranscript)) {
             // Quota / transient auth during review says nothing about the
             // cut — same handling as Agent A's guard above (#892).
@@ -690,6 +714,7 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
             extractSummary(
               resolve(TRANSCRIPTS_DIR, `${RUN_TIMESTAMP}-feature-cut-${issueNumber}-attempt${attempt}-A.jsonl`),
             ),
+            storyScreenshotsSection(visualCheck, repo, undefined, printWarning),
           )
         : pushed
       if (delivered.ok) {
@@ -787,6 +812,22 @@ RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
 
   await applyLabelBestEffort(octokit, repo, issueNumber, 'feature-bot-attempted')
   return { rateLimited: false }
+}
+
+/**
+ * Delete the PR screenshots of cuts whose PR is no longer open. Runs at the
+ * start of every run instead of on PR close, which would need a workflow
+ * trigger a bot can't push (#840). Logged and ignored on failure.
+ */
+function pruneScreenshots(repo: RepoIdentity): void {
+  try {
+    const report = reconcileScreenshotAssets(repo)
+    if (report.deleted.length > 0)
+      printNotice(`Pruned ${report.deleted.length} screenshot(s) of closed or merged cuts.`)
+    for (const e of report.errors) printWarning(`Screenshot pruning: ${e}`)
+  } catch (err) {
+    printWarning(`Screenshot pruning failed (continuing): ${err}`)
+  }
 }
 
 /**
@@ -969,6 +1010,7 @@ function openCutPR(
   branchName: string,
   reviewerReasoning: string,
   agentASummary: string,
+  screenshotsSection: string,
 ): DeliveryResult {
   const body = `## Summary
 
@@ -995,7 +1037,7 @@ pass), verified each \`## Acceptance\` bullet is pinned, independently
 checked SOLID, scrutinized any test removals, and verified the diff
 implements the design doc's Locked decisions.
 
-## Verification
+${screenshotsSection ? `${screenshotsSection}\n` : ''}## Verification
 
 One atomic commit (tests + impl together). CI re-runs the full suite;
 Agent B's revert check already proved the tests are load-bearing.
