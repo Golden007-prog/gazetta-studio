@@ -262,7 +262,7 @@ Follows from Q9.
 Follows from Q1, Q3, Q4, Q7, Q8 and Q13.
 
 1. Read ROADMAP.md. `## Now`, `## Next`, `## Later` and `## Deferred` start a bucket; any other `##` heading ends it, and the second top-level heading (`# Appendix: Shipped status`) ends the plan. `###` headings set the Section.
-2. Collect issue references: links to an issue and bare `#N`, with `#A–#B` ranges expanded (spans of up to 30). `Decided:` and `Follows from` lines are skipped. Each reference is a list item, table row or prose mention, and Q4 picks its place.
+2. Collect issue references: links to an issue, whatever their text, and bare `#N`. A link counts as its issue's number, so a range of links (`[#515](…)–[#520](…)`) expands like `#A–#B` (spans of up to 30). `Decided:` and `Follows from` lines are skipped. Each reference is a list item, table row or prose mention, and Q4 picks its place.
 3. Collect drafts (Q3). A table row's draft takes its first cell as the title and the other cells as the body; a bullet's takes its first sentence as the title and the whole text as the body.
 4. Look the numbers up and keep issues; pull requests are dropped. List the repository's open issues too: those the file doesn't mention go on the board with no Status or Section, since auto-add only adds issues created or updated after it's turned on.
 5. Read the project: fields, items and their values.
