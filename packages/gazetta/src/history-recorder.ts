@@ -143,6 +143,7 @@ export async function recordWrite(opts: RecordWriteOptions) {
     message: opts.message,
     restoredFrom: opts.restoredFrom,
     items: nextItems,
+    changed: opts.items.map(it => it.path),
   }
   return opts.history.recordRevision(input)
 }
