@@ -18,6 +18,8 @@ Priorities derive from [`docs/audits/cms-feature-audit.md`](docs/audits/cms-feat
 
 ## Now (committed, 4-8 weeks)
 
+These designs ship one cut at a time through feature-bot's weekly run (Friday nights, `night-shift.yml`), so 4–8 weeks covers their first cuts, not their completion.
+
 ### Publishing safety
 
 October's designs fix wrong results on live sites: deleted pages stay live, undo doesn't change what visitors see, and a target's private files can be public. Where a design has a planner issue, its cuts reach feature-bot one at a time through it.
@@ -37,7 +39,7 @@ The back end ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515
 
 ### MCP server design pass
 
-[#49](https://github.com/gazetta-studio/gazetta-studio/issues/49): design now, build in Next. The design starts from one decision: agents save through the same path as the admin, as their own principal with their own capabilities, and the audit log records them. By default they can't publish, so a person decides what reaches visitors, and undo covers mistakes. Bulk edits ([#1170](https://github.com/gazetta-studio/gazetta-studio/issues/1170)) are one of its use cases. Still to design: how an agent authenticates (scripts and CI share the single `GAZETTA_TOKEN` today) and how agents appear in the audit log.
+[#49](https://github.com/gazetta-studio/gazetta-studio/issues/49): design now, build in Next. The design starts from one decision: agents save through the same path as the admin, as their own principal with their own capabilities, and the audit log records them. By default they can't publish, so a person decides what reaches visitors, and undo covers mistakes. Bulk edits ([#1170](https://github.com/gazetta-studio/gazetta-studio/issues/1170)) are one of its use cases. Still to design: how an agent authenticates (scripts and CI share the single `GAZETTA_TOKEN` today), how agents appear in the audit log, and how an agent's run is undone without undoing other people's saves (undo and rollback restore whole revisions).
 
 ### Creation UX design pass
 
@@ -68,7 +70,7 @@ User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-st
 
 Decided: maintainer, 2026-10-23 (#1179)
 
-## Next (planned, this quarter)
+## Next (planned, the quarter after Now)
 
 ### Onboarding sprint
 
@@ -87,7 +89,7 @@ Reduce time-to-first-deploy for new operators. Moved from Now on 2026-10-23.
   - [#1188](https://github.com/gazetta-studio/gazetta-studio/issues/1188) docs and `init` put pages in different folders, and new pages need a `gazetta dev` restart
   - [#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189) the README's quick start is for contributors
 - [#1171](https://github.com/gazetta-studio/gazetta-studio/issues/1171) starter themes
-- [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209) Netlify static, after [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)'s cuts 1–2 and [#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149)
+- [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209) Netlify static, after [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)'s cuts 1–2 and [#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149). #1152's cut 2 waits for target removal cut 1, whose planner issue opens after publish undo cut 2, target indices cut 2 and review workflow cuts 12–13
 
 ### Phase 1 — Remaining foundations
 
@@ -120,9 +122,13 @@ What remains wrong or undecided on static targets:
 
 [#91](https://github.com/gazetta-studio/gazetta-studio/issues/91).
 
-### Offline save queue and e2e tests
+### Offline: save queue, editor offline and e2e tests
 
-The save queue (`design-offline-implementation.md`, "Cut 9b: Save queue"): a save made offline goes out by itself once the connection returns, which `design-offline.md` designs but which isn't built. Its audit events carry replay metadata (Cut 15). Built this quarter together with the e2e tests in [#253](https://github.com/gazetta-studio/gazetta-studio/issues/253): the two scenarios no e2e test covers yet: editing offline, reloading, then reconnecting and saving; and the offline save conflict. The reload step also needs the editor to open offline, which doesn't work yet ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)). Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving an online reload are covered.
+Three pieces of offline mode that `design-offline.md` designs but that aren't built or tested, planned together:
+
+- The save queue (`design-offline-implementation.md`, "Cut 9c: Save queue"): a save made offline goes out by itself once the connection returns. Its audit events carry replay metadata (Cut 15).
+- Opening a page in the editor on an offline cold load ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)), which #253's reload step needs.
+- The e2e tests in [#253](https://github.com/gazetta-studio/gazetta-studio/issues/253) for the two scenarios no test covers yet: editing offline, reloading, then reconnecting and saving; and the offline save conflict. Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving an online reload are covered.
 
 ### MCP server build
 
@@ -130,7 +136,7 @@ The save queue (`design-offline-implementation.md`, "Cut 9b: Save queue"): a sav
 
 ### CSP design passes
 
-Two research+design issues filed 2026-05-13. Tier 3 implementation; this quarter for the design work.
+Two research+design issues filed 2026-05-13. Tier 3 implementation; the design work is in Next.
 
 - [#361](https://github.com/gazetta-studio/gazetta-studio/issues/361) Content Security Policy: admin surface
 - [#362](https://github.com/gazetta-studio/gazetta-studio/issues/362) Content Security Policy: target / published-site surface
@@ -299,7 +305,7 @@ All 19 `design-{feature}-implementation.md` docs shipped: ai, audit, auth-rbac, 
 | RBAC ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194)) | ✓ shipped 2026-05-13 (capabilities, built-in and custom roles, route gates; [`docs/auth.md`](docs/auth.md)) |
 | Component IDs | ✓ shipped (`component-ids.ts`; called from page + fragment save handlers) |
 | AdminCache abstraction | ✓ shipped (interface + `MemoryCache` + per-site + 6 test files) |
-| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). Denied requests aren't recorded yet ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). External sinks are demand-driven; CSV export, role and config-change events and a target filter are in `design-audit.md`'s future directions |
+| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). Denied requests aren't recorded yet ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). External sinks are demand-driven; CSV export, role and config-change events, a target filter, and date and item filters in the drawer are in `design-audit.md`'s future directions |
 | Hooks lifecycle | ✓ shipped (factory contributions via `admin.hooks` per ADR-0009; 10 test files) |
 | Deploy adapter contract (#203) | ✓ shipped 2026-05-14 ([`design-deploy.md`](.claude/rules/design-deploy.md) + [ADR-0010](docs/adr/0010-deploy-publish-independence.md) + [`docs/deploy.md`](docs/deploy.md); `cloudflareWorkersDeploy()` + 2 validators + `target.worker` deleted; verified end-to-end against `sites/gazetta.studio` — real CF deploy, live worker on https://gazetta.studio) |
 | NotificationProvider (in-admin) | ☐ pending — see Next |
