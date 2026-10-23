@@ -390,13 +390,13 @@ Decided: maintainer, 2026-10-22 (#1124)
 | Keep the row at the destination in that language (`/fr/landing  /fr/welcome  301`) | Static publish writes no `/fr/welcome`, so the redirect lands on a 404 |
 | No row for that language | `/fr/landing` then serves its blank archive marker, or a 404 |
 
-On a static target served by `gazetta serve` or a worker, the archive's 301 does the same: when the destination has no version in the request's language, it goes to the destination's default-language page. Today the CLI starts `gazetta serve` without the site's languages, so its redirects send every language to the default page; [#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138) passes them, and this rule keeps that fix from sending `/fr/landing` to a 404 at `/fr/welcome`.
+On a static target served by `gazetta serve` or a worker, the archive's 301 does the same: when the destination has no version in the request's language, it goes to the destination's default-language page. `gazetta serve` has the site's languages since #1155 ([#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138)), and this rule keeps it from sending `/fr/landing` to a 404 at `/fr/welcome`.
 
 Decided: maintainer, 2026-10-22 (#1124)
 
 | Rejected | Why |
 |---|---|
-| Keep the request's language when serving | Once #1138 passes the languages, `/fr/landing` → `/fr/welcome` answers 404 on a static target served by `gazetta serve`, while on Cloudflare Pages the same target redirects to `/welcome` |
+| Keep the request's language when serving | With the site's languages (#1155), that would send `/fr/landing` to `/fr/welcome`, a 404 on a static target served by `gazetta serve`, while on Cloudflare Pages the same target redirects to `/welcome` |
 
 **Archived page HTML body content:**
 
