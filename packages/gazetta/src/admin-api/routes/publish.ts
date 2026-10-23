@@ -3,6 +3,7 @@ import { streamSSE } from 'hono/streaming'
 import { getType, getEnvironment, isEditable, isHistoryEnabled, getHistoryRetention } from '../../types.js'
 import type { StorageProvider, TargetConfig } from '../../types.js'
 import { publishItems, resolveDependencies, findFragmentDependents, findDependentsFromSidecars } from '../../publish.js'
+import { localeFilename, localeFromFilename, isValidLocale } from '../../locale.js'
 import type { SourceContextResolver } from '../source-context.js'
 import type { PublishResult } from '../../publish.js'
 import { createCloudflarePurge, lookupCloudflareZoneId } from '../../publish-rendered.js'
@@ -419,8 +420,38 @@ export function publishRoutes(
         }
 
         // 1. Source copy
-        const { copiedFiles } = await publishItems(source.contentRoot, targetRoot, targetItems)
-        totalFiles += copiedFiles
+        // A locale-qualified item (`pages/about:fr`) names one manifest
+        // variant, not a folder: publishItems would look for a literal
+        // `about:fr` directory and copy nothing, leaving the target's
+        // old translation manifest under its new HTML. Copy the variant
+        // manifest directly; bare items keep the whole-folder copy.
+        const folderItems: string[] = []
+        const variantKeys: string[] = []
+        for (const it of targetItems) {
+          const m = /^(pages|fragments)\/([^:]+):([^:]+)$/.exec(it)
+          if (m) {
+            // The locale part names a file — fail closed on anything
+            // isValidLocale rejects (path traversal, dots, bad shape).
+            if (isValidLocale(m[3])) {
+              variantKeys.push(`${m[1]}/${m[2]}/${localeFilename(m[1] === 'pages' ? 'page' : 'fragment', m[3])}`)
+            }
+          } else {
+            folderItems.push(it)
+          }
+        }
+        const { copiedFiles } = await publishItems(source.contentRoot, targetRoot, folderItems)
+        let variantFiles = 0
+        for (const key of variantKeys) {
+          try {
+            const content = await source.contentRoot.storage.readFile(source.contentRoot.path(key))
+            await targetRoot.storage.writeFile(targetRoot.path(key), content)
+            variantFiles++
+          } catch {
+            // Variant missing on source — publishRun's per-item result
+            // reports the item instead.
+          }
+        }
+        totalFiles += copiedFiles + variantFiles
         current++
         yield { kind: 'progress', target: targetName, current, total, label: 'source files' }
 
@@ -1065,15 +1096,43 @@ async function collectPublishedItemsForHistory(
 ): Promise<WrittenItem[]> {
   const out: WrittenItem[] = []
   for (const item of publishedItems) {
-    const manifestName = item.startsWith('pages/') ? 'page.json' : 'fragment.json'
-    const key = `${item}/${manifestName}`
-    const sourcePath = sourceRoot.path(key)
-    try {
-      const content = await sourceRoot.storage.readFile(sourcePath)
-      out.push({ path: key, content })
-    } catch {
-      // Item missing on source (unusual — publish normally reads from
-      // source manifests). Skip; snapshot stays as-was for this item.
+    const m = /^(pages|fragments)\/([^:]+)(?::([^:]+))?$/.exec(item)
+    if (!m) continue
+    const base = m[1] === 'pages' ? 'page' : 'fragment'
+    const dir = `${m[1]}/${m[2]}`
+    const names: string[] = []
+    if (m[3]) {
+      // Locale-qualified: exactly the requested variant's manifest.
+      // Fail closed on an invalid locale — it never reaches a path.
+      if (isValidLocale(m[3])) names.push(localeFilename(base, m[3]))
+    } else {
+      // Bare item: the copy writes the whole folder, so record the
+      // default manifest plus every translation manifest present —
+      // publishRun's collectItemsForHistory rule applied to what the
+      // route's copy actually writes.
+      names.push(localeFilename(base, null))
+      try {
+        const entries = await sourceRoot.storage.readDir(sourceRoot.path(dir))
+        for (const e of entries) {
+          if (e.isDirectory) continue
+          const locale = localeFromFilename(e.name, base)
+          if (locale && isValidLocale(locale)) names.push(localeFilename(base, locale))
+        }
+      } catch {
+        // Folder missing on source — the default-manifest read below
+        // skips the item the same way.
+      }
+    }
+    for (const name of names) {
+      const key = `${dir}/${name}`
+      const sourcePath = sourceRoot.path(key)
+      try {
+        const content = await sourceRoot.storage.readFile(sourcePath)
+        out.push({ path: key, content })
+      } catch {
+        // Item missing on source (unusual — publish normally reads from
+        // source manifests). Skip; snapshot stays as-was for this item.
+      }
     }
   }
   return out
