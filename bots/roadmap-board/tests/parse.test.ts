@@ -214,6 +214,23 @@ describe('parseRoadmap — items without an issue become drafts (Q3)', () => {
   })
 })
 
+describe('parseRoadmap — sections', () => {
+  it('lists every section with a reference or a draft, in file order, so the Section options follow the file', () => {
+    expect(parseRoadmap(ROADMAP).sections).toEqual([
+      { bucket: 'Now', section: 'MCP server design pass' },
+      { bucket: 'Now', section: 'Bug backlog' },
+      { bucket: 'Now', section: 'Review workflow — finish' },
+      { bucket: 'Next', section: 'Onboarding sprint' },
+      { bucket: 'Next', section: 'gazetta validate checks target connectivity' },
+      { bucket: 'Next', section: 'Phase 1 — Remaining foundations' },
+      { bucket: 'Next', section: 'Offline' },
+      { bucket: 'Next', section: 'MCP server build' },
+      { bucket: 'Later', section: 'Content features' },
+      { bucket: 'Deferred', section: 'Deferred' },
+    ])
+  })
+})
+
 describe('parseRoadmap — the repository file', () => {
   it("finds items in each of the four buckets of the repository's ROADMAP.md", () => {
     const here = dirname(fileURLToPath(import.meta.url))

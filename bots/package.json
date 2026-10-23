@@ -20,6 +20,7 @@
     "review-on-comment": "tsx review-on-comment/index.ts",
     "review-bot": "tsx review-bot/index.ts",
     "review-bot:compact": "tsx review-bot/compact.ts",
+    "roadmap-board": "tsx roadmap-board/index.ts",
     "replay": "tsx _lib/replay.ts",
     "test": "vitest run",
     "cut-planner": "tsx cut-planner/index.ts",

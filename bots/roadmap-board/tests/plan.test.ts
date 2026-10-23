@@ -13,6 +13,7 @@ const roadmap = (over: Partial<ParsedRoadmap> = {}): ParsedRoadmap => ({
   placements: new Map(),
   repeated: [],
   drafts: [],
+  sections: [],
   ...over,
 })
 

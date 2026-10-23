@@ -37,6 +37,8 @@ export interface ParsedRoadmap {
   /** Numbers mentioned in more than one section; each run prints them. */
   repeated: RepeatedMention[]
   drafts: Draft[]
+  /** Every section with a reference or a draft, in file order: the order of the Section field's options. */
+  sections: Array<{ bucket: Bucket; section: string }>
 }
 
 type Kind = 'list' | 'table' | 'prose'
@@ -61,6 +63,10 @@ export function parseRoadmap(markdown: string): ParsedRoadmap {
   const lines = markdown.split('\n')
   const mentions: Mention[] = []
   const drafts: Draft[] = []
+  const sections: ParsedRoadmap['sections'] = []
+  const useSection = (b: Bucket, s: string) => {
+    if (!sections.some(x => x.bucket === b && x.section === s)) sections.push({ bucket: b, section: s })
+  }
   let topLevelHeadings = 0
   let bucket: Bucket | null = null
   let section = ''
@@ -88,6 +94,7 @@ export function parseRoadmap(markdown: string): ParsedRoadmap {
     const kind: Kind = isTable ? 'table' : LIST_ITEM.test(line) ? 'list' : 'prose'
     const numbers = references(line)
     for (const number of numbers) mentions.push({ number, bucket, section, kind })
+    if (numbers.length > 0) useSection(bucket, section)
 
     if (isTable) {
       const cells = tableCells(line)
@@ -96,13 +103,17 @@ export function parseRoadmap(markdown: string): ParsedRoadmap {
         tableHeader = cells
         continue
       }
-      if (numbers.length === 0) drafts.push(tableDraft(cells, tableHeader, bucket, section))
+      if (numbers.length === 0) {
+        drafts.push(tableDraft(cells, tableHeader, bucket, section))
+        useSection(bucket, section)
+      }
     } else if (kind === 'list' && numbers.length === 0 && !hasSubItems(lines, i)) {
       drafts.push(listDraft(line, bucket, section))
+      useSection(bucket, section)
     }
   }
 
-  return { placements: placementsOf(mentions), repeated: repeatedOf(mentions), drafts }
+  return { placements: placementsOf(mentions), repeated: repeatedOf(mentions), drafts, sections }
 }
 
 function bucketOf(headingText: string): Bucket | null {
