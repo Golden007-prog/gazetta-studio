@@ -2,7 +2,7 @@
 
 Every target keeps Gazetta's own files in a `.gazetta/` folder next to the published site: history, the audit log, review state, dependency indices, live-check reports. When a host serves the target's storage directly, those files are downloadable by anyone. This design makes that impossible by default: a target whose storage visitors can reach keeps no sensitive state, Gazetta assumes cloud storage is reachable unless told otherwise, and a detected leak stops publishing to that target until it's fixed.
 
-**Status**: design pass complete (2026-10-21), grilled Q1–Q8. Implementation not started.
+**Status**: design pass complete (2026-10-21), grilled Q1–Q8. Cut 1 shipped in #1134 (#1071); #1158, the first half of cut 2, is in flight.
 
 **Companion docs:**
 - [#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070): the issue this design resolves, with the options considered before the pass
@@ -39,7 +39,7 @@ Every target keeps Gazetta's own files in a `.gazetta/` folder next to the publi
 
 What lives in `.gazetta/` (shipped and designed): `history/` (every past version, plus asset bytes), `audit/` (actor IDs and emails), `review/` (review state, approvers' IDs), `fragment-deps/`, `asset-refs/`, `alias-targets/` (dependency indices), and from designs: `deps-of/` (the indices' forward records, #1077), `live-check/`, `scheduled/`, `comments/`, `notifications/`, `publish-requests/`, `cache/`, `audit-index/`, `page-index/`, `built-config/`. Since #1201, also `publish-generation`, a publish id (#1125). Per-item sidecars (`.{hash}.hash`, `.pub-{ts}`) sit next to each page.
 
-One reader is on the serving path: since #1201, the worker (`workers/cloudflare-r2.ts`) reads `.gazetta/publish-generation` for its cache key (Q5). `serve.ts` never mentions `.gazetta`. Static `gazetta serve` does serve any stored file (#1071); the worker and ESI `serve` serve any file under `/pages/` and `/fragments/`, sidecars included (read from code, not tested). R2 public access exposes the whole bucket and is off by default; a path can be blocked only on a custom domain with a WAF rule and `r2.dev` off ([Cloudflare](https://developers.cloudflare.com/r2/buckets/public-buckets/)). gazetta.studio's domain returns 404 for `/.gazetta/…` (checked 2026-10-21).
+One reader is on the serving path: since #1201, the worker (`workers/cloudflare-r2.ts`) reads `.gazetta/publish-generation` for its cache key (Q5). `serve.ts` never mentions `.gazetta`. Static `gazetta serve` served any stored file until #1134 (cut 1, #1071); the worker and ESI `serve` serve any file under `/pages/` and `/fragments/`, sidecars included (read from code, not tested). R2 public access exposes the whole bucket and is off by default; a path can be blocked only on a custom domain with a WAF rule and `r2.dev` off ([Cloudflare](https://developers.cloudflare.com/r2/buckets/public-buckets/)). gazetta.studio's domain returns 404 for `/.gazetta/…` (checked 2026-10-21).
 
 ## Locked decisions
 
