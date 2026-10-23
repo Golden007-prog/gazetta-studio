@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getType, getEnvironment, isEditable, isHistoryEnabled, getHistoryRetention } from '../../types.js'
 import type { StorageProvider, TargetConfig } from '../../types.js'
+import { writePublishGeneration } from '../../publish-generation.js'
 import { publishItems, resolveDependencies, findFragmentDependents, findDependentsFromSidecars } from '../../publish.js'
 import { localeFilename, localeFromFilename, isValidLocale } from '../../locale.js'
 import type { SourceContextResolver } from '../source-context.js'
@@ -682,6 +683,10 @@ export function publishRoutes(
             totalFiles++
           }
         }
+
+        // Generation after the content and site files, before the purge,
+        // whether or not a purge is configured (#1125).
+        await writePublishGeneration(targetStorage)
 
         // 4. Purge CDN cache
         if (purgeConfig?.type === 'cloudflare') {

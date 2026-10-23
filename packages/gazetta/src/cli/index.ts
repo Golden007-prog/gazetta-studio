@@ -10,6 +10,7 @@ import { loadSite } from '../site-loader.js'
 import { resolvePage } from '../resolver.js'
 import { renderPage } from '../renderer.js'
 import { createFilesystemProvider } from '../providers/filesystem.js'
+import { writePublishGeneration } from '../publish-generation.js'
 import { invalidateTemplate, invalidateAllTemplates } from '../template-loader.js'
 import { REQUIRED_NODE_FLOOR } from '../node-floor.js'
 import { isTemplateEventRecent, TEMPLATE_RECENT_CHANGE_WINDOW_MS } from './dev-template-watcher.js'
@@ -1030,6 +1031,10 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
         console.log(`    ${c.dim(`· ${result.filename}`)}`)
       }
     }
+
+    // Generation after the content and site files, before the purge,
+    // whether or not a purge is configured (#1125).
+    await writePublishGeneration(targetStorage)
 
     const removedMsg = totalRemoved > 0 ? c.dim(` (${totalRemoved} old files cleaned)`) : ''
     console.log(`\n  ${c.green('✓')} ${c.bold(name)}: ${totalFiles} files published${removedMsg}\n`)

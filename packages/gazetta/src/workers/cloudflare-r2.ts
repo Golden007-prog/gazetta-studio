@@ -43,6 +43,39 @@ export interface CloudflareR2WorkerOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Publish generation cache key (#1125)
+// ---------------------------------------------------------------------------
+
+// Each publish writes a new generation to the target before purging, so a
+// response read from R2 before the publish but stored after the purge can
+// never be served again: the generation in the key no longer matches. A
+// missing file gives a fixed key part, so targets published before this
+// change cache as before until their next publish. The generation is kept
+// for 5 seconds per isolate, so a cache hit doesn't wait for an R2 read and
+// a page is stale for at most those 5 seconds after a publish.
+const GENERATION_PATH = '.gazetta/publish-generation'
+const GENERATION_TTL_MS = 5000
+const NO_GENERATION_KEY_PART = 'pre-generation'
+
+let generationMemo: { value: string; expires: number } | null = null
+
+async function publishGeneration(bucket: R2Bucket): Promise<string> {
+  const now = Date.now()
+  if (generationMemo && generationMemo.expires > now) return generationMemo.value
+  const obj = await bucket.get(GENERATION_PATH)
+  const text = obj ? (await obj.text()).trim() : ''
+  const value = text === '' ? NO_GENERATION_KEY_PART : text
+  generationMemo = { value, expires: now + GENERATION_TTL_MS }
+  return value
+}
+
+function generationCacheKey(request: Request, generation: string): Request {
+  const url = new URL(request.url)
+  url.searchParams.set('gazetta-generation', generation)
+  return new Request(url.toString(), request)
+}
+
+// ---------------------------------------------------------------------------
 // Locale extraction (same logic as serve.ts — SRP)
 // ---------------------------------------------------------------------------
 
@@ -178,10 +211,11 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
     const request = c.req.raw
     const cache = (caches as unknown as { default: Cache }).default
 
-    const cached = await cache.match(request)
+    const bucket = c.env[bindingName]
+    const cacheKey = generationCacheKey(request, await publishGeneration(bucket))
+    const cached = await cache.match(cacheKey)
     if (cached) return cached
 
-    const bucket = c.env[bindingName]
     const requestPath = new URL(c.req.url).pathname
 
     const result = await findPage(bucket, requestPath, locales)
@@ -197,7 +231,7 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
 
     const archived = archiveFor(result.html, result.locale, result.params)
     if (archived) {
-      c.executionCtx.waitUntil(cache.put(request, archived.clone()))
+      c.executionCtx.waitUntil(cache.put(cacheKey, archived.clone()))
       return archived
     }
 
@@ -228,7 +262,7 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
       },
     })
 
-    c.executionCtx.waitUntil(cache.put(request, response.clone()))
+    c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()))
     return response
   })
 

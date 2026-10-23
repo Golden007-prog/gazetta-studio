@@ -218,6 +218,10 @@ Override target-level cache in a page manifest:
 | Page changed | Purge that page's URL only |
 | CLI publish | Purge all at the end |
 
+### Publish generation
+
+Every publish writes a value unique to that publish to `.gazetta/publish-generation` on the target, after the content files and before the purge, whether or not `purge` is configured. The worker includes the generation in its edge cache keys and re-reads it at most every 5 seconds, so pages update within 5 seconds of a publish; the purge then frees the old cached copies.
+
 ## Audit log
 
 Audit recording is on by default — every save / publish / delete / restore writes a structured event to the target's `.gazetta/audit/events-{instance}.jsonl`. With Cloudflare Workers admin instances, the per-instance file naming uses the worker's revision identity. See [`audit.md`](audit.md) for the full reference (privacy posture, retention, capability gating).
