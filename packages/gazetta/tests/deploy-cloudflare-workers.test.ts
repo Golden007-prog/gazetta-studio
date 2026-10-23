@@ -143,6 +143,17 @@ describe('renderWorkerEntry() — pure entry code generator', () => {
     expect(code).toContain('createWorker')
     expect(code).toContain('export default')
   })
+
+  it('renders a bare createWorker() call without locales', () => {
+    expect(renderWorkerEntry()).toContain('export default createWorker()')
+  })
+
+  it('embeds the site locales when given', () => {
+    const code = renderWorkerEntry({ supported: ['en', 'fr'], default: 'en', defaultPrefix: false })
+    expect(code).toContain(
+      'export default createWorker({ locales: ["en","fr"], defaultLocale: "en", defaultPrefix: false })',
+    )
+  })
 })
 
 describe('extractDeployUrl() — wrangler stdout parser', () => {

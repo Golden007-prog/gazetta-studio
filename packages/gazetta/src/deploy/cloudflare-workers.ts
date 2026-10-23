@@ -57,6 +57,7 @@ import type {
   WorkerRuntimeConfig,
 } from './types.js'
 import { DeployAuthError, DeployConfigError, DeployTransportError } from './errors.js'
+import { resolveSiteLocales } from '../locale.js'
 import type { Issue } from '../validation/types.js'
 
 const ADAPTER_NAME = 'cloudflare-workers'
@@ -105,13 +106,25 @@ export function renderWranglerToml(input: WranglerTomlInput): string {
   return out
 }
 
+/** Site locales embedded in the generated worker entry. */
+export interface WorkerEntryLocales {
+  supported: string[]
+  default: string
+  defaultPrefix: boolean
+}
+
 /**
  * Render the worker entry-point code. Pure function. The
  * `cloudflare-r2` adapter at `packages/gazetta/src/workers/` provides
  * the actual request-handling logic; the entry is a thin re-export.
+ * Site locales are embedded at deploy time, so a change to the site's
+ * locales needs a redeploy, like other worker settings.
  */
-export function renderWorkerEntry(): string {
-  return `import { createWorker } from 'gazetta/workers/cloudflare-r2'\nexport default createWorker()\n`
+export function renderWorkerEntry(locales?: WorkerEntryLocales): string {
+  const options = locales
+    ? `{ locales: ${JSON.stringify(locales.supported)}, defaultLocale: ${JSON.stringify(locales.default)}, defaultPrefix: ${locales.defaultPrefix} }`
+    : ''
+  return `import { createWorker } from 'gazetta/workers/cloudflare-r2'\nexport default createWorker(${options})\n`
 }
 
 /**
@@ -217,7 +230,19 @@ export function cloudflareWorkersDeploy(opts: CloudflareWorkersDeployOptions): W
           siteUrl: target.siteUrl,
         })
         await writeFile(join(tmpDir, 'wrangler.toml'), tomlBody)
-        await writeFile(join(tmpDir, 'index.ts'), renderWorkerEntry())
+        const siteLocales = ctx.site ? resolveSiteLocales(ctx.site) : null
+        await writeFile(
+          join(tmpDir, 'index.ts'),
+          renderWorkerEntry(
+            siteLocales
+              ? {
+                  supported: siteLocales.supported,
+                  default: siteLocales.default,
+                  defaultPrefix: siteLocales.defaultPrefix,
+                }
+              : undefined,
+          ),
+        )
         await writeFile(
           join(tmpDir, 'package.json'),
           JSON.stringify({ type: 'module', dependencies: { gazetta: '*', hono: '*' } }),

@@ -17,7 +17,7 @@
  * declaring `supports: ['static'] as const` today continue compiling
  * after that widening.
  */
-import type { StorageProvider, TargetConfig, TargetType } from '../types.js'
+import type { SiteManifest, StorageProvider, TargetConfig, TargetType } from '../types.js'
 import type { Issue } from '../validation/types.js'
 
 /**
@@ -116,6 +116,9 @@ export interface WorkerRuntimeConfig {
 export interface DeployContext {
   readonly target: TargetConfig
   readonly targetName: string
+  /** Site manifest, so deploy-time codegen can embed site-level settings
+   * (e.g. resolved locales in the worker entry). */
+  readonly site?: SiteManifest
   readonly outputDir: string
   readonly storage: StorageProvider
   readonly env: Record<string, string | undefined>

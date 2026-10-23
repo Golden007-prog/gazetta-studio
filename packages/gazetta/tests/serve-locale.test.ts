@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
-import { extractLocale, matchAcceptLanguage, findPage, createServer } from '../src/serve.js'
+import { extractLocale, matchAcceptLanguage, findPage, createServer, serveLocaleOptions } from '../src/serve.js'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
+import { memoryStorage } from './_helpers/memory-storage.js'
 import { tempDir } from './_helpers/temp.js'
 
 // ---------------------------------------------------------------------------
@@ -267,5 +268,65 @@ describe('fragment locale fallback', () => {
     const html = await res.text()
     expect(html).toContain('Header FR')
     expect(html).not.toContain('Header EN')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// serveLocaleOptions — the `gazetta serve` CLI entry point passes the site's
+// resolved locales to createServer (#1138)
+// ---------------------------------------------------------------------------
+
+describe('serveLocaleOptions', () => {
+  it('maps the site manifest locales to serve options', () => {
+    expect(
+      serveLocaleOptions({
+        name: 'test',
+        locales: { supported: ['en', 'fr'], default: 'en', defaultPrefix: false, detection: true },
+      }),
+    ).toEqual({ locales: ['en', 'fr'], defaultLocale: 'en', defaultPrefix: false, detection: true })
+  })
+
+  it('returns empty options when the site has no locales config', () => {
+    expect(serveLocaleOptions({ name: 'test' })).toEqual({})
+  })
+
+  it('serves a non-default language page on a dynamic target', async () => {
+    const storage = memoryStorage()
+    storage.seed({
+      'pages/home/index.html': '<!DOCTYPE html><html><body>Home</body></html>',
+      'pages/about/index.html': '<!DOCTYPE html><html><body>About</body></html>',
+      'pages/about/index.fr.html': '<!DOCTYPE html><html><body>\u00c0 propos</body></html>',
+    })
+    const app = createServer({
+      storage,
+      type: 'dynamic',
+      ...serveLocaleOptions({ name: 'test', locales: { supported: ['en', 'fr'], default: 'en' } }),
+    })
+
+    const res = await app.request('http://localhost/fr/about')
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('\u00c0 propos')
+  })
+})
+
+describe('detection with defaultPrefix', () => {
+  it('does not treat the default locale prefix as unlocalized', async () => {
+    const storage = memoryStorage()
+    storage.seed({
+      'pages/about/index.en.html': '<!DOCTYPE html><html><body>About EN</body></html>',
+      'pages/about/index.fr.html': '<!DOCTYPE html><html><body>\u00c0 propos</body></html>',
+    })
+    const app = createServer({
+      storage,
+      type: 'dynamic',
+      locales: ['en', 'fr'],
+      defaultLocale: 'en',
+      defaultPrefix: true,
+      detection: true,
+    })
+
+    const res = await app.request('http://localhost/en/about', { headers: { Cookie: 'locale=fr' } })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('About EN')
   })
 })

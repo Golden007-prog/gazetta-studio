@@ -1331,8 +1331,8 @@ async function runServe(siteDir: string, port: number, targetName?: string, host
   // factory ran at config-eval).
   const storage = config.storage
   const { getType } = await import('../types.js')
-  const { createServer } = await import('../serve.js')
-  const app = createServer({ storage, type: getType(config) })
+  const { createServer, serveLocaleOptions } = await import('../serve.js')
+  const app = createServer({ storage, type: getType(config), ...serveLocaleOptions(siteYaml) })
 
   const server = serve({ fetch: app.fetch, port, hostname: resolveListenHost('serve', hostFlag) }, () => {
     console.log()
@@ -1399,6 +1399,7 @@ async function runDeploy(siteDir: string, targetName?: string) {
     const result = await adapter.execute({
       target,
       targetName,
+      site: siteYaml,
       // outputDir not used by worker-deploy adapters (worker reads R2 at request).
       // Adapters that need bytes (static-host) read storage themselves.
       outputDir: join(siteDir, 'dist', targetName),

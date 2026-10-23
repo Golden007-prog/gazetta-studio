@@ -14,11 +14,29 @@
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { createHash } from 'node:crypto'
-import type { StorageProvider, TargetType } from './types.js'
+import type { SiteManifest, StorageProvider, TargetType } from './types.js'
 import { assembleEsi, parseCacheComment } from './assemble.js'
 import { isPublicSitePath } from './public-site-path.js'
 import { archiveResponse } from './runtime/archive-response.js'
+import { aliasTargetIssue, parseArchiveMarker } from './runtime/archive-marker.js'
+import { deriveRoute } from './runtime/derive-route.js'
+import { resolveSiteLocales } from './locale.js'
 import { fetchFragmentEntries } from './runtime/fragment-fetch.js'
+
+/** Locale options for `createServer`, resolved from the site manifest.
+ * Empty object when the site has no `locales` config. */
+export function serveLocaleOptions(
+  site: SiteManifest,
+): Pick<ServeOptions, 'locales' | 'defaultLocale' | 'defaultPrefix' | 'detection'> {
+  const loc = resolveSiteLocales(site)
+  if (!loc) return {}
+  return {
+    locales: loc.supported,
+    defaultLocale: loc.default,
+    defaultPrefix: loc.defaultPrefix,
+    detection: loc.detection,
+  }
+}
 
 export interface ServeOptions {
   storage: StorageProvider
@@ -189,6 +207,34 @@ export function createServer(options: ServeOptions) {
   const nonDefaultLocales = locales?.filter(l => l !== (defaultLocale ?? locales?.[0])) ?? []
   const archiveFor = (html: string, locale: string | undefined) =>
     archiveResponse(html, { locale, defaultLocale: defaultLocale ?? locales?.[0], defaultPrefix })
+
+  // Static targets store each language's version at the language's route,
+  // so an alias redirect keeps the request's language only when the
+  // destination has a version in it; otherwise the 301 goes to the
+  // destination's default-language page, like the `_redirects` row
+  // (design-soft-delete.md Q10).
+  const staticArchiveFor = async (html: string, locale: string | undefined) => {
+    const siteDefault = defaultLocale ?? locales?.[0]
+    let effectiveLocale = locale
+    if (locale && locale !== siteDefault) {
+      const marker = parseArchiveMarker(html)
+      if (marker?.kind === 'alias' && aliasTargetIssue(marker.target) === null) {
+        const route = deriveRoute(marker.target)
+        const rel = `${locale}${route === '/' ? '' : route}/index.html`
+        let hasVersion = false
+        for (const candidate of [`/${rel}`, rel]) {
+          if (await storage.exists(candidate)) {
+            hasVersion = true
+            break
+          }
+        }
+        if (!hasVersion) effectiveLocale = undefined
+      }
+    }
+    // Static publish writes default-language pages unprefixed until #1146,
+    // so prefixing the default locale here would redirect to a 404.
+    return archiveResponse(html, { locale: effectiveLocale, defaultLocale: siteDefault, defaultPrefix: false })
+  }
   const readFragment = (path: string) => readFragmentHtml(storage, path)
   const app = new Hono()
 
@@ -219,7 +265,7 @@ export function createServer(options: ServeOptions) {
       const filePath = requestPath === '/' ? 'index.html' : `${requestPath.replace(/\/$/, '')}/index.html`
       try {
         const html = await storage.readFile(filePath)
-        const archived = archiveFor(html, locale)
+        const archived = await staticArchiveFor(html, locale)
         if (archived) return archived
         const etag = `"${createHash('sha256').update(html).digest('hex').slice(0, 16)}"`
         if (c.req.header('If-None-Match') === etag) return new Response(null, { status: 304, headers: { ETag: etag } })
@@ -227,7 +273,7 @@ export function createServer(options: ServeOptions) {
       } catch {
         try {
           const html = await storage.readFile(requestPath.slice(1))
-          const archived = archiveFor(html, locale)
+          const archived = await staticArchiveFor(html, locale)
           if (archived) return archived
           return c.html(html)
         } catch {
@@ -270,8 +316,11 @@ export function createServer(options: ServeOptions) {
   if (detection && nonDefaultLocales.length > 0) {
     app.get('*', async (c, next) => {
       const requestPath = new URL(c.req.url).pathname
-      // Only redirect paths that don't already have a locale prefix
-      const { locale: existingLocale } = extractLocale(requestPath, nonDefaultLocales)
+      // Only redirect paths that don't already have a locale prefix. With
+      // defaultPrefix on, the default locale's prefix counts too — otherwise
+      // /en/about would look unlocalized and redirect to /fr/en/about.
+      const prefixLocales = defaultPrefix ? (locales ?? []) : nonDefaultLocales
+      const { locale: existingLocale } = extractLocale(requestPath, prefixLocales)
       if (existingLocale) return next()
       // Check cookie opt-out (user explicitly chose a locale)
       const localeCookie = c.req.header('Cookie')?.match(/(?:^|;\s*)locale=([a-z-]+)/)?.[1]
