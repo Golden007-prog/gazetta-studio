@@ -121,7 +121,17 @@ The operator states one fact; Gazetta applies the consequences, and validation p
 | Page, fragment and asset manifests (outside `.gazetta/`) | Not written |
 | `comments/`, `notifications/` (designed) | Not written |
 | `cache/`, `audit-index/`, `page-index/`, `built-config/` (designed) | Not written unless their design says otherwise |
+| `publish-generation` (#1125) | Written (below) |
 | Any new folder | Not written until its entry in the registry (cut 3) says it's safe |
+
+`.gazetta/publish-generation` is written on public targets too, so the registry (cut 3) marks it safe. It holds only a publish id, and the Cloudflare worker's cache key reads it (#1125, #1201).
+
+Decided: maintainer, 2026-10-23 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Not written on public targets | Their worker falls back to the fixed cache key, so a page read during a publish can be cached again for up to a day (#1125), on what is the default for cloud storage |
+| Decide when cut 3 is planned | Cut 3's scan test fails on the path literal, so whoever builds the cut meets the question without a locked answer |
 
 **Where audit events for a public target go,** in order: the publish's source, if private; otherwise the first private target in `site.config.ts` (usually `local`); otherwise an external audit sink (`design-audit.md` v2); otherwise nowhere, shown as info in `gazetta validate` and the capabilities view, and as a one-line warning in the output of any publish that actually dropped an audit event (a failure, not a setup note). In CI with a throwaway checkout, a durable record needs an external sink; that info shows in `gazetta validate` and at admin boot, not in `gazetta publish` output.
 
