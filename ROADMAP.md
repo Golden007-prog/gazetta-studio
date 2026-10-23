@@ -20,7 +20,7 @@ Priorities derive from [`docs/audits/cms-feature-audit.md`](docs/audits/cms-feat
 
 ### Publishing safety
 
-October's designs fix wrong results on live sites: deleted pages stay live, undo doesn't change what visitors see, and a target's private files can be public. Their cuts reach feature-bot one at a time through each design's planner issue.
+October's designs fix wrong results on live sites: deleted pages stay live, undo doesn't change what visitors see, and a target's private files can be public. Where a design has a planner issue, its cuts reach feature-bot one at a time through it.
 
 | Design | Tracking |
 |---|---|
@@ -33,7 +33,7 @@ October's designs fix wrong results on live sites: deleted pages stay live, undo
 
 ### Review workflow — finish
 
-The back end shipped ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515)–[#520](https://github.com/gazetta-studio/gazetta-studio/issues/520), [#522](https://github.com/gazetta-studio/gazetta-studio/issues/522)–[#524](https://github.com/gazetta-studio/gazetta-studio/issues/524)). The remaining cuts are queued for feature-bot: [#521](https://github.com/gazetta-studio/gazetta-studio/issues/521) (API routes), [#525](https://github.com/gazetta-studio/gazetta-studio/issues/525) (review banner and dialog), [#528](https://github.com/gazetta-studio/gazetta-studio/issues/528)–[#532](https://github.com/gazetta-studio/gazetta-studio/issues/532) and [#535](https://github.com/gazetta-studio/gazetta-studio/issues/535); [#526](https://github.com/gazetta-studio/gazetta-studio/issues/526) and [#527](https://github.com/gazetta-studio/gazetta-studio/issues/527) (publish requests); [#533](https://github.com/gazetta-studio/gazetta-studio/issues/533) (docs). Design: [`design-review-workflow.md`](.claude/rules/design-review-workflow.md); tracking issue [#199](https://github.com/gazetta-studio/gazetta-studio/issues/199).
+The back end ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515)–[#520](https://github.com/gazetta-studio/gazetta-studio/issues/520)) and the UI primitives and story runner ([#522](https://github.com/gazetta-studio/gazetta-studio/issues/522)–[#524](https://github.com/gazetta-studio/gazetta-studio/issues/524)) shipped. Queued for feature-bot: [#521](https://github.com/gazetta-studio/gazetta-studio/issues/521) (API routes), [#525](https://github.com/gazetta-studio/gazetta-studio/issues/525) (review banner and dialog), [#528](https://github.com/gazetta-studio/gazetta-studio/issues/528)–[#532](https://github.com/gazetta-studio/gazetta-studio/issues/532) and [#535](https://github.com/gazetta-studio/gazetta-studio/issues/535). [#526](https://github.com/gazetta-studio/gazetta-studio/issues/526) and [#527](https://github.com/gazetta-studio/gazetta-studio/issues/527) (publish requests) wait for publish undo cut 1 (`design-review-workflow.md`, lock 1). [#533](https://github.com/gazetta-studio/gazetta-studio/issues/533) (docs) is labelled `ready-for-human`. Design: [`design-review-workflow.md`](.claude/rules/design-review-workflow.md); tracking issue [#199](https://github.com/gazetta-studio/gazetta-studio/issues/199).
 
 ### MCP server design pass
 
@@ -67,7 +67,7 @@ Decided: maintainer, 2026-10-23 (#1179)
 
 ## Next (planned, this quarter)
 
-### Onboarding sprint (3-4 weeks)
+### Onboarding sprint
 
 Reduce time-to-first-deploy for new operators. Moved from Now on 2026-10-23.
 
@@ -119,7 +119,7 @@ What remains wrong or undecided on static targets:
 
 ### Offline mode e2e tests
 
-[#253](https://github.com/gazetta-studio/gazetta-studio/issues/253): the two scenarios no e2e test covers yet: editing offline, then reconnecting and saving; and the offline save conflict. Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving a reload are covered.
+[#253](https://github.com/gazetta-studio/gazetta-studio/issues/253): the two scenarios no e2e test covers yet: editing offline, reloading, then reconnecting and saving; and the offline save conflict. The reload step also needs the editor to open offline, which doesn't work yet ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)). Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving an online reload are covered.
 
 ### MCP server build
 
@@ -142,7 +142,7 @@ Post-contract additions to the onboarding sprint:
 
 - [#205](https://github.com/gazetta-studio/gazetta-studio/issues/205) Deno Deploy
 - [#207](https://github.com/gazetta-studio/gazetta-studio/issues/207) Netlify Edge Functions
-- Static hosts, after [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)'s cuts 1–2 and [#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149):
+- Static hosts:
   - [#208](https://github.com/gazetta-studio/gazetta-studio/issues/208) GitHub Pages (static-only)
   - [#210](https://github.com/gazetta-studio/gazetta-studio/issues/210) Cloudflare Pages (static-only, no Functions)
   - [#211](https://github.com/gazetta-studio/gazetta-studio/issues/211) S3 static website
@@ -281,6 +281,7 @@ Implementation is in Now (see "Publishing safety").
 3. **[`design-publish-undo.md`](.claude/rules/design-publish-undo.md)** — undo and rollback on a publish destination restore the previous content and re-render it through one shared target-publish function.
 4. **Target indices that describe the target** ([`sidecars.md`](.claude/rules/sidecars.md), [#1077](https://github.com/gazetta-studio/gazetta-studio/issues/1077)) — each published item's edges replaced from its own forward record.
 5. **[`design-target-removal.md`](.claude/rules/design-target-removal.md)** — items deleted on the source are removed from a target only when the author chooses, after a check that nothing staying there uses them.
+6. **Archived pages on plain-static hosts** ([`design-soft-delete.md`](.claude/rules/design-soft-delete.md) Q10, [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152), decided in [#1163](https://github.com/gazetta-studio/gazetta-studio/pull/1163)) — static publish leaves no marker file at an archived route; plain hosts apply their `_redirects` rows, serve a redirect page at an alias's old route, or answer 404 with the target's `404.html`.
 
 ## Phase 0 — Implementation planning artifacts (complete 2026-05)
 

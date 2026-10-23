@@ -27,8 +27,8 @@ Branch: `hooks-v1` off `main`. Sequenced after AuthIdentity + Audit per Phase 1 
 | 6 | Wire `beforeUpload` / `afterUpload` into asset upload handler | ✓ | Low-medium | Asset hooks compose with existing UploadPreprocessor/Analyzer |
 | 7 | Audit integration: `action: 'hook-fired'` + `outcome: 'hook-cancelled'` extensions | ✓ | Low | Composes with audit foundation |
 | 8 | Review-lifecycle hook phases (10 phases per design-review-workflow.md) | ✓ | Medium | Forward-compat for review-workflow feature |
-| 9 | Factory contributions in `admin.hooks` + delete Cut 3 file walker | ☐ | Medium | The blessed registration path; aligns with provider factory pattern |
-| 10 | Docs + example hooks in starter | ☐ | Low | User-facing |
+| 9 | Factory contributions in `admin.hooks` + delete Cut 3 file walker | ✓ | Medium | The blessed registration path; aligns with provider factory pattern |
+| 10 | Docs + example hooks in starter | ✓ | Low | User-facing |
 
 ## Per-cut scope
 
@@ -102,7 +102,7 @@ The discovery walker was correct for a "magic file convention" world; the locked
 
 **Why now:** types only; the actual review state machine that fires these is Phase 2 work. Forward-compat preparation.
 
-### Cut 9: Factory contributions in `admin.hooks` ☐
+### Cut 9: Factory contributions in `admin.hooks` ✓
 
 The blessed registration path. Operators (and plugin authors) export a factory that returns `HookContribution`; site config invokes it inside `admin.hooks`. Same shape for site-local code and npm-distributed plugins.
 
@@ -130,7 +130,7 @@ The blessed registration path. Operators (and plugin authors) export a factory t
 
 **Why now:** the deletion + simplification land together so we don't ship a build with two registration paths. One blessed pattern, one mental model.
 
-### Cut 10: Docs ☐
+### Cut 10: Docs ✓
 
 **Files added/modified:**
 - `docs/hooks.md` (NEW) — operator guide:
@@ -179,16 +179,16 @@ The blessed registration path. Operators (and plugin authors) export a factory t
 |---|---|---|
 | 1 (Infrastructure) | 0.5 day | ✓ shipped |
 | 2 (Registry + dispatch) | 1.5 days | ✓ shipped |
-| 3 (Discovery — superseded) | — | ✗ to delete in Cut 9 |
+| 3 (Discovery — superseded) | — | ✗ deleted in Cut 9 |
 | 4 (Wire save/load) | 1 day | ✓ shipped |
 | 5 (Wire publish) | 0.5 day | ✓ shipped |
 | 6 (Wire asset upload) | 0.5 day | ✓ shipped |
 | 7 (Audit integration) | 0.5 day | ✓ shipped |
 | 8 (Review-lifecycle phases) | 0.5 day | ✓ shipped |
-| 9 (Factory contributions + Cut 3 deletion) | 1 day | ☐ pending |
-| 10 (Docs + starter example) | 1 day | ☐ pending |
+| 9 (Factory contributions + Cut 3 deletion) | 1 day | ✓ shipped |
+| 10 (Docs + starter example) | 1 day | ✓ shipped |
 
-**Total: ~7 days.** With CI iteration, budget ~1.5 weeks. Cuts 1-2, 4-8 already shipped; Cut 9 + 10 remain.
+**Total: ~7 days.** With CI iteration, budget ~1.5 weeks. All cuts shipped (Cut 3 superseded by Cut 9).
 
 ## SOLID checks per cut
 

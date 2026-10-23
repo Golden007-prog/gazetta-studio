@@ -20,17 +20,17 @@ Branch: `auth-rbac-v1` off `main` (after TS config migration is shipped per Phas
 
 | # | Cut | Status | Risk | Validates |
 |---|---|---|---|---|
-| 1 | `auth/` infrastructure: types, config schema, trust-mode dispatcher | ☐ | Low | Type-only foundation; no runtime |
-| 2 | `AuthIdentityProvider` interface + `none` trust mode | ☐ | Low | The seam; `none` is the trivial case |
-| 3 | `forwarded-user` trust mode + header validation | ☐ | Medium | Most flexible; basic header parsing |
-| 4 | `cloudflare-access` trust mode + JWT verification | ☐ | Medium-high | First provider needing crypto |
-| 5 | `azure-easy-auth`, `aws-cognito`, `tailscale` trust modes | ☐ | Medium | Provider proliferation |
-| 6 | Capability vocabulary + role aliases + Zod schema | ☐ | Low | Static data structures |
-| 7 | `Principal` request context + auth middleware | ☐ | Medium | Hono integration |
-| 8 | Capability-check middleware + 401 / 403 responses | ☐ | Medium | Per-route capability enforcement |
-| 9 | Wire all 10 admin-API routes with capability gates | ☐ | Low-medium | Mechanical integration |
-| 10 | Trust-mode integration tests with real header fixtures | ☐ | Medium | Validates each trust mode end-to-end |
-| 11 | Docs: per-trust-mode operator guide + capability reference | ☐ | Low | User-facing |
+| 1 | `auth/` infrastructure: types, config schema, trust-mode dispatcher | ✓ | Low | Type-only foundation; no runtime |
+| 2 | `AuthIdentityProvider` interface + `none` trust mode | ✓ | Low | The seam; `none` is the trivial case |
+| 3 | `forwarded-user` trust mode + header validation | ✓ | Medium | Most flexible; basic header parsing |
+| 4 | `cloudflare-access` trust mode + JWT verification | ✓ | Medium-high | First provider needing crypto |
+| 5 | `azure-easy-auth`, `aws-cognito`, `tailscale` trust modes | ✓ | Medium | Provider proliferation |
+| 6 | Capability vocabulary + role aliases + Zod schema | ✓ | Low | Static data structures |
+| 7 | `Principal` request context + auth middleware | ✓ | Medium | Hono integration |
+| 8 | Capability-check middleware + 401 / 403 responses | ✓ | Medium | Per-route capability enforcement |
+| 9 | Wire all 10 admin-API routes with capability gates | ✓ | Low-medium | Mechanical integration |
+| 10 | Trust-mode integration tests with real header fixtures | ✓ | Medium | Validates each trust mode end-to-end |
+| 11 | Docs: per-trust-mode operator guide + capability reference | ✓ | Low | User-facing |
 
 ## Per-cut scope
 
