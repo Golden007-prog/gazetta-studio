@@ -297,7 +297,7 @@ export function createHistoryProvider(opts: CreateHistoryProviderOptions): Histo
       operation: input.operation,
       author: input.author,
       source: input.source,
-      items: [...input.items.keys()].sort(),
+      items: [...(input.changed ?? input.items.keys())].sort(),
       message: input.message,
       restoredFrom: input.restoredFrom,
       snapshot,
