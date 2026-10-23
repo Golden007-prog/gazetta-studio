@@ -117,9 +117,10 @@ Decided: maintainer, 2026-10-22 (#1124)
 ### 410 Gone for archived items without aliasOf
 
 A page archived without `aliasOf` is a pure soft-delete — the URL
-should return `410 Gone` where the runtime can, the more precise
-answer. Google treats 404 and 410 alike and drops the URL from its
-index either way
+should return `410 Gone` wherever Gazetta answers the request (a
+worker, `gazetta serve`, a dynamic origin), the more precise answer
+(`design-soft-delete.md` Q14, scoped by #1152). Google treats 404 and
+410 alike and drops the URL from its index either way
 ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)).
 
 Same mechanism: HTML marker `<!-- gazetta:archived gone -->` on
@@ -132,11 +133,14 @@ Plain-static hosts answer 404 there once static publish leaves no file
 at the route
 ([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)):
 Cloudflare Pages, Netlify and GitHub Pages show the target's
-`404.html`, and an S3 website the error page its bucket's website
-settings name. Until then they serve the archived page's marker file,
-a blank page with status 200. The capability gap is surfaced at four
-points (per `design-soft-delete.md` Q10): boot validate, author-time
-modal, validator scanner, publish gate.
+`404.html`, and an S3 website (which answers 403 when its bucket
+doesn't allow listing) the error page its website settings name. The
+status codes are expected, not documented by the hosts
+(`design-soft-delete.md` Q10, #1152 decision 5). Until then they serve
+the archived page's marker file, a blank page with status 200. The
+capability gap is surfaced at four points (per `design-soft-delete.md`
+Q10): boot validate, author-time modal, validator scanner, publish
+gate.
 
 ### What about manual redirects?
 
@@ -182,8 +186,10 @@ future redirect lifecycle design must respect them:
 1. **Renames produce 301, never 302.** Author intent is "this is the
    permanent new home"; later changes to make it temporary would
    violate that contract.
-2. **Archive without `aliasOf` produces 410, not 404.** Search-engine
-   semantics matter; a future "soft 404" mode would have to be
+2. **Archive without `aliasOf` produces 410, not 404, wherever Gazetta
+   answers the request** (a worker, `gazetta serve`, a dynamic origin);
+   plain static hosts answer 404, which Google treats the same
+   (scoped by #1152). A future "soft 404" mode would have to be
    explicit operator opt-in.
 3. **Manifests are the data, sidecars are derived.** Future
    scheduling fields go on the manifest (per the

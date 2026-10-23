@@ -186,7 +186,7 @@ The `aliasOf` field on an Archive's manifest, pointing at the name of a live tar
 _Avoid_: Symlink (filesystem metaphor; Aliases are content-tree state, not filesystem state), Reference (collides with the in-content Reference / Usage distinction).
 
 **Redirect**:
-A Page or Fragment whose manifest carries `archived: true` AND a non-empty `aliasOf` pointing at a live target. The Worker (or `_redirects` host-glue for plain-static targets) emits `301 Moved Permanently` from the source URL to the alias target's route. Distinguished from a **Pure Soft-Delete** (archived without `aliasOf` — emits `410 Gone`).
+A Page or Fragment whose manifest carries `archived: true` AND a non-empty `aliasOf` pointing at a live target. The Worker (or `_redirects` host-glue for plain-static targets) emits `301 Moved Permanently` from the source URL to the alias target's route; a static target without `redirects.format` gets a redirect page with an instant refresh there instead (`design-soft-delete.md` Q10, #1152). Distinguished from a **Pure Soft-Delete** (archived without `aliasOf` — emits `410 Gone`).
 
 A Redirect originates from one of two operations:
 - **Rename Redirect** — composed during the rename operation; the archived old name carries `aliasOf` pointing at the new name (per `design-soft-delete.md` Q3 flatten lock).
@@ -198,7 +198,7 @@ v1 ships 301 redirects only, depth-1 (no chains; flattened on rename). Status co
 _Avoid_: URL Rewrite (different mechanism — Gazetta does not own URL rewriting), HTTP Redirect (too generic; "Redirect" in domain language always means the Gazetta primitive defined above).
 
 **Pure Soft-Delete**:
-An Archive without an `aliasOf` field. Emits `410 Gone` (not `404 Not Found`) at the source URL — search-engine semantics: 410 tells crawlers the URL is permanently retired (drop from index), 404 implies "may come back" (keep in crawl queue). Same HTML marker mechanism as Redirect, different marker grammar (`<!-- gazetta:archived gone -->`).
+An Archive without an `aliasOf` field. Emits `410 Gone` at the source URL wherever Gazetta answers the request (a worker, `gazetta serve`, a dynamic origin); a plain static host answers `404 Not Found`, which Google treats the same (`design-soft-delete.md` Q14). Same HTML marker mechanism as Redirect, different marker grammar (`<!-- gazetta:archived gone -->`; on static targets, a `.gone` archive sidecar).
 _Avoid_: Hard Delete (Purge is the hard-delete operation), Removed (a Removal takes an item off a Target, a different operation).
 
 ### Composition and resolution
