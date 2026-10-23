@@ -34,7 +34,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - `restoreRevision` (`history-restorer.ts`) writes the revision's snapshot back to the target: page and fragment manifests plus `site.config.ts` (`DEFAULT_SCAN_LOCATIONS`, `DEFAULT_SCAN_ROOT_FILES`). It doesn't render.
 - Visitors of a publish destination get rendered output: static pages are pre-rendered HTML; ESI targets hold pre-rendered fragments the worker assembles.
 - The publish panel offers Undo per destination and shows "Undone on `<target>`" (`PublishPanel.vue:257`) although nothing visitors see changed.
-- The admin route copies source manifests to the target (`publishItems`) before recording history; the CLI path doesn't, so CLI-published targets hold no manifests (#1082).
+- The admin route copies source manifests to the target (`publishItems`) before recording history; the CLI path didn't until #1082 (merged 2026-10-21), so targets the CLI published to before then hold no manifests.
 - `sitemap.xml`, `robots.txt`, `_redirects` and the CDN purge are written separately by the CLI (`cli/index.ts`, around lines 870–990) and the admin route (`admin-api/routes/publish.ts`, around 514–597); `publishRun`'s purge step is reserved.
 - Since #1201 (2026-10-23), both also write `.gazetta/publish-generation` after the content and before the purge; the Cloudflare worker's cache key reads it (#1125).
 - No code removes a published item from a target.
@@ -102,9 +102,14 @@ A render that fails after the check passes (a template that throws) is reported 
 
 The CLI, the admin route and undo are three callers of the same post-publish steps, so they move into one function (team rule 15): render loop (`publishRun`), manifest copy, removals, dependency indices, site manifest, `sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge.
 
-**The publish generation** (`.gazetta/publish-generation`, #1125, #1201) is written before the CDN purge, as the CLI and the admin route write it today. The Cloudflare worker's cache key reads it, and undo publishes only through this function, so an undo gets a new generation like any publish; without one, the worker would serve the pre-undo pages from its cache for up to a day.
+**The publish generation** (`.gazetta/publish-generation`, #1125, #1201) is written before the CDN purge, as the CLI and the admin route write it today. The Cloudflare worker's cache key reads it, and undo publishes only through this function, so an undo gets a new generation like any publish; without one, the worker could serve pre-undo pages from its cache until their edge lifetime runs out (a day by default).
 
 Decided: maintainer, 2026-10-23 (#1220)
+
+| Option | Why rejected |
+|---|---|
+| Leave cut 1 as specified; add the write before cut 4 (undo) is filed | Cut 1 may move the write out of the CLI and the admin route without moving it into the shared function. |
+| Record it on #1092 and decide later | cut-planner files cut 1 from #1092's lock at 03:00 UTC. |
 
 **Removal** deletes the item's own files only: its rendered output (static: its route's `index.html` and locale variants; ESI: its `index*.html` under `pages/<name>/` and fragment output), its per-item sidecars and its manifest. A nested item's folder stays: removing `about` leaves `pages/about/team/` (follows from `design-target-removal.md` Q3). Dependency indices are rebuilt by the publish. The item then answers 404, as it did before the publish that added it.
 
