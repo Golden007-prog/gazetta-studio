@@ -111,6 +111,8 @@ The stateless property is what differentiates Gazetta from WordPress / Strapi / 
 
 AI SEO and GEO review reports are content scoring with AI, and a non-goal for the same reason. For example, Hygraph's SEO agent produces Generative Engine Optimization review reports ([changelog](https://hygraph.com/changelog), 2026-07-30).
 
+Decided: maintainer, 2026-10-23 (#1179)
+
 **Integration path**: don't.
 
 ---

@@ -58,6 +58,8 @@ User-visible publishing and editor bugs, all with fix-bot except [#1162](https:/
 - [#1165](https://github.com/gazetta-studio/gazetta-studio/issues/1165) capability checks don't know `gazetta serve` serves a static target
 - [#1174](https://github.com/gazetta-studio/gazetta-studio/issues/1174) a translation-only admin publish leaves the old manifest on the target
 
+Decided: maintainer, 2026-10-23 (#1179)
+
 ## Next (planned, this quarter)
 
 ### Onboarding sprint (3-4 weeks)
@@ -119,6 +121,8 @@ Two research+design issues filed 2026-05-13. Tier 3 implementation; this quarter
 - [#361](https://github.com/gazetta-studio/gazetta-studio/issues/361) Content Security Policy: admin surface
 - [#362](https://github.com/gazetta-studio/gazetta-studio/issues/362) Content Security Policy: target / published-site surface
 
+Decided: maintainer, 2026-10-23 (#1179)
+
 ## Later (sequenced behind Now / Next)
 
 ### Additional deploy adapters (demand-driven)
@@ -163,6 +167,8 @@ These can run alongside Phase 2 since they don't block foundations:
 - Large-site editor UX ([#196](https://github.com/gazetta-studio/gazetta-studio/issues/196)) — `design-scale.md` shipped; implementation pending
 - Environment-specific content ([#62](https://github.com/gazetta-studio/gazetta-studio/issues/62)) — design pass needed first
 
+Decided: maintainer, 2026-10-23 (#1179)
+
 ## Deferred — real gaps, no current trigger
 
 | Item | Trigger to revisit |
@@ -204,6 +210,8 @@ These can run alongside Phase 2 since they don't block foundations:
 | `llms.txt` and Markdown versions of pages for AI agents | Evidence that AI platforms read them, or an operator asks |
 | Agent instructions (skills) for template developers | The MCP server ships |
 | Asset folders and a crop rectangle | Operators ask |
+
+Decided: maintainer, 2026-10-23 (#1179)
 
 ## Non-goals
 
