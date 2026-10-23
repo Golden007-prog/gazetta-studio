@@ -162,7 +162,16 @@ gh pr merge <N> --rebase --delete-branch --admin --match-head-commit <headRefOid
 
 `--match-head-commit` makes GitHub refuse the merge if anything was pushed after the verdict.
 
-Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-opinion outcome>."
+If the PR changes `ROADMAP.md`, sync the roadmap board from an up-to-date checkout of `main` ([`design-roadmap-board.md`](../../rules/design-roadmap-board.md) Q5):
+
+```bash
+git checkout main && git pull --ff-only
+GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots -- --apply
+```
+
+If it stops because it would remove more than 10 items, read the plan it printed before rerunning with `--allow-removals`.
+
+Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-opinion outcome>." Add "board synced" when the sync ran.
 
 ## Rules that don't bend
 
