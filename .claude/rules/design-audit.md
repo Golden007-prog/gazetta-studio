@@ -614,3 +614,8 @@ Sites without `admin.audit` config use `HistoryAuditProvider` automatically. Exi
 - **Audit log query CLI** (`gazetta audit query --actor=X --since=Y`). Lands with validation Cut 5 CLI rewrite.
 - **Right-to-be-forgotten scrub CLI** (`gazetta audit scrub`). Same trigger.
 - **Audit retention separate from history retention** — for compliance teams who keep audit longer than content history.
+- **CSV export.** `GET /api/audit` returns JSON; there's no export in the drawer. Left from [#200](https://github.com/gazetta-studio/gazetta-studio/issues/200).
+- **Events for role and config changes.** `configure-roles` is reserved but never recorded, and `site.config.ts` edits aren't recorded. Left from #200.
+- **A filter by target** in the drawer and `GET /api/audit`; publish events carry the target name in their metadata. Left from #200.
+
+Decided: maintainer, 2026-10-23 (#1179)

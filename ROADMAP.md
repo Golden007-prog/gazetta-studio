@@ -295,7 +295,7 @@ All 19 `design-{feature}-implementation.md` docs shipped: ai, audit, auth-rbac, 
 | RBAC ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194)) | ✓ shipped 2026-05-13 (capabilities, built-in and custom roles, route gates; [`docs/auth.md`](docs/auth.md)) |
 | Component IDs | ✓ shipped (`component-ids.ts`; called from page + fragment save handlers) |
 | AdminCache abstraction | ✓ shipped (interface + `MemoryCache` + per-site + 6 test files) |
-| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). External sinks are demand-driven |
+| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). External sinks are demand-driven; CSV export, role and config-change events and a target filter are in `design-audit.md`'s future directions |
 | Hooks lifecycle | ✓ shipped (factory contributions via `admin.hooks` per ADR-0009; 10 test files) |
 | Deploy adapter contract (#203) | ✓ shipped 2026-05-14 ([`design-deploy.md`](.claude/rules/design-deploy.md) + [ADR-0010](docs/adr/0010-deploy-publish-independence.md) + [`docs/deploy.md`](docs/deploy.md); `cloudflareWorkersDeploy()` + 2 validators + `target.worker` deleted; verified end-to-end against `sites/gazetta.studio` — real CF deploy, live worker on https://gazetta.studio) |
 | NotificationProvider (in-admin) | ☐ pending — see Next |
