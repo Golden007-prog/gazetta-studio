@@ -412,7 +412,7 @@ Until these cuts ship, static publish writes the marker at the archived route (`
 
 **1. No marker file at the route; `gazetta serve` reads the archive sidecar.** On static targets, publish writes no marker file at an archived route. When a route has no file, `gazetta serve` reads the page's archive sidecar (`.gone` or `.alias-<name>`, `design-target-removal.md` Q6) and answers 301 or 410 as before (where the route has a redirect page, it reads the marker on the page's first line: decision 8); hosts with `_redirects` apply their rows and their own 404. This waits for target removal cut 1, which adds the sidecars.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -421,7 +421,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 **2. Every static target; a redirect page where the host has no rules.** No static target gets the marker file. With `redirects.format`, the host's rows do the work and nothing is written at the route. Without it (GitHub Pages, an S3 website, a plain web server), an archived page with an alias gets a redirect page at its old route (decision 6); a removed page gets no file, so the host's own 404 (decision 3).
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -430,7 +430,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 **3. A `404.html` at every static target's root.** Static publish also writes the site's `/404` page (`pages/404/`, which `gazetta init` creates), in the default language, as `404.html` at the target root, so Pages, Netlify and GitHub Pages show it with status 404 for unknown and removed pages. A site without a 404 page gets a minimal noindex "Page not found" page.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -439,7 +439,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 **4. Removed pages answer 404 on every plain host.** `_redirects` writes no 410 rows for `netlify` either (#1149 drops them for `cloudflare`), so a removed page on any plain host shows the site's 404 page with status 404. `gone-status` stays a worker capability, as `inspectTarget` already says, and `docs/runtime-capabilities.md`, which marks it ✓ for these formats, is corrected. `json` keeps its gone list for custom integrations.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -448,7 +448,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 **5. Locked from the hosts' docs.** The host behaviour above is from the hosts' docs, not tested on the hosts. The Netlify and Pages deploy adapters (#209, #210) test it on real deploys, and the live check flags any difference after a publish.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -456,7 +456,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 **6. The redirect page.** At an alias's old route on a target without `redirects.format`: the archive marker as its first line (decision 8), an instant meta refresh to the new address, a canonical link to it, and a short line with a link ("This page has moved to /welcome") for visitors whose browser doesn't follow the refresh. No noindex, so search engines take it as a redirect. A redirect page in a language points at the destination in that language when it has a version there, else at its default-language page (the rule above). WCAG's technique H76 uses a zero-second refresh and keeps only information about the redirect on the page ([H76](https://www.w3.org/TR/WCAG20-TECHS/H76.html)); the link is ours.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -465,7 +465,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 **8. The redirect page starts with the marker.** Its first line is the archive marker comment, which browsers don't show. `gazetta serve` and a worker read the first 200 bytes, as they do today, and answer 301 there; a plain host serves the page. No extra read.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
@@ -482,7 +482,7 @@ Decided: maintainer, 2026-10-23 (#PRNUM).
 
 The 410 rows for `netlify` go with #1149, which drops them for `cloudflare` in the same builder, together with `docs/runtime-capabilities.md`'s `gone-status` column (decision 4). Static targets published before cut 2 keep their marker files until each archive is published again; a one-time `gazetta publish <target> --force` clears them all, the same step target removal cut 1 needs.
 
-Decided: maintainer, 2026-10-23 (#PRNUM).
+Decided: maintainer, 2026-10-23 (#1163).
 
 | Rejected | Why |
 |---|---|
