@@ -344,3 +344,46 @@ describe('restoreRevision', () => {
     expect(restored.aliasOf).toBeUndefined()
   })
 })
+
+describe("restore's affected items (#1078)", () => {
+  let storage: ReturnType<typeof memoryStorage>
+  beforeEach(() => {
+    storage = memoryStorage()
+  })
+
+  it('the restore revision lists only the paths it changed', async () => {
+    storage.seed({
+      'pages/home/page.json': 'v1',
+      'pages/about/page.json': 'unchanged',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    const firstSave = await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/home/page.json', content: 'v1' }],
+    })
+    storage.seed({ 'pages/home/page.json': 'v2', 'pages/extra/page.json': 'new' })
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [
+        { path: 'pages/home/page.json', content: 'v2' },
+        { path: 'pages/extra/page.json', content: 'new' },
+      ],
+    })
+
+    // Restoring to firstSave writes home back to v1 and deletes extra;
+    // about is untouched and must not appear.
+    const restored = await restoreRevision({ history, contentRoot, revisionId: firstSave.id })
+
+    expect(restored.items).toEqual(['pages/extra/page.json', 'pages/home/page.json'])
+    const manifest = await history.readRevision(restored.id)
+    expect(manifest.items).toEqual(['pages/extra/page.json', 'pages/home/page.json'])
+    expect(manifest.snapshot).not.toHaveProperty('pages/extra/page.json')
+    expect(manifest.snapshot).toHaveProperty('pages/about/page.json')
+  })
+})
