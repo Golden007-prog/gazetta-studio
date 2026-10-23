@@ -19,7 +19,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - Undo and rollback on a publish destination restore the previous content and re-render it through the publish pipeline, removing items the undone publish added
 - A check against current templates before anything is written
 - The same flow for the publish panel's Undo, the History panel's Restore, and `gazetta undo` / `gazetta rollback`
-- Post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, CDN purge) in one shared function used by the CLI, the admin and undo
+- Post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge) in one shared function used by the CLI, the admin and undo
 
 **Out of v1:**
 - Restoring old template output (templates are code, versioned in git)
@@ -36,6 +36,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - The publish panel offers Undo per destination and shows "Undone on `<target>`" (`PublishPanel.vue:257`) although nothing visitors see changed.
 - The admin route copies source manifests to the target (`publishItems`) before recording history; the CLI path doesn't, so CLI-published targets hold no manifests (#1082).
 - `sitemap.xml`, `robots.txt`, `_redirects` and the CDN purge are written separately by the CLI (`cli/index.ts`, around lines 870–990) and the admin route (`admin-api/routes/publish.ts`, around 514–597); `publishRun`'s purge step is reserved.
+- Since #1201 (2026-10-23), both also write `.gazetta/publish-generation` after the content and before the purge; the Cloudflare worker's cache key reads it (#1125).
 - No code removes a published item from a target.
 - Undo runs only in Node (admin, CLI), never in the worker, so templates are available.
 
@@ -99,7 +100,11 @@ A render that fails after the check passes (a template that throws) is reported 
 
 ### Q4 — One shared target-publish function, with removals
 
-The CLI, the admin route and undo are three callers of the same post-publish steps, so they move into one function (team rule 15): render loop (`publishRun`), manifest copy, removals, dependency indices, site manifest, `sitemap.xml`, `robots.txt`, `_redirects`, CDN purge.
+The CLI, the admin route and undo are three callers of the same post-publish steps, so they move into one function (team rule 15): render loop (`publishRun`), manifest copy, removals, dependency indices, site manifest, `sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge.
+
+**The publish generation** (`.gazetta/publish-generation`, #1125, #1201) is written before the CDN purge, as the CLI and the admin route write it today. The Cloudflare worker's cache key reads it, and undo publishes only through this function, so an undo gets a new generation like any publish; without one, the worker would serve the pre-undo pages from its cache for up to a day.
+
+Decided: maintainer, 2026-10-23 (#PR)
 
 **Removal** deletes the item's own files only: its rendered output (static: its route's `index.html` and locale variants; ESI: its `index*.html` under `pages/<name>/` and fragment output), its per-item sidecars and its manifest. A nested item's folder stays: removing `about` leaves `pages/about/team/` (follows from `design-target-removal.md` Q3). Dependency indices are rebuilt by the publish. The item then answers 404, as it did before the publish that added it.
 
@@ -161,7 +166,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 - **Render:** the normal publish render; templates are today's.
 - **Validation:** `schema-conformance` runs as the pre-write check.
 - **Plugin:** the hook field only.
-- **Cache:** the CDN purge runs through the shared function.
+- **Cache:** the shared function writes the publish generation and runs the CDN purge, so an undo, like any publish, changes the worker's cache key (#1201).
 - **Offline:** undo needs the target; offline admins can't undo (as with publish).
 - **Collaboration:** none.
 
@@ -169,7 +174,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
-| 1 | The shared target-publish function (Q4), called by the CLI and the admin route: it wraps `publishRun`, takes over the admin route's history record and manifest copy, has the approval gate's place at its start (`design-review-workflow.md` lock 1), and runs the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, CDN purge); generated files are written or deleted, never skipped | — | unit + api | Medium |
+| 1 | The shared target-publish function (Q4), called by the CLI and the admin route: it wraps `publishRun`, takes over the admin route's history record and manifest copy, has the approval gate's place at its start (`design-review-workflow.md` lock 1), and runs the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge); generated files are written or deleted, never skipped | — | unit + api | Medium |
 | 2 | Removals in the shared function: delete an item's own files (static route `index.html` and locale variants; ESI `index*.html` under `pages/<name>/`; a nested item's folder stays), sidecars and manifest; removal by route for route changes | 1 | unit + api | Medium |
 | 3 | Destinations hold manifests: the CLI copies them before recording history ([#1082](https://github.com/gazetta-studio/gazetta-studio/pull/1082)) | — | api | Low |
 | 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, rollback requests and the undo-latest rule at the approval gate (`design-review-workflow.md` locks 3–5), hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088), review workflow cuts 12–13 (#526, #527) | api-first | High |
