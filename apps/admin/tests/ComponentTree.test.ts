@@ -25,10 +25,17 @@ import ComponentTree from '../src/client/components/ComponentTree.vue'
 import { FRAGMENTS_API, type FragmentsApi } from '../src/client/composables/api.js'
 import { useSelectionStore } from '../src/client/stores/selection.js'
 import { useEditingStore } from '../src/client/stores/editing.js'
+import { useComponentFocusStore } from '../src/client/stores/componentFocus.js'
 import { useEditorStashStore } from '../src/client/stores/editorStash.js'
 import { useEditorContentStore } from '../src/client/stores/editorContent.js'
 import { useEditorMetadataStore } from '../src/client/stores/editorMetadata.js'
+import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
 import { api, type PageDetail, type FragmentDetail } from '../src/client/api/client.js'
+
+const dragAndDropMock = vi.hoisted(() => vi.fn())
+const tearDownMock = vi.hoisted(() => vi.fn())
+vi.mock('@formkit/drag-and-drop/vue', () => ({ dragAndDrop: dragAndDropMock }))
+vi.mock('@formkit/drag-and-drop', () => ({ tearDown: tearDownMock }))
 
 /** Minimal FragmentsApi fake — each method throws unless the test provides an impl. */
 function fakeFragmentsApi(partial: Partial<FragmentsApi> = {}): FragmentsApi {
@@ -415,6 +422,73 @@ describe('ComponentTree', () => {
     expect(w.find('[data-testid="component-header"]').exists()).toBe(true)
     expect(w.find('[data-testid="component-nav"]').exists()).toBe(true)
   })
+
+  it('gives reused fragment refs globally unique keys and isolated selection/hover', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const getFragment = vi.fn(
+        async (name: string): Promise<FragmentDetail> => ({
+          name,
+          template: 'shared',
+          dir: `fragments/${name}`,
+          components: [],
+        }),
+      )
+      // The same fragment appears twice under group-a (both nested rows land
+      // in one flattened v-for), once under group-b, and twice at top level.
+      // Occurrence counts are local to each group, so a name+occurrence key
+      // collides and would select/hover every matching row at once.
+      setPageSelection({
+        name: 'home',
+        route: '/',
+        template: 'page-default',
+        dir: 'pages/home',
+        components: [
+          {
+            name: 'group-a',
+            template: 'group',
+            components: [
+              { name: 'left', template: 'box', components: ['@shared'] },
+              { name: 'right', template: 'box', components: ['@shared'] },
+            ],
+          },
+          {
+            name: 'group-b',
+            template: 'group',
+            components: [{ name: 'inner', template: 'box', components: ['@shared'] }],
+          },
+          '@shared',
+          '@shared',
+        ],
+      })
+      const w = mountTree(fakeFragmentsApi({ getFragment }))
+      await flushMicrotasks()
+
+      const rows = w.findAll('[data-testid="component-shared"]')
+      expect(rows).toHaveLength(5)
+      const warnings = warn.mock.calls.map(args => args.join(' ')).join('\n')
+      expect(warnings).not.toMatch(/duplicate keys/i)
+
+      // Clicking one reused fragment highlights only that instance.
+      await rows[1].trigger('click')
+      expect(w.findAll('[data-testid="component-shared"].selected')).toHaveLength(1)
+      expect(rows[1].classes()).toContain('selected')
+
+      // Preview-hovering another instance highlights only that instance.
+      // (Tree hover is plain CSS; `hoveredNodeKey` tracks preview hover.)
+      const hoverTarget = w.findAll('[data-testid="component-shared"]')[2]
+      await hoverTarget.trigger('mouseenter')
+      const focus = useComponentFocusStore()
+      expect(focus.highlightGzId).toBeTruthy()
+      focus.previewHover(focus.highlightGzId)
+      await w.vm.$nextTick()
+      const hovered = w.findAll('[data-testid="component-shared"].hovered')
+      expect(hovered).toHaveLength(1)
+      expect(hovered[0].element).toBe(hoverTarget.element)
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })
 
 describe('ComponentTree — drag handle + Alt+arrow reorder (#105)', () => {
@@ -538,6 +612,287 @@ describe('ComponentTree — drag handle + Alt+arrow reorder (#105)', () => {
     const blocks = w.findAll('.top-level-block')
     await blocks[0].trigger('keydown', { key: 'ArrowDown', altKey: true, shiftKey: true })
     expect(moveSpy).not.toHaveBeenCalled()
+  })
+
+  it('Space lift shows an insertion line and the arrow keys move it', async () => {
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const handle = w.find('[data-testid="drag-handle-hero"]')
+
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(false)
+    await handle.trigger('keydown', { key: ' ' })
+    // Lifted at index 0 without moving: line above the source row.
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('0')
+
+    // Down across features (index 1): the row lands below it.
+    await handle.trigger('keydown', { key: 'ArrowDown' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('2')
+
+    // Down again to the last index: line after the last row.
+    await handle.trigger('keydown', { key: 'ArrowDown' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('3')
+    const list = w.find('[data-testid="component-tree-draggable"]')
+    expect(list.element.lastElementChild?.getAttribute('data-testid')).toBe('keyboard-insertion-indicator')
+
+    // Up one: back above the last row.
+    await handle.trigger('keydown', { key: 'ArrowUp' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('2')
+  })
+
+  it('the insertion line handles the first and last rows without moving past them', async () => {
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const lastHandle = w.find('[data-testid="drag-handle-banner"]')
+
+    await lastHandle.trigger('keydown', { key: ' ' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('2')
+
+    // Already last: ArrowDown is bounded.
+    await lastHandle.trigger('keydown', { key: 'ArrowDown' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('2')
+
+    await lastHandle.trigger('keydown', { key: 'ArrowUp' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('1')
+
+    // Top: the line sits above the first row and ArrowUp is bounded.
+    await lastHandle.trigger('keydown', { key: 'ArrowUp' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('0')
+    await lastHandle.trigger('keydown', { key: 'ArrowUp' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').attributes('data-boundary')).toBe('0')
+    const list = w.find('[data-testid="component-tree-draggable"]')
+    expect(list.element.firstElementChild?.getAttribute('data-testid')).toBe('keyboard-insertion-indicator')
+  })
+
+  it('Space drop clears the insertion line and moves to the indicated index', async () => {
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const editing = useEditingStore()
+    const moveSpy = vi.spyOn(editing, 'moveComponentStructural')
+    const handle = w.find('[data-testid="drag-handle-hero"]')
+
+    await handle.trigger('keydown', { key: ' ' })
+    await handle.trigger('keydown', { key: 'ArrowDown' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(true)
+
+    await handle.trigger('keydown', { key: ' ' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(false)
+    expect(moveSpy).toHaveBeenCalledTimes(1)
+    const args = moveSpy.mock.calls[0]
+    expect(args[2]).toBe(0)
+    expect(args[3]).toBe(1)
+  })
+
+  it('Escape cancels the lift and clears the insertion line', async () => {
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const editing = useEditingStore()
+    const moveSpy = vi.spyOn(editing, 'moveComponentStructural')
+    const handle = w.find('[data-testid="drag-handle-hero"]')
+
+    await handle.trigger('keydown', { key: ' ' })
+    await handle.trigger('keydown', { key: 'ArrowDown' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(true)
+
+    await handle.trigger('keydown', { key: 'Escape' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(false)
+    expect(moveSpy).not.toHaveBeenCalled()
+  })
+
+  it('starting a pointer drag clears the keyboard insertion line', async () => {
+    dragAndDropMock.mockClear()
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const handle = w.find('[data-testid="drag-handle-hero"]')
+
+    await handle.trigger('keydown', { key: ' ' })
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(true)
+
+    const dragOptions = dragAndDropMock.mock.calls[0][0] as { onDragstart: (data: unknown) => void }
+    dragOptions.onDragstart({ position: 0, state: {} })
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="keyboard-insertion-indicator"]').exists()).toBe(false)
+  })
+
+  it('resolves a synthetic pointerup drop from the coordinates, not the captured target', async () => {
+    dragAndDropMock.mockClear()
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const editing = useEditingStore()
+    const moveSpy = vi.spyOn(editing, 'moveComponentStructural')
+
+    const dragOptions = dragAndDropMock.mock.calls[0][0] as {
+      parent: HTMLElement
+      onDragstart: (data: unknown) => void
+      onDragend: (data: unknown) => void
+    }
+    const blocks = [...dragOptions.parent.querySelectorAll<HTMLElement>(':scope > .top-level-block')]
+    expect(blocks).toHaveLength(3)
+    // Release over the bottom half of banner (index 2).
+    vi.spyOn(blocks[2]!, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 120,
+      height: 20,
+      left: 0,
+      right: 100,
+      width: 100,
+      x: 0,
+      y: 100,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const destinationRow = blocks[2]!.querySelector('.top-level-row')
+    const sourceGrip = blocks[0]!.querySelector('.drag-handle')
+    const originalElementFromPoint = document.elementFromPoint
+    document.elementFromPoint = vi.fn(() => destinationRow)
+    try {
+      // Synthetic drags skip onDragstart; pointer capture keeps the
+      // pointerup target on the source grip even over the destination.
+      sourceGrip!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 5 }))
+      sourceGrip!.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 50, clientY: 115 }))
+      dragOptions.onDragend({ state: {} })
+    } finally {
+      document.elementFromPoint = originalElementFromPoint
+    }
+
+    expect(moveSpy).toHaveBeenCalledTimes(1)
+    expect(moveSpy.mock.calls[0]![2]).toBe(0)
+    expect(moveSpy.mock.calls[0]![3]).toBe(2)
+  })
+
+  it('falls back to the drop event target when coordinates miss the tree', async () => {
+    dragAndDropMock.mockClear()
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const editing = useEditingStore()
+    const moveSpy = vi.spyOn(editing, 'moveComponentStructural')
+
+    const dragOptions = dragAndDropMock.mock.calls[0][0] as {
+      parent: HTMLElement
+      onDragstart: (data: unknown) => void
+      onDragend: (data: unknown) => void
+    }
+    const blocks = [...dragOptions.parent.querySelectorAll<HTMLElement>(':scope > .top-level-block')]
+    vi.spyOn(blocks[2]!, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 120,
+      height: 20,
+      left: 0,
+      right: 100,
+      width: 100,
+      x: 0,
+      y: 100,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const originalElementFromPoint = document.elementFromPoint
+    // A point over unrelated chrome must not select that element's row.
+    document.elementFromPoint = vi.fn(() => document.body)
+    try {
+      dragOptions.onDragstart({ position: 0, state: {} })
+      blocks[2]!.dispatchEvent(new MouseEvent('drop', { bubbles: true, clientX: 50, clientY: 115 }))
+      dragOptions.onDragend({ state: {} })
+    } finally {
+      document.elementFromPoint = originalElementFromPoint
+    }
+
+    expect(moveSpy).toHaveBeenCalledTimes(1)
+    expect(moveSpy.mock.calls[0]![2]).toBe(0)
+    expect(moveSpy.mock.calls[0]![3]).toBe(2)
+  })
+
+  it('the drag controller only counts top-level rows as draggable nodes', async () => {
+    // The library is mocked here, so its remapNodes warning cannot be
+    // observed in this suite. This pins the integration contract the warning
+    // guards: the filter FormKit receives must accept exactly the rows that
+    // correspond to values, and reject the insertion line and any other
+    // direct child. The e2e Space path exercises the real library and
+    // asserts the warning is absent.
+    dragAndDropMock.mockClear()
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+
+    const dragOptions = dragAndDropMock.mock.calls[0][0] as {
+      parent: HTMLElement
+      values: { value: unknown[] }
+      draggable?: (child: HTMLElement) => boolean
+    }
+    expect(dragOptions.draggable).toBeTypeOf('function')
+    const isDraggable = dragOptions.draggable!
+
+    // Lift a row so the insertion line is rendered as a direct child.
+    await w.find('[data-testid="drag-handle-hero"]').trigger('keydown', { key: ' ' })
+    const indicator = dragOptions.parent.querySelector<HTMLElement>('[data-testid="keyboard-insertion-indicator"]')
+    expect(indicator).not.toBeNull()
+    expect(isDraggable(indicator!)).toBe(false)
+
+    const row = dragOptions.parent.querySelector<HTMLElement>('.top-level-block')
+    expect(row).not.toBeNull()
+    expect(isDraggable(row!)).toBe(true)
+
+    const unrelated = document.createElement('div')
+    unrelated.className = 'not-a-component-row'
+    dragOptions.parent.appendChild(unrelated)
+    expect(isDraggable(unrelated)).toBe(false)
+    unrelated.remove()
+
+    // remapNodes warns as soon as the eligible-child count differs from the
+    // value count and then skips the remap entirely.
+    const eligibleChildren = Array.from(dragOptions.parent.children).filter(
+      child => child instanceof HTMLElement && isDraggable(child),
+    )
+    expect(eligibleChildren).toHaveLength(dragOptions.values.value.length)
+  })
+
+  it('removes the top-level component at the clicked index', async () => {
+    selectStarterHome()
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    const editing = useEditingStore()
+    const removeSpy = vi.spyOn(editing, 'removeComponentStructural')
+
+    await w.find('[data-testid="remove-features"]').trigger('click')
+
+    expect(removeSpy).toHaveBeenCalledTimes(1)
+    const args = removeSpy.mock.calls[0]
+    expect(args[0]).toEqual({ kind: 'page', name: 'home' })
+    expect(args[2]).toBe(1)
+  })
+
+  it('rebinds drag listeners when an emptied tree is repopulated', async () => {
+    dragAndDropMock.mockClear()
+    tearDownMock.mockClear()
+    const hero = { name: 'hero', template: 'hero' }
+    setPageSelection({
+      name: 'home',
+      route: '/',
+      template: 'page-default',
+      dir: 'pages/home',
+      components: [hero],
+    })
+    const w = mountTree(fakeFragmentsApi())
+    await flushMicrotasks()
+    expect(dragAndDropMock).toHaveBeenCalledTimes(1)
+    const firstParent = dragAndDropMock.mock.calls[0][0].parent as HTMLElement
+
+    const structural = useEditorStructuralStore()
+    const key = { kind: 'page' as const, name: 'home' }
+    structural.removeComponent(key, [hero], 0)
+    await flushMicrotasks()
+    expect(w.find('[data-testid="component-tree-draggable"]').exists()).toBe(false)
+    expect(tearDownMock).toHaveBeenCalledWith(firstParent)
+
+    structural.addComponent(key, [], hero)
+    await flushMicrotasks()
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="component-tree-draggable"]').exists()).toBe(true)
+    expect(dragAndDropMock).toHaveBeenCalledTimes(2)
+    expect(dragAndDropMock.mock.calls[1][0].parent).not.toBe(firstParent)
   })
 
   it('the draggable parent is rendered with the test id (DnD library hook target)', async () => {

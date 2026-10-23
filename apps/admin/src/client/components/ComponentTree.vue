@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { tearDown } from '@formkit/drag-and-drop'
 import { dragAndDrop } from '@formkit/drag-and-drop/vue'
 import Button from 'primevue/button'
 import { useSelectionStore } from '../stores/selection.js'
@@ -54,6 +55,7 @@ const toast = useToastStore()
 const focus = useComponentFocusStore()
 const structural = useEditorStructuralStore()
 const selectedNodeKey = ref<string | null>(null)
+const keyboardLift = ref<{ from: number; to: number } | null>(null)
 const hoveredNodeKey = ref<string | null>(null)
 const componentNodes = ref<ComponentNode[]>([])
 const showAddDialog = ref(false)
@@ -85,20 +87,28 @@ async function buildComponentNode(
   index: number,
   parentTreePath: string,
   map: Map<string, GzEntry>,
+  fragmentCounts: Map<string, number>,
 ): Promise<ComponentNode> {
   // Fragment reference
   if (typeof entry === 'string') {
     const fragName = entry.slice(1)
+    const occurrence = fragmentCounts.get(fragName) ?? 0
+    fragmentCounts.set(fragName, occurrence + 1)
     const treePath = parentTreePath ? `${parentTreePath}/${entry}` : entry
     const gzId = hashPath(treePath)
     map.set(gzId, { isFragment: true, fragName })
     try {
       const frag = await fragmentsApi.getFragment(fragName)
+      const childCounts = new Map<string, number>()
       const children = frag.components
-        ? await Promise.all(frag.components.map((c, i) => buildComponentNode(c, i, treePath, map)))
+        ? await Promise.all(frag.components.map((c, i) => buildComponentNode(c, i, treePath, map, childCounts)))
         : []
       return {
-        key: `frag:${fragName}:${index}`,
+        // The same fragment can be referenced from different sibling groups,
+        // so occurrence alone is not tree-unique. Include the full path
+        // (parent path + @frag) to keep keys globally distinct; occurrence
+        // still separates repeated refs to one fragment in a single group.
+        key: `frag:${treePath}:${occurrence}`,
         label: entry,
         data: {
           isFragment: true,
@@ -113,7 +123,7 @@ async function buildComponentNode(
       }
     } catch (err) {
       return {
-        key: `frag:${fragName}:${index}`,
+        key: `frag:${treePath}:${occurrence}`,
         label: entry,
         data: { isFragment: true, fragName, treePath, index, isTopLevel: true, error: (err as Error).message },
         children: [],
@@ -124,14 +134,15 @@ async function buildComponentNode(
   // Inline component
   const treePath = parentTreePath ? `${parentTreePath}/${entry.name}` : entry.name
   const gzId = hashPath(treePath)
+  const childCounts = new Map<string, number>()
   const children: ComponentNode[] = entry.components
-    ? await Promise.all(entry.components.map((c, i) => buildComponentNode(c, i, treePath, map)))
+    ? await Promise.all(entry.components.map((c, i) => buildComponentNode(c, i, treePath, map, childCounts)))
     : []
 
   map.set(gzId, { path: treePath, template: entry.template })
 
   return {
-    key: `comp:${treePath}:${index}`,
+    key: `comp:${treePath}`,
     label: entry.name,
     data: { path: treePath, template: entry.template, treePath, isFragment: false, index, isTopLevel: true },
     children: children.map(c => ({ ...c, data: { ...c.data, isTopLevel: false } })),
@@ -141,6 +152,8 @@ async function buildComponentNode(
 watch(
   [detail, effectiveComponents],
   async ([d, comps]) => {
+    // A rebuilt tree invalidates the index-based keyboard lift.
+    keyboardLift.value = null
     if (!d) {
       componentNodes.value = []
       gzMap.value = new Map()
@@ -149,8 +162,9 @@ watch(
 
     const map = new Map<string, GzEntry>()
     const rootPath = selection.type === 'fragment' ? `@${selection.name}` : ''
+    const fragmentCounts = new Map<string, number>()
     const children = comps
-      ? await Promise.all(comps.map((entry, i) => buildComponentNode(entry, i, rootPath, map)))
+      ? await Promise.all(comps.map((entry, i) => buildComponentNode(entry, i, rootPath, map, fragmentCounts)))
       : []
 
     const rootNode: ComponentNode = {
@@ -389,6 +403,7 @@ function nodeToSelection(node: ComponentNode): EditorSelection | null {
 
 async function onSelect(node: ComponentNode) {
   if (!node.data) return
+  keyboardLift.value = null
   selectedNodeKey.value = node.key
   focus.clearPending()
   const treePath = node.data.treePath
@@ -481,36 +496,56 @@ function currentManifestKey(): import('gazetta/types').ManifestKey | null {
  *     buttons replaced by the grip handle in #105)
  *   - the Alt+ArrowUp / Alt+ArrowDown keyboard shortcut (Q6)
  */
-function moveComponent(index: number, direction: -1 | 1) {
+function moveComponentTo(index: number, toIndex: number) {
   const comps = effectiveComponents.value
   if (!comps) return
-  const newIndex = index + direction
-  if (newIndex < 0 || newIndex >= comps.length) return
+  if (index < 0 || index >= comps.length || toIndex < 0 || toIndex >= comps.length || index === toIndex) return
   const key = currentManifestKey()
   if (!key) return
-  editing.moveComponentStructural(key, comps, index, newIndex)
+  editing.moveComponentStructural(key, comps, index, toIndex)
+}
+
+function moveComponent(index: number, direction: -1 | 1) {
+  moveComponentTo(index, index + direction)
 }
 
 // --- Drag-and-drop reorder (#105) ---
 //
-// `@formkit/drag-and-drop` operates on a ref of values; on a successful
-// drop it mutates the ref to the new order and fires `onSort`. We sync
-// `dragValues` from `effectiveComponents` so the lib's view tracks the
-// store; on `onSort` we dispatch to `editing.moveComponentStructural`.
-//
-// One drag = one position move (same model as the legacy buttons), so
-// we extract `previousPosition` + `position` from the SortEventData and
-// forward to the store action. The store update propagates back through
-// `effectiveComponents` → `dragValues` watcher; the lib's mutated state
-// converges with the store's authoritative state.
+// `@formkit/drag-and-drop` operates on a ref of values and mutates it on
+// every live sort while the pointer crosses rows. 0.6.1 remaps node
+// identities during a drag, but the intermediate sort events still describe
+// transient positions. We ignore them so one gesture commits exactly one
+// structural move, on `onDragend`, using the pointer's release point over the
+// target block rather than a live index.
 //
 // `dragHandle: '.drag-handle'` restricts pointer drag to clicks on the
-// grip element (not the row body — preserves click-to-select). Keyboard
-// reorder is the library's default (Space-to-lift + arrows + Space-to-
-// drop) and works against the focused row regardless of handle.
+// grip element (not the row body — preserves click-to-select).
+//
+// The library's `handleNodeFocus` disables native drag when focus moves
+// into a child during pointerdown. The grip is itself a focusable button,
+// so that guard would disable the block before a drag could start. Keep
+// the guard for the row's other focusable children, but exempt the grip.
+// 0.6.1 still has this behavior (verified against the installed build and
+// the mouse-drag e2e tests); removing the override makes grip drags fail
+// whenever the grip was not already focused.
+// (The library's keyboard handler is still empty in 0.6.1; the app handles
+// Space-to-lift in `onTopLevelKeydown` below.)
 
 const dragParentRef = ref<HTMLElement | null>(null)
 const dragValues = ref<import('../api/client.js').ComponentEntry[]>([])
+const dragSourceIndex = ref<number | null>(null)
+/**
+ * Boundary in the rendered list where a lifted row will land: 0 is above the
+ * first row, `topLevelNodes.length` is below the last. `keyboardLift.to` is
+ * the final array index after the source is spliced out, so a downward move
+ * lands after the row currently at `to`, and an upward move before it.
+ */
+const keyboardInsertionBoundary = computed<number | null>(() => {
+  const lift = keyboardLift.value
+  if (!lift) return null
+  if (lift.to === lift.from) return lift.from
+  return lift.to < lift.from ? lift.to : lift.to + 1
+})
 
 watch(
   effectiveComponents,
@@ -520,43 +555,144 @@ watch(
   { immediate: true },
 )
 
-function onDragSort(data: { previousPosition: number; position: number }): void {
-  const { previousPosition, position } = data
-  if (previousPosition === position) return
-  const key = currentManifestKey()
-  if (!key) return
-  const comps = effectiveComponents.value
-  if (!comps) return
-  // The library has already mutated dragValues to the new order. Dispatch
-  // the canonical move to the structural-pending store; the watcher above
-  // re-syncs dragValues from effectiveComponents on the next tick (no-op
-  // when orders match).
-  editing.moveComponentStructural(key, comps, previousPosition, position)
-}
-
-let dragInitialized = false
+let dragBoundEl: HTMLElement | null = null
+let dragAbort: AbortController | null = null
+let dragDropped = false
+let synthDrag = false
+let dropPoint: { blockIndex: number; after: boolean } | null = null
 
 function setupDrag(el: HTMLElement | null) {
-  if (!el || dragInitialized) return
-  dragInitialized = true
+  if (el === dragBoundEl) return
+  // The draggable list is behind `v-if="topLevelNodes.length"`. When the last
+  // component is removed and a later add recreates the element, the old
+  // listeners belong to a detached node and the library has no parent for the
+  // new one. Tear down the old binding before initializing the new element.
+  if (dragBoundEl) {
+    dragAbort?.abort()
+    dragAbort = null
+    tearDown(dragBoundEl)
+  }
+  dragBoundEl = el
+  if (!el) return
+  dragAbort = new AbortController()
+  const { signal } = dragAbort
+  // Native drops fire `drop`; synthetic (touch) drops fire `pointerup`.
+  // `onDragend` also fires for canceled drags, so require one of these
+  // before committing the last hovered position. Capture the release
+  // point too: the library's `incomingDirection` is entry direction,
+  // not the drop half, so it can't distinguish before/after a block.
+  const recordDrop = (e: DragEvent | PointerEvent) => {
+    // Touch drags use implicit pointer capture, so `e.target` can stay on the
+    // source grip even when the finger is released over another row. Resolve
+    // the row under the release coordinates first and fall back to the event
+    // target only when the point does not land inside this tree.
+    const blockAt = (target: Element | null): HTMLElement | null => {
+      const block = target?.closest('.top-level-block')
+      return block instanceof HTMLElement && el.contains(block) ? block : null
+    }
+    const fromPoint =
+      Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? document.elementFromPoint(e.clientX, e.clientY) : null
+    const block = blockAt(fromPoint) ?? blockAt(e.target instanceof Element ? e.target : null)
+    if (!block) return
+    const blocks = [...el.querySelectorAll<HTMLElement>(':scope > .top-level-block')]
+    const blockIndex = blocks.indexOf(block)
+    if (blockIndex === -1) return
+    const rect = block.getBoundingClientRect()
+    dropPoint = { blockIndex, after: e.clientY > rect.top + rect.height / 2 }
+    dragDropped = true
+  }
+  el.addEventListener('drop', recordDrop, { capture: true, signal })
+  // Synthetic drags (touch/pen) skip the library's `onDragstart`, so capture
+  // the source row on pointerdown and treat the pointerup as a drop. Native
+  // mouse drags overwrite this in `onDragstart` before any drop can land.
+  el.addEventListener(
+    'pointerdown',
+    e => {
+      const handle = e.target instanceof Element ? e.target.closest('.drag-handle') : null
+      const block = handle?.closest('.top-level-block')
+      if (!(block instanceof HTMLElement) || !el.contains(block)) return
+      const blocks = [...el.querySelectorAll<HTMLElement>(':scope > .top-level-block')]
+      const blockIndex = blocks.indexOf(block)
+      if (blockIndex === -1) return
+      keyboardLift.value = null
+      dragSourceIndex.value = blockIndex
+      synthDrag = true
+      dragDropped = false
+      dropPoint = null
+    },
+    { capture: true, signal },
+  )
+  el.addEventListener(
+    'pointerup',
+    e => {
+      if (synthDrag) recordDrop(e)
+    },
+    { capture: true, signal },
+  )
   dragAndDrop({
     parent: el,
     values: dragValues,
     dragHandle: '.drag-handle',
-    onSort: data => onDragSort(data as { previousPosition: number; position: number }),
+    // Only actual rows are draggable nodes. The keyboard insertion line is
+    // also a direct child; 0.6.1's remapNodes counts every node child, warns
+    // on the value mismatch, and skips the remap, leaving rows after the line
+    // mapped to the wrong value.
+    draggable: child => child.classList.contains('top-level-block'),
+    handleNodeFocus: (data, state) => {
+      if (data.e.target === data.e.currentTarget || !state.pointerDown) return
+      if (data.e.target instanceof Element && data.e.target.closest('.drag-handle')) return
+      state.pointerDown.node.el.draggable = false
+    },
+    onDragstart: data => {
+      keyboardLift.value = null
+      dragSourceIndex.value = data.position
+      synthDrag = 'clonedDraggedNode' in data.state
+      dragDropped = false
+      dropPoint = null
+    },
+    onDragend: data => {
+      const from = dragSourceIndex.value
+      const dropped = dragDropped
+      const point = dropPoint
+      const state = data.state as { targetIndex?: number; incomingDirection?: string }
+      dragSourceIndex.value = null
+      dragDropped = false
+      synthDrag = false
+      dropPoint = null
+      if (dropped && from !== null) {
+        // Prefer the release-point block. Fall back to the library's
+        // target for synthetic drags that didn't expose a DOM target.
+        const insertAt = point
+          ? point.blockIndex + (point.after ? 1 : 0)
+          : state.targetIndex !== undefined
+            ? state.targetIndex + (state.incomingDirection === 'below' ? 1 : 0)
+            : undefined
+        if (insertAt !== undefined) {
+          const to = from < insertAt ? insertAt - 1 : insertAt
+          if (to !== from) moveComponentTo(from, to)
+        }
+      }
+      // The library mutates `dragValues` on every live sort; reset it to
+      // the store's authoritative order whether or not the drop moved.
+      const comps = effectiveComponents.value
+      dragValues.value = comps ? [...comps] : []
+    },
   })
 }
 
 watch(dragParentRef, el => setupDrag(el))
 
 onBeforeUnmount(() => {
-  // Library cleanup is implicit — the parent element going out of the
-  // DOM detaches its event listeners. Local guard reset for HMR.
-  dragInitialized = false
+  dragAbort?.abort()
+  dragAbort = null
+  if (dragBoundEl) tearDown(dragBoundEl)
+  dragBoundEl = null
 })
 
 /**
  * Keyboard shortcuts on a focused top-level row:
+ *   - Space, ArrowUp/Down, Space — lift, move, drop (#105 Q6).
+ *   - Escape — cancel a lifted row.
  *   - Alt+ArrowUp / Alt+ArrowDown — move the row one position (#105 Q6).
  *   - Cmd+D (Mac) / Ctrl+D — duplicate the row (#45). Same modifier
  *     pattern as Notion / Figma / Pages.
@@ -577,8 +713,46 @@ function onTopLevelKeydown(ev: KeyboardEvent, index: number): void {
     duplicateComponent(index)
     return
   }
+
+  // Space-to-lift / Space-to-drop on the grip (WAI-ARIA grab pattern).
+  // The handler lives on the block, so ignore Space from action buttons.
+  const handle = ev.target instanceof Element ? ev.target.closest<HTMLElement>('.drag-handle') : null
+  const noModifiers = !ev.altKey && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey
+  if (handle && noModifiers && (ev.key === ' ' || ev.key === 'Spacebar')) {
+    ev.preventDefault()
+    if (keyboardLift.value && keyboardLift.value.from === index) {
+      const { from, to } = keyboardLift.value
+      keyboardLift.value = null
+      if (from !== to) {
+        pendingFocusLabel.value = topLevelNodes.value[index]?.label ?? null
+        moveComponentTo(from, to)
+        void nextTick(() => handle.focus())
+      }
+    } else {
+      keyboardLift.value = { from: index, to: index }
+    }
+    return
+  }
+
+  if (keyboardLift.value && ev.key === 'Escape') {
+    ev.preventDefault()
+    keyboardLift.value = null
+    return
+  }
+
+  if (keyboardLift.value && keyboardLift.value.from === index && noModifiers) {
+    if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+      ev.preventDefault()
+      const delta = ev.key === 'ArrowUp' ? -1 : 1
+      const lastIndex = topLevelNodes.value.length - 1
+      keyboardLift.value.to = Math.max(0, Math.min(lastIndex, keyboardLift.value.to + delta))
+      return
+    }
+  }
+
   // Alt+ArrowUp / Alt+ArrowDown — move. Modifier-only check (Alt only).
   if (!ev.altKey || ev.shiftKey || ev.ctrlKey || ev.metaKey) return
+  keyboardLift.value = null
   if (ev.key === 'ArrowUp') {
     if (index === 0) return
     ev.preventDefault()
@@ -590,6 +764,22 @@ function onTopLevelKeydown(ev: KeyboardEvent, index: number): void {
   }
 }
 
+const pendingFocusLabel = ref<string | null>(null)
+
+watch(
+  componentNodes,
+  () => {
+    const label = pendingFocusLabel.value
+    if (!label || !dragParentRef.value) return
+    pendingFocusLabel.value = null
+    const handle = Array.from(dragParentRef.value.querySelectorAll<HTMLElement>('.drag-handle')).find(
+      el => el.dataset.testid === `drag-handle-${label}`,
+    )
+    handle?.focus()
+  },
+  { flush: 'post' },
+)
+
 function removeComponent(index: number) {
   const comps = effectiveComponents.value
   if (!comps) return
@@ -597,6 +787,7 @@ function removeComponent(index: number) {
   if (!key) return
 
   const removed = comps[index]
+  if (!removed) return
   const removedName = typeof removed === 'string' ? removed : removed.name
 
   // The path is about to disappear from the manifest — drop any open editor
@@ -719,70 +910,81 @@ function nextDuplicateName(
          only at v1; nested rows render as static (non-draggable) inside
          the block. -->
     <div v-if="topLevelNodes.length" ref="dragParentRef" class="top-level-list" data-testid="component-tree-draggable">
-      <div v-for="(topNode, topIndex) in topLevelNodes"
-        :key="topNode.key"
-        :data-component-name="topNode.label"
-        class="top-level-block"
-        @keydown="onTopLevelKeydown($event, topIndex)">
-        <!-- The top-level row itself — draggable via the grip handle. -->
+      <template v-for="(topNode, topIndex) in topLevelNodes" :key="topNode.key">
+        <!-- Keyboard lift destination. The line sits at the boundary where
+             the lifted row will land if Space drops it now. -->
+        <div v-if="keyboardInsertionBoundary === topIndex"
+          class="keyboard-insertion-line"
+          data-testid="keyboard-insertion-indicator"
+          :data-boundary="topIndex" />
         <div
-          :class="['node-item', 'top-level-row', { selected: selectedNodeKey === topNode.key, hovered: hoveredNodeKey === topNode.key }]"
-          :data-testid="`component-${topNode.data?.isFragment ? topNode.data.fragName : topNode.label}`"
-          @click="onSelect(topNode)"
-          @mouseenter="onHover(topNode)"
-          @mouseleave="onHoverEnd()">
-          <button
-            type="button"
-            class="drag-handle"
-            :data-testid="`drag-handle-${topNode.label}`"
-            :aria-label="`Drag ${topNode.label} to reorder, or press Alt+Arrow Up/Down`"
-            :title="`Drag to reorder, or press Alt+Up/Alt+Down`"
-            tabindex="0"
-            @click.stop>
-            <i class="pi pi-bars" aria-hidden="true" />
-          </button>
-          <i v-if="topNode.data?.error" class="pi pi-exclamation-triangle node-icon node-error-icon"
-            :title="topNode.data.error" />
-          <i v-else :class="nodeIcon(topNode, 0)" class="node-icon" />
-          <span v-if="topNode.data?.path && (editing.hasPendingEdit(topNode.data.path) || (editing.dirty && editing.path === topNode.data.path))" class="node-dirty-dot" />
-          <span class="node-label">{{ topNode.label }}</span>
-          <Button v-if="topNode.data?.path && (editing.hasPendingEdit(topNode.data.path) || (editing.dirty && editing.path === topNode.data.path))"
-            icon="pi pi-undo" text rounded size="small" class="node-revert"
-            title="Discard changes" @click.stop="revertComponent(topNode.data.path!)" />
-          <span class="node-actions">
-            <Button icon="pi pi-clone" text rounded size="small"
-              :data-testid="`duplicate-${topNode.label}`"
-              :aria-label="`Duplicate ${topNode.label}`"
-              :title="`Duplicate (Cmd/Ctrl+D)`"
-              @click.stop="duplicateComponent(topIndex)" />
-            <Button icon="pi pi-trash" text rounded size="small" severity="danger"
-              :data-testid="`remove-${topNode.label}`"
-              :aria-label="`Remove ${topNode.label}`"
-              @click.stop="removeComponent(topIndex)" />
-          </span>
-        </div>
+          :data-component-name="topNode.label"
+          :class="['top-level-block', { 'keyboard-lifted': keyboardLift?.from === topIndex }]"
+          @keydown="onTopLevelKeydown($event, topIndex)">
+          <!-- The top-level row itself — draggable via the grip handle. -->
+          <div
+            :class="['node-item', 'top-level-row', { selected: selectedNodeKey === topNode.key, hovered: hoveredNodeKey === topNode.key }]"
+            :data-testid="`component-${topNode.data?.isFragment ? topNode.data.fragName : topNode.label}`"
+            @click="onSelect(topNode)"
+            @mouseenter="onHover(topNode)"
+            @mouseleave="onHoverEnd()">
+            <button
+              type="button"
+              class="drag-handle"
+              :data-testid="`drag-handle-${topNode.label}`"
+              :aria-label="`Drag ${topNode.label} to reorder, or press Space then Arrow Up/Down, then Space again. Alt+Arrow moves immediately.`"
+              :title="`Drag to reorder, or press Space + Arrow Up/Down + Space`"
+              tabindex="0"
+              @click.stop>
+              <i class="pi pi-bars" aria-hidden="true" />
+            </button>
+            <i v-if="topNode.data?.error" class="pi pi-exclamation-triangle node-icon node-error-icon"
+              :title="topNode.data.error" />
+            <i v-else :class="nodeIcon(topNode, 0)" class="node-icon" />
+            <span v-if="topNode.data?.path && (editing.hasPendingEdit(topNode.data.path) || (editing.dirty && editing.path === topNode.data.path))" class="node-dirty-dot" />
+            <span class="node-label">{{ topNode.label }}</span>
+            <Button v-if="topNode.data?.path && (editing.hasPendingEdit(topNode.data.path) || (editing.dirty && editing.path === topNode.data.path))"
+              icon="pi pi-undo" text rounded size="small" class="node-revert"
+              title="Discard changes" @click.stop="revertComponent(topNode.data.path!)" />
+            <span class="node-actions">
+              <Button icon="pi pi-clone" text rounded size="small"
+                :data-testid="`duplicate-${topNode.label}`"
+                :aria-label="`Duplicate ${topNode.label}`"
+                :title="`Duplicate (Cmd/Ctrl+D)`"
+                @click.stop="duplicateComponent(topIndex)" />
+              <Button icon="pi pi-trash" text rounded size="small" severity="danger"
+                :data-testid="`remove-${topNode.label}`"
+                :aria-label="`Remove ${topNode.label}`"
+                @click.stop="removeComponent(topIndex)" />
+            </span>
+          </div>
 
-        <!-- Nested rows belonging to this top-level block. Rendered
-             inside the block so they ride along on drag. Not
-             individually draggable (no drag-handle). -->
-        <div v-for="{ node: nestedNode, depth } in flattenNested(topNode)"
-          :key="nestedNode.key"
-          :class="['node-item', 'nested-row', { selected: selectedNodeKey === nestedNode.key, hovered: hoveredNodeKey === nestedNode.key }]"
-          :style="nodeStyle(depth)"
-          :data-testid="`component-${nestedNode.data?.isFragment ? nestedNode.data.fragName : nestedNode.label}`"
-          @click="onSelect(nestedNode)"
-          @mouseenter="onHover(nestedNode)"
-          @mouseleave="onHoverEnd()">
-          <i v-if="nestedNode.data?.error" class="pi pi-exclamation-triangle node-icon node-error-icon"
-            :title="nestedNode.data.error" />
-          <i v-else :class="nodeIcon(nestedNode, depth)" class="node-icon" />
-          <span v-if="nestedNode.data?.path && (editing.hasPendingEdit(nestedNode.data.path) || (editing.dirty && editing.path === nestedNode.data.path))" class="node-dirty-dot" />
-          <span class="node-label">{{ nestedNode.label }}</span>
-          <Button v-if="nestedNode.data?.path && (editing.hasPendingEdit(nestedNode.data.path) || (editing.dirty && editing.path === nestedNode.data.path))"
-            icon="pi pi-undo" text rounded size="small" class="node-revert"
-            title="Discard changes" @click.stop="revertComponent(nestedNode.data.path!)" />
+          <!-- Nested rows belonging to this top-level block. Rendered
+               inside the block so they ride along on drag. Not
+               individually draggable (no drag-handle). -->
+          <div v-for="{ node: nestedNode, depth } in flattenNested(topNode)"
+            :key="nestedNode.key"
+            :class="['node-item', 'nested-row', { selected: selectedNodeKey === nestedNode.key, hovered: hoveredNodeKey === nestedNode.key }]"
+            :style="nodeStyle(depth)"
+            :data-testid="`component-${nestedNode.data?.isFragment ? nestedNode.data.fragName : nestedNode.label}`"
+            @click="onSelect(nestedNode)"
+            @mouseenter="onHover(nestedNode)"
+            @mouseleave="onHoverEnd()">
+            <i v-if="nestedNode.data?.error" class="pi pi-exclamation-triangle node-icon node-error-icon"
+              :title="nestedNode.data.error" />
+            <i v-else :class="nodeIcon(nestedNode, depth)" class="node-icon" />
+            <span v-if="nestedNode.data?.path && (editing.hasPendingEdit(nestedNode.data.path) || (editing.dirty && editing.path === nestedNode.data.path))" class="node-dirty-dot" />
+            <span class="node-label">{{ nestedNode.label }}</span>
+            <Button v-if="nestedNode.data?.path && (editing.hasPendingEdit(nestedNode.data.path) || (editing.dirty && editing.path === nestedNode.data.path))"
+              icon="pi pi-undo" text rounded size="small" class="node-revert"
+              title="Discard changes" @click.stop="revertComponent(nestedNode.data.path!)" />
+          </div>
         </div>
-      </div>
+      </template>
+      <div v-if="keyboardInsertionBoundary === topLevelNodes.length"
+        class="keyboard-insertion-line"
+        data-testid="keyboard-insertion-indicator"
+        :data-boundary="topLevelNodes.length" />
     </div>
     <p v-else class="empty">No components</p>
 
@@ -821,6 +1023,23 @@ function nextDuplicateName(
    so it's keyboard-focusable and screen-reader-discoverable. */
 .top-level-list { display: flex; flex-direction: column; gap: 0; }
 .top-level-block { display: flex; flex-direction: column; }
+.top-level-block.keyboard-lifted > .top-level-row {
+  background: var(--color-hover-bg);
+  outline: 1px dashed var(--p-violet-400);
+  outline-offset: -1px;
+}
+/* Keyboard lift destination. Negative vertical margins keep the line from
+   shifting rows as it moves between boundaries. */
+.keyboard-insertion-line {
+  position: relative;
+  z-index: 1;
+  height: 2px;
+  margin: -1px 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
 .drag-handle {
   display: flex;
   align-items: center;
