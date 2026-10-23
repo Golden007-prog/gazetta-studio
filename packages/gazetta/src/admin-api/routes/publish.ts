@@ -79,6 +79,58 @@ export function publishRoutes(
   const app = new Hono<AuditEnv>()
 
   /**
+   * Route-boundary validation for user-supplied item paths (#1196).
+   * Accepted forms: `pages/<name>[:<locale>]`, `fragments/<name>[:<locale>]`,
+   * `templates/<name>`, `assets/<name>`. Every name segment must be
+   * non-empty and not `.`/`..`; no leading `/`, no backslash; a locale
+   * suffix must satisfy `isValidLocale`. The raw item used to be joined
+   * straight onto a storage root, so `..` segments could read and copy
+   * folders outside the site - anything failing these rules is rejected
+   * before a path is built from it.
+   */
+  function parseRouteItem(item: string): { dir: string; knownPrefix: boolean } | null {
+    if (item.startsWith('/') || item.includes('\\')) return null
+    // Known folder prefixes get locale parsing + an existence check;
+    // anything else is an asset-style name (toPublishItem's fallback)
+    // and still gets the same segment rules, so no shape can carry a
+    // `..` segment through.
+    const m = /^(pages|fragments|templates|assets)\/(.+)$/.exec(item)
+    const prefix = m ? m[1] : null
+    let name = m ? m[2] : item
+    if (prefix === 'pages' || prefix === 'fragments') {
+      const ci = name.indexOf(':')
+      if (ci >= 0) {
+        if (!isValidLocale(name.slice(ci + 1))) return null
+        name = name.slice(0, ci)
+      }
+    }
+    if (name.length === 0) return null
+    for (const seg of name.split('/')) {
+      if (seg === '' || seg === '.' || seg === '..') return null
+    }
+    // Existence is checked for folder items (pages/fragments/templates);
+    // asset-style names pass the segment rules only.
+    return { dir: prefix ? `${prefix}/${name}` : name, knownPrefix: prefix !== null && prefix !== 'assets' }
+  }
+
+  /**
+   * Validate request items at the route boundary: shape via
+   * parseRouteItem, then existence on the storage they will be read
+   * from. Returns the error message for the first bad item, or null.
+   */
+  async function validateRequestItems(
+    items: readonly string[],
+    exists: (path: string) => Promise<boolean>,
+  ): Promise<string | null> {
+    for (const item of items ?? []) {
+      const parsed = parseRouteItem(item)
+      if (!parsed) return `Invalid item: ${item}`
+      if (parsed.knownPrefix && !(await exists(parsed.dir))) return `Unknown item: ${item}`
+    }
+    return null
+  }
+
+  /**
    * Categorize an item path into the hook payload shape.
    * Items arrive as e.g. `pages/home`, `fragments/header`,
    * `assets/hero`. Hooks see kind + name + path; if the prefix
@@ -712,6 +764,14 @@ export function publishRoutes(
   app.post('/api/publish', requireCapability('publish:non-production'), async c => {
     const body = (await c.req.json()) as { items: string[]; targets: string[]; source?: string }
 
+    // #1196: reject malformed or unknown items before anything reads
+    // or writes a path built from them.
+    const sourceForValidation = await resolve(body.source)
+    const itemError = await validateRequestItems(body.items, p =>
+      sourceForValidation.storage.exists(sourceForValidation.contentRoot.path(p)),
+    )
+    if (itemError) return c.json({ error: itemError }, 400)
+
     // beforePublish hooks per design-hooks.md "Publish lifecycle".
     // Hooks see the requested items + active target; can mutate
     // the item set (drop / reorder / extend) or throw to cancel
@@ -826,6 +886,15 @@ export function publishRoutes(
 
   app.post('/api/publish/stream', requireCapability('publish:non-production'), async c => {
     const body = (await c.req.json()) as { items: string[]; targets: string[]; source?: string }
+
+    // #1196: reject malformed or unknown items before anything reads
+    // or writes a path built from them (synchronous 400, before the
+    // SSE stream opens - same surface as the sync route).
+    const sourceForValidation = await resolve(body.source)
+    const itemError = await validateRequestItems(body.items, p =>
+      sourceForValidation.storage.exists(sourceForValidation.contentRoot.path(p)),
+    )
+    if (itemError) return c.json({ error: itemError }, 400)
 
     // beforePublish hooks fire BEFORE the SSE stream opens — a
     // cancellation surfaces as a 409 (synchronous) rather than as
@@ -961,6 +1030,9 @@ export function publishRoutes(
 
     let items: string[]
     if (body.items?.length) {
+      // #1196: same boundary validation against the fetch source.
+      const itemError = await validateRequestItems(body.items, p => targetStorage.exists(p))
+      if (itemError) return c.json({ error: itemError }, 400)
       items = body.items
     } else {
       items = []

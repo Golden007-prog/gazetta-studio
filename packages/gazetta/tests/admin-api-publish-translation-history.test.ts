@@ -12,7 +12,7 @@
  * records `page.json` AND every translation manifest the copy wrote.
  *
  * Verified fail-unfixed before commit: with `src/admin-api/routes/
- * publish.ts` reverted, all three tests fail — the variant manifest is
+ * publish.ts` reverted, the three publish tests fail — the variant manifest is
  * absent from the target and from the publish revision's snapshot (cases
  * 1 and 3), and the bare publish records `page.json` only (case 2).
  *
@@ -139,26 +139,26 @@ describe('publish route — translation manifests copied and recorded (#1174)', 
     expect(rev.snapshot).toHaveProperty('pages/about/page.fr.json')
   })
 
-  it('fails closed on an invalid locale: no manifest path is built from it, and history records none', async () => {
-    // `pages/about:../escape`: isValidLocale rejects the locale before
-    // it reaches a manifest filename, so the copy writes no variant
-    // manifest and the revision records nothing derived from it.
-    // (publishRun's render-side locale handling is out of scope here.)
+  it('rejects an invalid locale at the route boundary: 400, no write, no revision', async () => {
+    // `pages/about:../escape` fails `isValidLocale`, so #1196's
+    // boundary parser rejects the request before any path is built -
+    // stronger than the copy/history fail-closed guards, which stay as
+    // the second layer for items that reach the route internals.
     const { app, sourceStorage, targetStorage } = buildApp()
-    // The manifest an unvalidated `../escape` locale would name. On a
-    // hierarchical filesystem this path escapes the item folder; the
-    // flat in-memory storage keys it literally.
     sourceStorage.seed({
       'pages/about/page.../escape.json': JSON.stringify({ template: 'page-default', content: {} }),
     })
 
-    await publish(app, ['pages/about:../escape'])
+    const res = await app.request('/api/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: ['pages/about:../escape'], targets: ['staging'] }),
+    })
 
-    const manifestKeys = [...targetStorage.dump().keys()].filter(k => k.endsWith('.json') && !k.startsWith('.gazetta/'))
-    expect(manifestKeys.some(k => k.includes('..'))).toBe(false)
-
-    const rev = publishRevision(await readRevisions(targetStorage))
-    expect(Object.keys(rev.snapshot).some(k => k.includes('..'))).toBe(false)
+    expect(res.status).toBe(400)
+    const keys = [...targetStorage.dump().keys()]
+    expect(keys.some(k => k.includes('..'))).toBe(false)
+    expect(keys.some(k => k.startsWith('.gazetta/history/revisions/'))).toBe(false)
   })
 
   it('does not record a translation manifest whose locale fails LOCALE_PATTERN', async () => {
