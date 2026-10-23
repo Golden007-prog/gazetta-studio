@@ -444,3 +444,80 @@ describe('recordWrite', () => {
     expect(blobs).toHaveLength(1)
   })
 })
+
+describe('recordWrite affected items (#1078)', () => {
+  let storage: ReturnType<typeof memoryStorage>
+  beforeEach(() => {
+    storage = memoryStorage()
+  })
+
+  it('lists only the paths each write changed; the snapshot still holds the full tree', async () => {
+    storage.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/home/page.json': '{"v":1}',
+      'pages/about/page.json': '{"v":1}',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/home/page.json', content: '{"v":2}' }],
+    })
+    const second = await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/about/page.json', content: '{"v":2}' }],
+    })
+
+    // The second save's revision names only the second page.
+    expect(second.items).toEqual(['pages/about/page.json'])
+    const manifest = await history.readRevision(second.id)
+    expect(manifest.items).toEqual(['pages/about/page.json'])
+    // The snapshot still holds both pages plus the root file.
+    expect(Object.keys(manifest.snapshot).sort()).toEqual([
+      'pages/about/page.json',
+      'pages/home/page.json',
+      'site.config.ts',
+    ])
+    // The first save's revision names only its own write; the baseline
+    // still lists everything it captured.
+    const list = await history.listRevisions()
+    const baseline = list.find(r => r.message === 'Initial baseline')!
+    const firstSave = list.find(r => r.id !== second.id && r.id !== baseline.id)!
+    expect(firstSave.items).toEqual(['pages/home/page.json'])
+    expect(baseline.items).toEqual(['pages/about/page.json', 'pages/home/page.json', 'site.config.ts'])
+  })
+
+  it('a delete names the deleted path even though it leaves the snapshot', async () => {
+    storage.seed({
+      'site.config.ts': "export default { name: 'demo' }\n",
+      'pages/home/page.json': '{"v":1}',
+      'pages/about/page.json': '{"v":1}',
+    })
+    const history = createHistoryProvider({ storage })
+    const contentRoot = createContentRoot(storage)
+
+    await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/home/page.json', content: '{"v":2}' }],
+    })
+    const del = await recordWrite({
+      history,
+      contentRoot,
+      operation: 'save',
+      items: [{ path: 'pages/about/page.json', content: null }],
+    })
+
+    expect(del.items).toEqual(['pages/about/page.json'])
+    const manifest = await history.readRevision(del.id)
+    expect(manifest.items).toEqual(['pages/about/page.json'])
+    expect(manifest.snapshot).not.toHaveProperty('pages/about/page.json')
+    expect(manifest.snapshot).toHaveProperty('pages/home/page.json')
+  })
+})
