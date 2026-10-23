@@ -166,7 +166,7 @@ Replaces Cuts 8a/8b's snapshot persistence (two coordinators writing whole snaps
 
 **Tests:** see file references above. All tests green; no regressions on existing `VALIDATION_FAILED` 409 path.
 
-**Why Cut 9 is split into 9 + 9b:** the server contract + client API plumbing (this cut) is sufficient for any consumer that tracks the etag itself. The full save-queue Pinia store with Vue Query mutation-queue integration + per-item chain state machine is a separate surface area that would bloat this commit. The save queue (Cut 9c) lands when concrete consumer demand surfaces (likely with `useEditorActions` integration when Cut 8b's content-edit persistence ships).
+**Why Cut 9 is split into 9 + 9b:** the server contract + client API plumbing (this cut) is sufficient for any consumer that tracks the etag itself. The full save-queue Pinia store with Vue Query mutation-queue integration + per-item chain state machine is a separate surface area that would bloat this commit. The save queue is Cut 9c below, planned in ROADMAP Next.
 
 ### Cut 9c: Save queue (not built; planned in ROADMAP Next)
 
@@ -231,7 +231,7 @@ Replaces Cuts 8a/8b's snapshot persistence (two coordinators writing whole snaps
 
 ## Validation gate (definition of done)
 
-- [ ] All 18 cuts merged (1-7, 8a, 8b, 9, 9b, 10-16)
+- [ ] All 21 cuts merged (1-5, 5b, 6, 7, 8a, 8b, 8c, 9, 9b, 9c, 10-16)
 - [ ] Manual test: edit page offline → close laptop → reopen → edits persist → reconnect → sync invisibly
 - [ ] Conflict scenario test: edit offline + concurrent online edit → reconnect → conflict banner surfaces
 - [x] Service worker test: cold-load admin offline → SPA loads from cache (`tests/e2e/production-offline.test.ts`, CI job `e2e-prod`; site data from IndexedDB on that cold load does not load yet)

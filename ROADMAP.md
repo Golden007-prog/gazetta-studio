@@ -18,7 +18,7 @@ Priorities derive from [`docs/audits/cms-feature-audit.md`](docs/audits/cms-feat
 
 ## Now (committed, 4-8 weeks)
 
-These designs ship one cut at a time through feature-bot's weekly run (Friday nights, `night-shift.yml`), so 4–8 weeks covers their first cuts, not their completion.
+The publishing-safety designs and the review workflow's cuts ship one cut at a time through feature-bot's weekly run (Friday nights, `night-shift.yml`), so 4–8 weeks covers their first cuts, not their completion. Target removal's first cut waits for its planner issue (see its row).
 
 ### Publishing safety
 
@@ -35,7 +35,7 @@ October's designs fix wrong results on live sites: deleted pages stay live, undo
 
 ### Review workflow — finish
 
-The back end ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515)–[#520](https://github.com/gazetta-studio/gazetta-studio/issues/520)) and the UI primitives and story runner ([#522](https://github.com/gazetta-studio/gazetta-studio/issues/522)–[#524](https://github.com/gazetta-studio/gazetta-studio/issues/524)) shipped. Queued for feature-bot: [#521](https://github.com/gazetta-studio/gazetta-studio/issues/521) (API routes) and [#535](https://github.com/gazetta-studio/gazetta-studio/issues/535) (screenshots in bot PRs), then [#525](https://github.com/gazetta-studio/gazetta-studio/issues/525) (review banner and dialog) and [#531](https://github.com/gazetta-studio/gazetta-studio/issues/531) (pending-review queue). [#526](https://github.com/gazetta-studio/gazetta-studio/issues/526) and [#527](https://github.com/gazetta-studio/gazetta-studio/issues/527) (publish requests) wait for publish undo cut 1 (`design-review-workflow.md`, lock 1), and [#528](https://github.com/gazetta-studio/gazetta-studio/issues/528)–[#530](https://github.com/gazetta-studio/gazetta-studio/issues/530) and [#532](https://github.com/gazetta-studio/gazetta-studio/issues/532) wait for them. [#533](https://github.com/gazetta-studio/gazetta-studio/issues/533) (docs) is labelled `ready-for-human`. Design: [`design-review-workflow.md`](.claude/rules/design-review-workflow.md); tracking issue [#199](https://github.com/gazetta-studio/gazetta-studio/issues/199).
+The back end ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515)–[#520](https://github.com/gazetta-studio/gazetta-studio/issues/520)) and the UI primitives and story runner ([#522](https://github.com/gazetta-studio/gazetta-studio/issues/522)–[#524](https://github.com/gazetta-studio/gazetta-studio/issues/524)) shipped. Queued for feature-bot: [#521](https://github.com/gazetta-studio/gazetta-studio/issues/521) (API routes) and [#535](https://github.com/gazetta-studio/gazetta-studio/issues/535) (screenshots in bot PRs), then [#525](https://github.com/gazetta-studio/gazetta-studio/issues/525) (review banner and dialog) and [#531](https://github.com/gazetta-studio/gazetta-studio/issues/531) (pending-review queue). [#526](https://github.com/gazetta-studio/gazetta-studio/issues/526) and [#527](https://github.com/gazetta-studio/gazetta-studio/issues/527) (publish requests) wait for publish undo cut 1 (`design-review-workflow.md`, lock 1), and [#528](https://github.com/gazetta-studio/gazetta-studio/issues/528)–[#530](https://github.com/gazetta-studio/gazetta-studio/issues/530) and [#532](https://github.com/gazetta-studio/gazetta-studio/issues/532) wait for them. [#533](https://github.com/gazetta-studio/gazetta-studio/issues/533) (docs) is labelled `ready-for-human`. Design: [`design-review-workflow.md`](.claude/rules/design-review-workflow.md); request [#199](https://github.com/gazetta-studio/gazetta-studio/issues/199), tracking issue [#514](https://github.com/gazetta-studio/gazetta-studio/issues/514).
 
 ### MCP server design pass
 
@@ -63,10 +63,10 @@ User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-st
 - [#1182](https://github.com/gazetta-studio/gazetta-studio/issues/1182) the capability-gap warning on a new site links to a page that answers 404
 - [#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183) a new site fails its own broken-links check
 - [#1184](https://github.com/gazetta-studio/gazetta-studio/issues/1184) `gazetta dev` on a busy port prints a Node stack trace
-- [#1190](https://github.com/gazetta-studio/gazetta-studio/issues/1190) archive redirects answer 410 when a route parameter's name has non-ASCII characters or dots
 - [#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191) an editor can publish to production: `publish:production` is never checked
 - [#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192) denied admin requests (401 and 403) aren't recorded in the audit log
 - [#1193](https://github.com/gazetta-studio/gazetta-studio/issues/1193) the offline docs say offline saves are sent later, and "Send now" only checks the connection
+- [#1196](https://github.com/gazetta-studio/gazetta-studio/issues/1196) publish and fetch copy folders from outside the site when an item name contains `..`
 
 Decided: maintainer, 2026-10-23 (#1179)
 
@@ -124,10 +124,10 @@ What remains wrong or undecided on static targets:
 
 ### Offline: save queue, editor offline and e2e tests
 
-Three pieces of offline mode that `design-offline.md` designs but that aren't built or tested, planned together:
+Three pieces of offline mode that aren't built or tested yet, planned together:
 
 - The save queue (`design-offline-implementation.md`, "Cut 9c: Save queue"): a save made offline goes out by itself once the connection returns. Its audit events carry replay metadata (Cut 15).
-- Opening a page in the editor on an offline cold load ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)), which #253's reload step needs.
+- Opening a page in the editor on an offline cold load ([#969](https://github.com/gazetta-studio/gazetta-studio/issues/969)), which #253's reload step needs. It needs a decision first: how custom editor and field modules are cached offline.
 - The e2e tests in [#253](https://github.com/gazetta-studio/gazetta-studio/issues/253) for the two scenarios no test covers yet: editing offline, reloading, then reconnecting and saving; and the offline save conflict. Cold load offline (`tests/e2e/production-offline.test.ts`) and drafts surviving an online reload are covered.
 
 ### MCP server build
