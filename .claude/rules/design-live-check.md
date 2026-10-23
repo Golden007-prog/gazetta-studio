@@ -94,6 +94,7 @@ Decided: maintainer, 2026-10-23 (#1166): `410` passes too for an archive without
 | Rejected | Why |
 |---|---|
 | A target field naming what serves it (`servedBy: 'gazetta-serve'`) | Precise, but one more setting operators would have to know to set; alias routes already accept either server's answer. |
+| Only static targets without `redirects.format` | On a target with a format that `gazetta serve` serves (such as `production-fly` in `docs/runtime-capabilities.md`), the check would still report serve's correct `410` as wrong. |
 
 **Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location`, resolved against the request URL, has the expected alias route as its path (the query string is ignored: a host may carry the cache-bypass value into the redirect), and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
 
