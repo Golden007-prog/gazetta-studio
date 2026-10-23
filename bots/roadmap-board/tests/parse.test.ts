@@ -161,11 +161,13 @@ describe('parseRoadmap — an issue mentioned in more than one place (Q4)', () =
     expect(parsed.placements.get(49)).toEqual({ number: 49, bucket: 'Now', section: 'MCP server design pass' })
   })
 
-  it('reports each issue mentioned in more than one section, with where', () => {
-    const byNumber = new Map(parsed.repeated.map(r => [r.number, r.sections]))
-    expect(byNumber.get(1170)).toEqual(['Now / MCP server design pass', 'Later / Content features'])
-    expect(byNumber.get(49)).toEqual(['Now / MCP server design pass', 'Next / MCP server build'])
-    expect(byNumber.has(1162)).toBe(false) // twice, but in one section
+  it('reports each issue mentioned in more than one place, with each mention', () => {
+    const byNumber = new Map(parsed.repeated.map(r => [r.number, r.places]))
+    expect(byNumber.get(1170)).toEqual(['Now / MCP server design pass (prose)', 'Later / Content features (list)'])
+    expect(byNumber.get(49)).toEqual(['Now / MCP server design pass (prose)', 'Next / MCP server build (prose)'])
+    // Twice within one section counts too: "more than one place" (Q4).
+    expect(byNumber.get(1162)).toEqual(['Now / Bug backlog (prose)', 'Now / Bug backlog (list)'])
+    expect(byNumber.has(91)).toBe(false) // mentioned once
   })
 })
 

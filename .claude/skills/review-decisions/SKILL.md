@@ -169,7 +169,7 @@ git checkout main && git pull --ff-only
 GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots -- --apply
 ```
 
-If it stops because it would remove more than 10 items, read the plan it printed before rerunning with `--allow-removals`.
+If it stops because more than 10 cards would leave the roadmap, show the maintainer the plan it printed and ask before rerunning with `--allow-removals` (Q8).
 
 Tell the maintainer in one line: "Merged #N: <k> decisions, all yours; <second-opinion outcome>." Add "board synced" when the sync ran.
 

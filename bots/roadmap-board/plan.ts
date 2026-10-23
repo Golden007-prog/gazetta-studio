@@ -10,8 +10,10 @@
  *   Status and no Section, so only the "Not in ROADMAP.md" view shows it;
  * - an issue that is neither is removed, and so is a draft the file no
  *   longer has; anything else (a pull request added by hand) is left alone;
- * - a run that would remove more than REMOVAL_LIMIT items is blocked, since
- *   a ROADMAP format change the parser misses would otherwise empty the board.
+ * - a run that would take more than OFF_ROADMAP_LIMIT cards off the roadmap
+ *   is blocked (Q8). A misread file shows up that way: a lost section's open
+ *   issues lose their Section, its closed issues and drafts are removed.
+ *   Closed issues the file never listed leave without counting.
  */
 import type { Bucket, Draft, ParsedRoadmap } from './parse.js'
 
@@ -49,6 +51,8 @@ export interface SyncPlan {
   addDrafts: Array<{ title: string; body: string; fields: Fields }>
   updates: Array<{ itemId: string; label: string; fields: Partial<Fields>; body?: { draftId: string; body: string } }>
   removals: Array<{ itemId: string; label: string; reason: string }>
+  /** Cards leaving the roadmap, by label: removed, or their Section cleared. */
+  offRoadmap: string[]
   /** Items the sync doesn't own, by label. */
   untouched: string[]
   /** Mentioned numbers that aren't issues: pull requests, or missing. */
@@ -59,7 +63,7 @@ export interface SyncPlan {
   blocked: string | null
 }
 
-export const REMOVAL_LIMIT = 10
+export const OFF_ROADMAP_LIMIT = 10
 export const AREA_ORDER: readonly string[] = ['cms', 'renderer', 'cli', 'storage', 'templates']
 
 const AREA_PREFIX = 'area: '
@@ -80,6 +84,7 @@ export function planSync(input: PlanInput): SyncPlan {
     addDrafts: [],
     updates: [],
     removals: [],
+    offRoadmap: [],
     untouched: [],
     notIssues: [],
     multiArea: [],
@@ -111,13 +116,16 @@ export function planSync(input: PlanInput): SyncPlan {
   const seenIssues = new Set<number>()
   const seenDrafts = new Set<string>()
   for (const item of input.items) {
+    const listed = item.type !== 'other' && item.fields.section !== null
     if (item.type === 'issue') {
       const w = wanted.get(item.number)
       if (!w) {
         plan.removals.push({ itemId: item.itemId, label: `#${item.number}`, reason: 'closed and not in ROADMAP.md' })
+        if (listed) plan.offRoadmap.push(`#${item.number}`)
         continue
       }
       seenIssues.add(item.number)
+      if (listed && w.fields.section === null) plan.offRoadmap.push(`#${item.number}`)
       const changes = changedFields(item.fields, w.fields)
       if (Object.keys(changes).length > 0)
         plan.updates.push({ itemId: item.itemId, label: `#${item.number}`, fields: changes })
@@ -125,6 +133,7 @@ export function planSync(input: PlanInput): SyncPlan {
       const d = wantedDrafts.get(item.title)
       if (!d || seenDrafts.has(item.title)) {
         plan.removals.push({ itemId: item.itemId, label: item.title, reason: 'no longer in ROADMAP.md' })
+        if (listed) plan.offRoadmap.push(item.title)
         continue
       }
       seenDrafts.add(item.title)
@@ -150,8 +159,8 @@ export function planSync(input: PlanInput): SyncPlan {
     if (!seenDrafts.has(title)) plan.addDrafts.push({ title, body: d.body, fields: draftFields(d) })
   }
 
-  if (plan.removals.length > REMOVAL_LIMIT && !input.allowRemovals) {
-    plan.blocked = `The sync would remove ${plan.removals.length} items, more than ${REMOVAL_LIMIT}. Check the plan, then rerun with --allow-removals.`
+  if (plan.offRoadmap.length > OFF_ROADMAP_LIMIT && !input.allowRemovals) {
+    plan.blocked = `The sync would take ${plan.offRoadmap.length} cards off the roadmap, more than ${OFF_ROADMAP_LIMIT}. Check the plan, then rerun with --allow-removals.`
   }
   return plan
 }

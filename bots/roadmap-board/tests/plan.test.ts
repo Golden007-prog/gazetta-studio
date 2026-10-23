@@ -1,13 +1,13 @@
 /**
  * Sync planner tests.
  *
- * Derived from design-roadmap-board.md ("The sync", Q3, "Fields") and the
- * decisions recorded with it (the Area rule, the removal stop), NOT from
- * observing the implementation (team-preferences rule 31).
+ * Derived from design-roadmap-board.md ("The sync", Q3, Q7 the Area rule,
+ * Q8 the stop), NOT from observing the implementation (team-preferences
+ * rule 31).
  */
 import { describe, expect, it } from 'vitest'
 import type { ParsedRoadmap } from '../parse.js'
-import { areaOf, type Fields, type IssueInfo, type ProjectItem, planSync, REMOVAL_LIMIT } from '../plan.js'
+import { areaOf, type Fields, type IssueInfo, OFF_ROADMAP_LIMIT, type ProjectItem, planSync } from '../plan.js'
 
 const roadmap = (over: Partial<ParsedRoadmap> = {}): ParsedRoadmap => ({
   placements: new Map(),
@@ -187,29 +187,65 @@ describe('planSync — what it leaves alone', () => {
   })
 })
 
-describe('planSync — the removal stop', () => {
-  const closedItems = (count: number) =>
-    Array.from({ length: count }, (_, i) => issueItem(i + 1, fields('Done', null, null)))
+describe('planSync — the stop on cards leaving the roadmap (Q8)', () => {
+  const numbers = (count: number) => Array.from({ length: count }, (_, i) => i + 1)
+  /** Listed issues, now closed and gone from the file: removed. */
+  const listedClosed = (count: number) => numbers(count).map(n => issueItem(n, fields('Done', 'Bug backlog', 'cms')))
+  /** Open issues still on the board with a Section the file no longer gives them. */
+  const listedOpen = (count: number) =>
+    numbers(count).map(n => issueItem(n, fields('Later', 'Content features', 'cms')))
+  /** Closed issues the file never listed: removed, but they were never on the roadmap. */
+  const neverListed = (count: number) => numbers(count).map(n => issueItem(n, fields('Done', null, 'cms')))
 
-  it(`stops a run that would remove more than ${REMOVAL_LIMIT} items`, () => {
+  it(`stops a run that would remove more than ${OFF_ROADMAP_LIMIT} listed issues`, () => {
     const plan = planSync({
       roadmap: roadmap(),
       issues: new Map(),
-      items: closedItems(REMOVAL_LIMIT + 1),
+      items: listedClosed(OFF_ROADMAP_LIMIT + 1),
       allowRemovals: false,
     })
     expect(plan.blocked).toMatch(/--allow-removals/)
   })
 
-  it(`lets ${REMOVAL_LIMIT} removals through, and more with allowRemovals`, () => {
-    expect(
-      planSync({ roadmap: roadmap(), issues: new Map(), items: closedItems(REMOVAL_LIMIT), allowRemovals: false })
-        .blocked,
-    ).toBeNull()
-    expect(
-      planSync({ roadmap: roadmap(), issues: new Map(), items: closedItems(REMOVAL_LIMIT + 1), allowRemovals: true })
-        .blocked,
-    ).toBeNull()
+  it('counts open issues whose Section it would clear, as when the parser misses a section', () => {
+    const open = new Map(numbers(OFF_ROADMAP_LIMIT + 1).map(n => [n, info(n, 'OPEN')]))
+    const plan = planSync({
+      roadmap: roadmap(),
+      issues: open,
+      items: listedOpen(OFF_ROADMAP_LIMIT + 1),
+      allowRemovals: false,
+    })
+    expect(plan.removals).toEqual([])
+    expect(plan.offRoadmap).toHaveLength(OFF_ROADMAP_LIMIT + 1)
+    expect(plan.blocked).toMatch(/--allow-removals/)
+  })
+
+  it('counts drafts it would remove', () => {
+    const drafts: ProjectItem[] = numbers(OFF_ROADMAP_LIMIT + 1).map(n => ({
+      itemId: `PVTI_d${n}`,
+      type: 'draft',
+      draftId: `DI_${n}`,
+      title: `Row ${n}`,
+      body: '',
+      fields: fields('Deferred', 'Deferred', null),
+    }))
+    expect(planSync({ roadmap: roadmap(), issues: new Map(), items: drafts, allowRemovals: false }).blocked).toMatch(
+      /--allow-removals/,
+    )
+  })
+
+  it('lets closed issues the file never listed leave without counting', () => {
+    const plan = planSync({ roadmap: roadmap(), issues: new Map(), items: neverListed(50), allowRemovals: false })
+    expect(plan.removals).toHaveLength(50)
+    expect(plan.offRoadmap).toEqual([])
+    expect(plan.blocked).toBeNull()
+  })
+
+  it(`lets ${OFF_ROADMAP_LIMIT} through, and more with allowRemovals`, () => {
+    const run = (count: number, allowRemovals: boolean) =>
+      planSync({ roadmap: roadmap(), issues: new Map(), items: listedClosed(count), allowRemovals }).blocked
+    expect(run(OFF_ROADMAP_LIMIT, false)).toBeNull()
+    expect(run(OFF_ROADMAP_LIMIT + 1, true)).toBeNull()
   })
 })
 

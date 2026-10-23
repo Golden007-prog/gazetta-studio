@@ -27,14 +27,14 @@ export interface Draft {
 
 export interface RepeatedMention {
   number: number
-  /** Every `Bucket / Section` that mentions the issue, in file order. */
-  sections: string[]
+  /** Each line that mentions the issue, as `Bucket / Section (list|table|prose)`, in file order. */
+  places: string[]
 }
 
 export interface ParsedRoadmap {
   /** Where each referenced number lands (Q4), keyed by number. */
   placements: Map<number, Placement>
-  /** Numbers mentioned in more than one section; each run prints them. */
+  /** Numbers mentioned on more than one line; each run prints them (Q4). */
   repeated: RepeatedMention[]
   drafts: Draft[]
   /** Every section with a reference or a draft, in file order: the order of the Section field's options. */
@@ -149,11 +149,9 @@ function placementsOf(mentions: Mention[]): Map<number, Placement> {
 function repeatedOf(mentions: Mention[]): RepeatedMention[] {
   const byNumber = new Map<number, string[]>()
   for (const m of mentions) {
-    const where = `${m.bucket} / ${m.section}`
-    const seen = byNumber.get(m.number) ?? []
-    if (!seen.includes(where)) byNumber.set(m.number, [...seen, where])
+    byNumber.set(m.number, [...(byNumber.get(m.number) ?? []), `${m.bucket} / ${m.section} (${m.kind})`])
   }
-  return [...byNumber].filter(([, sections]) => sections.length > 1).map(([number, sections]) => ({ number, sections }))
+  return [...byNumber].filter(([, places]) => places.length > 1).map(([number, places]) => ({ number, places }))
 }
 
 function tableCells(line: string): string[] {

@@ -2,13 +2,14 @@
  * roadmap-board — sync the public "Roadmap" GitHub Project from ROADMAP.md.
  *
  * Run from a checkout of main after a ROADMAP change merges; review-decisions
- * does this after merging one (design-roadmap-board.md Q5):
+ * and review-prs do this after merging one (design-roadmap-board.md Q5):
  *
  *   GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots              # print the plan
  *   GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots -- --apply   # write it
  *
  * The token needs the `project` scope (`gh auth refresh -s project`).
- * `--allow-removals` lets a run remove more than REMOVAL_LIMIT items.
+ * `--allow-removals` lets a run take more than OFF_ROADMAP_LIMIT cards off the
+ * roadmap (Q8).
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -149,12 +150,14 @@ function report(roadmap: ParsedRoadmap, plan: SyncPlan, commit: string, url: str
     console.log(`  update ${u.label}: ${changes.join(', ')}`)
   }
   for (const r of plan.removals) console.log(`  remove ${r.label} (${r.reason})`)
+  if (plan.offRoadmap.length > 0) console.log(`Leaving the roadmap: ${plan.offRoadmap.join(', ')}`)
   if (roadmap.repeated.length > 0) {
     console.log('Mentioned in more than one place:')
     for (const r of roadmap.repeated) {
       const p = roadmap.placements.get(r.number)
-      const used = p ? key(p.bucket, p.section) : ''
-      console.log(`  #${r.number}: ${used} (used); also ${r.sections.filter(s => s !== used).join(', ')}`)
+      console.log(
+        `  #${r.number}: on the board in ${p ? key(p.bucket, p.section) : '?'}; mentioned in ${r.places.join(', ')}`,
+      )
     }
   }
   if (plan.multiArea.length > 0)

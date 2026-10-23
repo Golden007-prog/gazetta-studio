@@ -205,6 +205,10 @@ Decided: maintainer, 2026-10-22 (#1133)
 | Approved PRs wait, and the maintainer confirms them all at the end of a session | Holds back planner issues and cuts, and the click is still a rubber stamp |
 | A cooling-off period, say a day, then merge unless the maintainer objects | Slows everything for an objection that has no trigger, since the maintainer won't be reading the PRs |
 
+After merging a PR that changes `ROADMAP.md`, the author syncs the roadmap board before the one line to the maintainer.
+
+Follows from [`design-roadmap-board.md`](design-roadmap-board.md) Q5.
+
 ### Q7 — Which PRs are in scope
 
 The skill's scope is every file that records the maintainer's decisions: everything under `.claude/rules/` and `docs/adr/`, plus the root `CLAUDE.md`, `bots/README.md`, `CONTEXT.md`, `ROADMAP.md`, `docs/non-goals.md`, and `SKILL.md` files under `.claude/skills/`. It's the same review whichever file the decision is in: did the maintainer decide this, and is it recorded faithfully? Folders rather than a list of files, so new design or rule files are covered without updating the skill. `CLAUDE.md` and `bots/README.md` are in because design passes record decisions there: `CLAUDE.md` summarises each design doc's locked decisions, and `bots/README.md` holds the bots' dev-process rules. None of these files deploy.
@@ -347,6 +351,7 @@ verdict comment naming the commit it checked and the PR's base (Q8)
   → merge if the head is unchanged, main hasn't changed the PR's files since
     the base (otherwise rebase, push and run again), and there's no hold
     (Q6, Q8, Q9)
+  → a ROADMAP.md change: sync the roadmap board (design-roadmap-board.md Q5)
   → one line to the maintainer (Q6)
 ```
 
