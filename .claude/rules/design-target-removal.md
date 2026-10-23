@@ -7,7 +7,7 @@ How a page or fragment deleted on the source stops being served by a target. Tod
 **Companion docs:**
 - [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094): the issue this design resolves
 - [#1060](https://github.com/gazetta-studio/gazetta-studio/issues/1060): served sites didn't read archive markers; #1118 fixed it, so worker and ESI targets serve archives as 301 or 410
-- [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152): static targets get no marker file at an archived route, and `gazetta serve` reads the archive sidecars (Q6); plain hosts apply their rows or show the target's `404.html` (`design-soft-delete.md` Q10)
+- [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152): static targets get no marker file at an archived route, and `gazetta serve` reads the archive sidecars (Q6); plain hosts apply their rows, serve a redirect page at an alias's old route, or answer 404 with the target's `404.html` (`design-soft-delete.md` Q10)
 - [#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138), fixed by #1155: `gazetta serve` and the generated worker get the site's languages, so translations fall back on worker and ESI targets
 - [`design-publishing.md`](design-publishing.md) and [`design-decisions.md`](design-decisions.md) #16: Publish is one verb with an author-chosen direction
 - [`design-publish-undo.md`](design-publish-undo.md): Q4's removal step and the shared target-publish function, which removals reuse

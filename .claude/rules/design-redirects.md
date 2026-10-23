@@ -55,29 +55,34 @@ carrying a comment marker:
 <!-- gazetta:archived alias=welcome -->
 ```
 
-Worker-served target types (static-with-worker, ESI, dynamic) read the
-first 200 bytes of `pages/landing/index.html`, see the marker, and
-emit `301 Moved Permanently` to `/welcome` in the request's language
+Worker-served ESI and dynamic targets read the first 200 bytes of
+`pages/landing/index.html`, see the marker, and emit
+`301 Moved Permanently` to `/welcome` in the request's language
 (`/fr/landing` → `/fr/welcome`, or `/welcome` on a static target where
 `welcome` has no French version; follows from `design-soft-delete.md`
-Q10) — no composition, no body served. Both need the site's languages,
-which `gazetta serve` and the generated worker get since #1155
-([#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138)). Cache headers on the 301 response strip
-strong caching (`Cache-Control: max-age=300`) so unarchive propagates
-quickly.
+Q10) — no composition, no body served. On a static target, `gazetta
+serve` or a worker reads the marker in the file at the page's route;
+once #1152's cuts ship there is no marker file there, and they read the
+page's archive sidecar instead, or the first line of a redirect page
+(`design-soft-delete.md` Q10). `gazetta serve` and the generated worker
+need the site's languages, which they get since #1155
+([#1138](https://github.com/gazetta-studio/gazetta-studio/issues/1138)).
+Cache headers on the 301 response strip strong caching
+(`Cache-Control: max-age=300`) so unarchive propagates quickly.
 
 For plain-static targets (no worker — Cloudflare Pages plain assets,
-GitHub Pages, S3 static-website), the marker mechanism doesn't fire. Once #1152's cuts ship, publish
-writes no marker file at an archived route there (`design-soft-delete.md`
-Q10): where the target has no `redirects.format`, an alias's old route
-gets a redirect page instead (instant meta refresh, canonical link, a
-visible link), whose first line is the marker for `gazetta serve`.
+GitHub Pages, S3 static-website), the marker mechanism doesn't fire.
 Those targets opt into the `_redirects` host-glue file
 (`targets.X.redirects: { format: 'cloudflare' | 'netlify' | 'json' }`)
 which the publish flow emits at the target root by walking archived
 manifests (decided: from the target's archive sidecars instead,
-[`design-target-removal.md`](design-target-removal.md) Q6). Cloudflare Pages and Netlify both honor the file at the
-site root; the `json` format is for custom integrations.
+[`design-target-removal.md`](design-target-removal.md) Q6). Cloudflare
+Pages and Netlify both honor the file at the site root; the `json`
+format is for custom integrations. Once #1152's cuts ship, a target
+without `redirects.format` gets a redirect page at an alias's old route
+instead (instant meta refresh, canonical link, a visible link), whose
+first line is the marker for `gazetta serve` (`design-soft-delete.md`
+Q10).
 
 The file has one row per language the target publishes, with the
 prefixes its routes use (`/landing  /welcome  301` and
@@ -123,13 +128,15 @@ Pages can't return 410 from `_redirects` (Cloudflare Pages limits,
 above) and Netlify doesn't document it, so a removed page on a plain
 host answers 404 (#1149, #1152). `gone-status` is a worker capability.
 
-Plain-static hosts (Cloudflare Pages, Netlify, GitHub Pages, S3
-static websites) show the target's `404.html` with status 404 once
-static publish writes it and leaves no file at the route
-([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)); until then they serve the
-archived page's marker file, a blank page with status 200. The capability
-gap is surfaced at four points (per `design-soft-delete.md` Q10):
-boot validate, author-time modal, validator scanner, publish gate.
+Plain-static hosts answer 404 there once static publish leaves no file
+at the route
+([#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)):
+Cloudflare Pages, Netlify and GitHub Pages show the target's
+`404.html`, and an S3 website the error page its bucket's website
+settings name. Until then they serve the archived page's marker file,
+a blank page with status 200. The capability gap is surfaced at four
+points (per `design-soft-delete.md` Q10): boot validate, author-time
+modal, validator scanner, publish gate.
 
 ### What about manual redirects?
 
@@ -235,8 +242,10 @@ defineSite({
 ```
 
 When `redirects.format` is unset (or set to `'none'`), no file is
-emitted. Worker-served targets ignore the field — they read markers
-directly.
+emitted. ESI and dynamic targets ignore the field — their workers read
+markers directly. On a static target, once #1152's cuts ship, the field
+also decides what publish writes at an alias's old route: nothing with
+a format, a redirect page without one (`design-soft-delete.md` Q10).
 
 ## Wire format
 
@@ -247,8 +256,8 @@ Cloudflare Pages / Netlify (`format: 'cloudflare'` or `'netlify'`):
 /retired     /            410
 ```
 
-Once #1149 lands, `format: 'cloudflare'` leaves out the `410` rows
-(Cloudflare Pages limits, above).
+Once #1149 lands, neither format writes `410` rows (Cloudflare Pages
+limits and 410 Gone, above); `json` keeps its `gone` list.
 
 Sorted alphabetically by source for determinism (same input → same
 file → host CDN cache hits when republishing).
@@ -292,7 +301,8 @@ mechanism's foundational checks are answered by its owners:
 - **Archive flow** — `design-soft-delete.md` Q10 (HTML marker), Q11
   (validation: `dangling-alias`, `referenced-archived-without-alias`)
 - **Multi-instance** — same as soft-delete: per-edge HTML markers on
-  page files; `_redirects` is a publish-time artifact regenerated
+  page files (per-page archive sidecars on static targets once #1152's
+  cuts ship); `_redirects` is a publish-time artifact regenerated
   deterministically from the source's manifests today, and from the
   target's archive sidecars once `design-target-removal.md` Q6 ships
 - **Cache** — 301/410 responses get `Cache-Control: max-age=300` to

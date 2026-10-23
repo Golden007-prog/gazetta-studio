@@ -371,8 +371,8 @@ Static targets are the exception since #1152 (below): there the marker would sit
 
 | Target type | Archive with `aliasOf` | Archive without `aliasOf` |
 |---|---|---|
-| **`static`** with worker | No file at the archived route (#1152 below); the worker reads the page's `.alias-X` archive sidecar and emits 301 to X's route in the request's language (`/fr/about` with alias `home` → `/fr`), or to X's default-language route when X has no version in that language. | No file at the route; the worker reads the `.gone` archive sidecar and emits 410. |
-| **`static`** without worker | No file at the archived route (#1152 below). With `redirects.format`, `_redirects` regenerated at publish from walked archived manifests (host-glue), one row per language the target publishes (`/fr/landing  /fr/welcome  301`). Without it, a redirect page at the old route that starts with the marker (#1152 decisions 6 and 8). Plain static can't emit 410: no file and no row, so the host shows the target's `404.html` with status 404 (#1152 decisions 3 and 4). Operator-config opt-in (not built): a 200 "Gone" placeholder page. |
+| **`static`** with worker | No marker file at the archived route (#1152 below); the worker reads the page's `.alias-X` archive sidecar, or the marker on the first line of the redirect page a target without `redirects.format` has there, and emits 301 to X's route in the request's language (`/fr/about` with alias `home` → `/fr`), or to X's default-language route when X has no version in that language. | No file at the route; the worker reads the `.gone` archive sidecar and emits 410. |
+| **`static`** without worker | No marker file at the archived route (#1152 below). With `redirects.format`, `_redirects` regenerated at publish from walked archived manifests (host-glue), one row per language the target publishes (`/fr/landing  /fr/welcome  301`). Without it, a redirect page at the old route that starts with the marker (#1152 decisions 6 and 8). Plain static can't emit 410: no file and no row, so the host answers 404, showing the target's `404.html` on Pages, Netlify and GitHub Pages (#1152 decisions 3 and 4). Operator-config opt-in (not built): a 200 "Gone" placeholder page. |
 | **`esi`** | Same HTML marker as static — worker reads first 200 bytes of `pages/{name}/index.html` BEFORE composing. Marker present → emit 301 without composing. | Same — marker present → emit 410 without composing. |
 | **`dynamic`** | Origin emits HTML marker OR returns 301 directly. Same marker grammar as static / ESI. | Same — 410. |
 
@@ -405,12 +405,13 @@ Decided: maintainer, 2026-10-22 (#1124)
 What the hosts do, from their docs on 2026-10-23, not tested on the hosts (decision 5):
 - **Netlify** doesn't apply a `_redirects` row at a path where a file exists unless the row is forced with `!`, shows a site's `404.html` for missing paths, and doesn't list 410 among its status codes ([redirect options](https://docs.netlify.com/routing/redirects/redirect-options/)).
 - **Cloudflare Pages** always follows `_redirects` rows, "regardless of whether or not an asset matches the incoming request"; supports 301, 302, 303, 307, 308 and 200, not 410 ([redirects](https://developers.cloudflare.com/pages/configuration/redirects/)); shows a top-level `404.html` for missing files, and without one serves the homepage with status 200 for any unknown path ([serving Pages](https://developers.cloudflare.com/pages/configuration/serving-pages/)). Pages' docs don't state the status code of `404.html`; the same mode on Workers serves it with 404 ([static assets](https://developers.cloudflare.com/workers/static-assets/routing/static-site-generation/)).
-- **GitHub Pages** shows a `404.html` at the root of the publishing source for pages that don't exist ([custom 404](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-custom-404-page-for-your-github-pages-site)).
+- **GitHub Pages** shows a `404.html` at the root of the publishing source for pages that don't exist; its docs don't state the status code either ([custom 404](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-custom-404-page-for-your-github-pages-site)).
+- **S3 websites** answer a missing key with 404, and show a custom error page only when the bucket's website settings name it (for example `404.html`) ([custom error document](https://docs.aws.amazon.com/AmazonS3/latest/userguide/CustomErrorDocSupport.html)).
 - **Google** reads an instant meta refresh as a permanent redirect, while preferring server-side redirects ([redirects](https://developers.google.com/search/docs/crawling-indexing/301-redirects)), and treats 404 and 410 alike ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)).
 
 Until these cuts ship, static publish writes the marker at the archived route (`publish-item.ts:371–386`): Netlify doesn't apply the rows there, and Pages, GitHub Pages and S3 websites serve it as a blank page with status 200.
 
-**1. No marker file at the route; `gazetta serve` reads the archive sidecar.** On static targets, publish writes no marker file at an archived route. When a route has no file, `gazetta serve` reads the page's archive sidecar (`.gone` or `.alias-<name>`, `design-target-removal.md` Q6) and answers 301 or 410 as before (where the route has a redirect page, it reads the marker on the page's first line: decision 8); hosts with `_redirects` apply their rows and their own 404. This waits for target removal cut 1, which adds the sidecars.
+**1. No marker file at the route; `gazetta serve` reads the archive sidecar.** On static targets with `redirects.format` (decision 2: every static target), publish writes no marker file at an archived route. When a route has no file, `gazetta serve` reads the page's archive sidecar (`.gone` or `.alias-<name>`, `design-target-removal.md` Q6) and answers 301 or 410 as before (where the route has a redirect page, it reads the marker on the page's first line: decision 8); hosts with `_redirects` apply their rows and their own 404. This waits for target removal cut 1, which adds the sidecars.
 
 Decided: maintainer, 2026-10-23 (#1163).
 
@@ -454,7 +455,7 @@ Decided: maintainer, 2026-10-23 (#1163).
 |---|---|
 | Test on throwaway Netlify and Pages sites before locking | Needs a Netlify account and a Cloudflare token that can deploy Pages, while no one deploys to these hosts through Gazetta before those adapters exist. |
 
-**6. The redirect page.** At an alias's old route on a target without `redirects.format`: the archive marker as its first line (decision 8), an instant meta refresh to the new address, a canonical link to it, and a short line with a link ("This page has moved to /welcome") for visitors whose browser doesn't follow the refresh. No noindex, so search engines take it as a redirect. A redirect page in a language points at the destination in that language when it has a version there, else at its default-language page (the rule above). WCAG's technique H76 uses a zero-second refresh and keeps only information about the redirect on the page ([H76](https://www.w3.org/TR/WCAG20-TECHS/H76.html)); the link is ours.
+**6. The redirect page.** At an alias's old route on a target without `redirects.format`: the archive marker as its first line (decision 8), an instant meta refresh to the new address, a canonical link to it, and a short line with a link ("This page has moved to /welcome") for visitors whose browser doesn't follow the refresh. No noindex, so search engines take it as a redirect. A redirect page in a language points at the destination in that language when it has a version there, else at its default-language page (the rule above). This is the shape of WCAG's technique H76: a zero-second refresh, a line with a link to the new address, and nothing on the page that isn't about the redirect ([H76](https://www.w3.org/WAI/WCAG22/Techniques/html/H76)).
 
 Decided: maintainer, 2026-10-23 (#1163).
 
@@ -462,15 +463,6 @@ Decided: maintainer, 2026-10-23 (#1163).
 |---|---|
 | Refresh and canonical only | A browser that doesn't follow the refresh shows a blank page. |
 | Also noindex | It may stop search engines from passing the old URL's standing to the new one. |
-
-**8. The redirect page starts with the marker.** Its first line is the archive marker comment, which browsers don't show. `gazetta serve` and a worker read the first 200 bytes, as they do today, and answer 301 there; a plain host serves the page. No extra read.
-
-Decided: maintainer, 2026-10-23 (#1163).
-
-| Rejected | Why |
-|---|---|
-| Serve checks the archive sidecar before serving any file | One extra storage read per request, for every page on the target. |
-| Serve sends the redirect page with status 200 | A server-side 301 is what the first decision kept for `gazetta serve`; the meta refresh is the fallback for hosts that can't redirect. |
 
 **7. Cuts.**
 
@@ -489,6 +481,15 @@ Decided: maintainer, 2026-10-23 (#1163).
 | The Netlify 410 rows as a fourth cut | One more cut for a change to the builder #1149 already changes. |
 | One cut after target removal cut 1 | Pages sites would wait for the sidecars to get a real 404 page. |
 
+**8. The redirect page starts with the marker.** Its first line is the archive marker comment, which browsers don't show. `gazetta serve` and a worker read the first 200 bytes, as they do today, and answer 301 there; a plain host serves the page. No extra read.
+
+Decided: maintainer, 2026-10-23 (#1163).
+
+| Rejected | Why |
+|---|---|
+| Serve checks the archive sidecar before serving any file | One extra storage read per request, for every page on the target. |
+| Serve sends the redirect page with status 200 | A server-side 301 is what the first decision kept for `gazetta serve`; the meta refresh is the fallback for hosts that can't redirect. |
+
 **Archived page HTML body content:**
 
 When a page is archived, the publish flow writes ONLY the marker line to
@@ -496,7 +497,7 @@ When a page is archived, the publish flow writes ONLY the marker line to
 beyond the page content hash sidecar (used by compare-targets). On static
 targets it writes no marker file at the route; a target without
 `redirects.format` gets a redirect page there instead, with the marker
-as its first line (#1152 below).
+as its first line (#1152 above).
 
 Justification: the worker short-circuits on the marker; no consumer ever
 parses the file beyond byte 200. Skipping body emission saves a few
@@ -520,7 +521,7 @@ Storage providers' `readBytes` supports range reads (per `design-media.md`); fir
 
 Strip strong caching: 301/410 responses get `Cache-Control: max-age=300` (5 minutes); operator override available. Lets unarchive propagate quickly without burning origin load.
 
-**No publish-time aggregate manifests** for archive state. Workers read the page HTML's marker line; that's source-of-truth (on static targets, the page's archive sidecar: #1152 below). Per-edge granularity — multi-instance correct, scales naturally.
+**No publish-time aggregate manifests** for archive state. Workers read the page HTML's marker line; that's source-of-truth (on static targets, the page's archive sidecar: #1152 above). Per-edge granularity — multi-instance correct, scales naturally.
 
 **Aggregate exception:** `_redirects` for Cloudflare/Netlify (external standard, host-glue), regenerated each publish from walked archived manifests (decided: from the target's archive sidecars instead, [`design-target-removal.md`](design-target-removal.md) Q6). A purge changes nothing on a target until its removal is published (same doc, Q5). Optional per-target `redirects.format: 'cloudflare' | 'netlify' | 'json' | 'none'` config; default depends on target's runtime hint.
 
@@ -647,10 +648,10 @@ How soft-delete composes with each of the other 12 foundational dimensions plus 
 - Future archive-specific hooks (`beforeArchive`, `afterRename`) reserved if concrete demand surfaces.
 
 ### Render (#8)
-- All worker-served target types: HTML comment marker as the first line of `pages/{name}/index.html` drives 301/410. Worker reads first 200 bytes; marker present → short-circuit before composing.
-- Plain-static (no worker): `_redirects` host-glue regenerated from walked archived manifests; capability-gap warning surfaces non-supported features.
+- ESI and dynamic targets: HTML comment marker as the first line of `pages/{name}/index.html` drives 301/410. Worker reads first 200 bytes; marker present → short-circuit before composing. Static targets have no marker file at an archived route: `gazetta serve` or a worker reads the page's archive sidecar, or the first line of a redirect page (Q10, #1152).
+- Plain-static (no worker): `_redirects` host-glue regenerated from walked archived manifests; without `redirects.format`, a redirect page at an alias's old route (Q10, #1152); capability-gap warning surfaces non-supported features.
 - Alias-aware composition: renderer follows `aliasOf` for fragment refs at compose time.
-- No publish-time aggregates (per Q10 lock); manifests + page HTML markers are source-of-truth.
+- No publish-time aggregates (per Q10 lock); manifests + page HTML markers (archive sidecars on static targets) are source-of-truth.
 
 ### Validation (#9)
 - 5 new validators (P1-P5 from Q11).
