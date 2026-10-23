@@ -65,7 +65,7 @@ From [Managing privately reported security vulnerabilities](https://docs.github.
   - 199, `undici` (high: denial of service via excessive content-encodings), dev-only, in `sites/gazetta.studio/worker/package-lock.json`. `miniflare` pins `undici` to exactly 7.29.1, and so does the latest `wrangler` (4.152.0). Decided 2026-10-23: wait for `wrangler` to move; Dependabot opens that PR.
 - **Scorecard: 46 alerts** (#1211).
   - 24 token permissions: 14 workflows have no top-level `permissions:` block, and 10 job-level writes are ones the bots need.
-  - 17 pinned dependencies: 13 workflows install `@anthropic-ai/claude-code@stable`, `scripts/actionlint.sh` pipes a downloaded script to `bash`, and `scripts/smoke-publish.sh` installs a local tarball.
+  - 17 pinned dependencies: 12 workflows install `@anthropic-ai/claude-code@stable` (15 times; `bots-compact.yml` has four), `scripts/actionlint.sh` pipes a downloaded script to `bash`, and `scripts/smoke-publish.sh` installs a local tarball.
   - One each for security policy (#1207), vulnerabilities (the Dependabot alerts), code review (a solo maintainer merging with `--admin`), SAST, and the OpenSSF best-practices badge.
 - **CodeQL: 2 alerts**, both in test code: shell commands built from a temp path in `packages/gazetta/tests/cli.test.ts` (#1212).
 - **Found while checking:** nothing tracks a GitHub App token for the bots since #336 closed (#1213), and `design-feature-bot.md` still says `has_projects` is false (#1215).
