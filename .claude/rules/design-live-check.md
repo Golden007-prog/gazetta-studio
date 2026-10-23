@@ -80,7 +80,13 @@ After every publish and every `gazetta deploy` to a target that has a `siteUrl`,
 - site files the publish wrote (`sitemap.xml`, `robots.txt`, `_redirects` behaviour);
 - always the root and one unknown URL (`404`).
 
-**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status`, an archive without an alias is expected to answer `404`; without `redirects`, alias routes are `not-checked`.
+**Expected answers follow the target's runtime capabilities** (`redirects`, `gone-status`; `docs/runtime-capabilities.md`). Without `gone-status`, an archive without an alias is expected to answer `404`; without `redirects`, alias routes are `not-checked`, except on a static target without `redirects.format`: there an alias's old route is expected to answer 200 with the redirect page, its first line the archive marker and an instant refresh to the alias's route (`design-soft-delete.md` Q10, #1152), so a leftover blank marker file is flagged too.
+
+Decided (the redirect-page answer): maintainer, 2026-10-23 (#1163).
+
+| Rejected | Why |
+|---|---|
+| Keep those alias routes `not-checked` | The redirect page would never be checked after a publish, and a leftover blank marker file at an alias route would go unflagged. |
 
 **Redirects are checked, not followed.** Requests use manual redirect handling (`redirect: 'manual'`): a `301` passes only when its `Location`, resolved against the request URL, has the expected alias route as its path (the query string is ignored: a host may carry the cache-bypass value into the redirect), and a redirect to a login page is `needs-credentials`. A `401` is `needs-credentials`; a `403` is only when the route is expected to answer `200`. Where `404` or `410` is expected, a `403` counts as not served, with an info note that the host answers missing files with `403` (S3, for example, does when the caller can't list the bucket). The check follows a redirect only to confirm the destination answers, and only on the same origin.
 

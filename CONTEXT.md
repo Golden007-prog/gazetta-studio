@@ -186,7 +186,7 @@ The `aliasOf` field on an Archive's manifest, pointing at the name of a live tar
 _Avoid_: Symlink (filesystem metaphor; Aliases are content-tree state, not filesystem state), Reference (collides with the in-content Reference / Usage distinction).
 
 **Redirect**:
-A Page or Fragment whose manifest carries `archived: true` AND a non-empty `aliasOf` pointing at a live target. The Worker (or `_redirects` host-glue for plain-static targets) emits `301 Moved Permanently` from the source URL to the alias target's route; a static target without `redirects.format` gets a redirect page with an instant refresh there instead (`design-soft-delete.md` Q10, #1152). Distinguished from a **Pure Soft-Delete** (archived without `aliasOf` — emits `410 Gone`).
+A Page or Fragment whose manifest carries `archived: true` AND a non-empty `aliasOf` pointing at a live target. The Worker (or `_redirects` host-glue for plain-static targets) emits `301 Moved Permanently` from the source URL to the alias target's route; a static target without `redirects.format` gets a redirect page with an instant refresh there instead (`design-soft-delete.md` Q10, #1152). Distinguished from a **Pure Soft-Delete** (archived without `aliasOf` — emits `410 Gone` where Gazetta answers the request).
 
 A Redirect originates from one of two operations:
 - **Rename Redirect** — composed during the rename operation; the archived old name carries `aliasOf` pointing at the new name (per `design-soft-delete.md` Q3 flatten lock).

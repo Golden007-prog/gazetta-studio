@@ -126,7 +126,7 @@ Decided: maintainer, 2026-10-22 (#1120). Refusing unknown users follows from Q12
 
 After a purge on the source, a target keeps serving the archive until the author publishes the removal; then the page answers 404 (or, for a translation on worker and ESI targets, the default-language page). On plain-static targets the archive's `_redirects` row stays until then (Q6). Until #1152's cuts ship, where the host doesn't apply the row (on Netlify, or for an archive without an alias on Cloudflare Pages), it serves the archived route's marker file instead, a blank page; after them there is no file at the route, and a host without a row shows the target's `404.html`.
 
-The removal row says what changes, from what the target serves: "Only on production: redirects to /welcome, will return 404 after removal", or "returns 410, will return 404 after removal". Docs advise: to tell search engines a page is gone, archive it and publish that before purging.
+The removal row says what changes, from what the target serves: "Only on production: redirects to /welcome, will return 404 after removal", or "returns 410, will return 404 after removal".
 
 Decided: maintainer, 2026-10-22 (#1120).
 
@@ -135,7 +135,13 @@ Decided: maintainer, 2026-10-22 (#1120).
 | Removing a purged archive keeps its 410 marker | The row never clears, so the sync count stays behind (or needs a special case), and markers pile up forever. To keep a 410, keep the archive. |
 | Purges reach targets automatically | The automatic removal Q1 rejects; an archive only on production may have been made there. |
 
-A 404 after a 410 costs nothing for search when the archive answered 410 for a while before its purge (the CLI's example purges after 180 days): crawlers have already dropped the URL. An archive purged before it was ever published goes straight from 200 to 404, which is why the docs advise publishing the archive first.
+A removal costs nothing in search, whether or not the archive answered 410 first: Google treats 404 and 410 alike ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes); `design-soft-delete.md` Q14). So the docs don't advise publishing an archive before purging it.
+
+Decided: maintainer, 2026-10-23 (#1163): the search advice is dropped.
+
+| Rejected | Why |
+|---|---|
+| Keep the advice, reworded as a precision tip (410 before the 404) | Its only reason was search, and Google's docs remove it. |
 
 ### Q6 — `_redirects` describes the target, from per-page archive sidecars
 
@@ -376,7 +382,7 @@ Composition with designs in flight:
 | 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (#526, #527) | api-first | Medium-high |
 | 3 | Publish panel: rows per the UX table; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
 | 4 | CLI: list items only on the target; `--remove`, running compare even with `--force` | 2 | integration | Low |
-| 5 | Docs: removals in the publishing docs; purge and 410 guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
+| 5 | Docs: removals in the publishing docs; purge guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
 | 6 | Add `--remove` to gazetta.studio's `deploy-site.yml` (maintainer PR; bots can't push workflow files) | 4 | manual | Low |
 
 Cut 2 adds removal requests to the approval gate, so review workflow cuts 12–13 build the gate for items, and this planner issue opens after them (Q11).

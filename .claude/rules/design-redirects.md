@@ -58,11 +58,11 @@ carrying a comment marker:
 Worker-served ESI and dynamic targets read the first 200 bytes of
 `pages/landing/index.html`, see the marker, and emit
 `301 Moved Permanently` to `/welcome` in the request's language
-(`/fr/landing` → `/fr/welcome`, or `/welcome` on a static target where
-`welcome` has no French version; follows from `design-soft-delete.md`
-Q10) — no composition, no body served. On a static target, `gazetta
-serve` or a worker reads the marker in the file at the page's route;
-once #1152's cuts ship there is no marker file there, and they read the
+(`/fr/landing` → `/fr/welcome`) — no composition, no body served. On a
+static target, `gazetta serve` or a worker reads the marker in the file
+at the page's route, and the 301 goes to `/welcome` when `welcome` has
+no French version (follows from `design-soft-delete.md` Q10); once
+#1152's cuts ship there is no marker file there, and they read the
 page's archive sidecar instead, or the first line of a redirect page
 (`design-soft-delete.md` Q10). `gazetta serve` and the generated worker
 need the site's languages, which they get since #1155
@@ -124,10 +124,11 @@ worker, `gazetta serve`, a dynamic origin), the more precise answer
 ([HTTP status codes](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)).
 
 Same mechanism: HTML marker `<!-- gazetta:archived gone -->` on
-worker-served targets. `_redirects` writes no 410 rows: Cloudflare
-Pages can't return 410 from `_redirects` (Cloudflare Pages limits,
-above) and Netlify doesn't document it, so a removed page on a plain
-host answers 404 (#1149, #1152). `gone-status` is a worker capability.
+worker-served targets. Once #1149 lands, `_redirects` writes no 410
+rows: Cloudflare Pages can't return 410 from `_redirects` (Cloudflare
+Pages limits, above) and Netlify doesn't document it, so a removed page
+on a plain host answers 404 (#1149, #1152). `gone-status` is a worker
+capability.
 
 Plain-static hosts answer 404 there once static publish leaves no file
 at the route
