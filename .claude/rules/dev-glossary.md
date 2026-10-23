@@ -237,7 +237,11 @@ without human invocation. Lives under [`bots/`](../../bots/). Each has its
 own subdirectory with `index.ts` + `prompt.md`, shares helpers from
 [`bots/_lib/`](../../bots/_lib/), runs on a daily cron via
 `.github/workflows/<bot-name>.yml`. Distinct from a Skill: bots run
-unattended, skills are user-invoked.
+unattended, skills are user-invoked. One exception lives there too:
+`bots/roadmap-board/` is a tool a session runs after merging a ROADMAP
+change, kept in the bots workspace for its tests; the bot conventions
+(cron, transcripts, outcome tags, skip-lists) don't apply to it
+([design-roadmap-board.md](design-roadmap-board.md)).
 
 **Skill**:
 A reusable Claude prompt body with defined input + output contracts.
