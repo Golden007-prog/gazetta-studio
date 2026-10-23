@@ -132,6 +132,14 @@ describe('parseRoadmap — references', () => {
     expect([...bare.placements.keys()].sort()).toEqual([1234, 1235])
   })
 
+  it('counts a link to an issue whatever its text', () => {
+    const linked = parseRoadmap(
+      '## Now\n\n### A\n\n- [cut 9](https://github.com/gazetta-studio/gazetta-studio/issues/1081) waits for the planner\n- [the fix](https://github.com/gazetta-studio/gazetta-studio/issues/1082#issuecomment-1) landed\n',
+    )
+    expect([...linked.placements.keys()].sort()).toEqual([1081, 1082])
+    expect(linked.drafts).toEqual([])
+  })
+
   it('expands a range of up to 30 numbers', () => {
     for (const n of [515, 516, 517, 518, 519, 520]) {
       expect(parsed.placements.get(n)?.section).toBe('Review workflow — finish')

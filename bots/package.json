@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Repo-scoped bots that run on GitHub Actions cron schedules. Each bot lives in its own subdirectory and shares helpers from _lib/.",
+  "description": "Repo-scoped bots that run on GitHub Actions cron schedules, and the roadmap-board sync a session runs. Each lives in its own subdirectory and shares helpers from _lib/.",
   "scripts": {
     "flake-watcher": "tsx flake-watcher/index.ts",
     "mutation-watcher": "tsx mutation-watcher/index.ts",

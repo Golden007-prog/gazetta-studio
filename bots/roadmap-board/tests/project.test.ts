@@ -7,7 +7,18 @@
  * shows and how to finish the one-time setup.
  */
 import { describe, expect, it } from 'vitest'
-import { type FieldOption, mergeOptions, readme, STATUS_OPTIONS, sameOptions, shortDescription } from '../project.js'
+import type { SyncPlan } from '../plan.js'
+import {
+  applyPlan,
+  type FieldOption,
+  fieldMutation,
+  mergeOptions,
+  type ProjectState,
+  readme,
+  STATUS_OPTIONS,
+  sameOptions,
+  shortDescription,
+} from '../project.js'
 
 const option = (id: string, name: string, color: FieldOption['color'] = 'GRAY', description = ''): FieldOption => ({
   id,
@@ -55,7 +66,106 @@ describe('project text', () => {
     const text = readme('gazetta-studio/gazetta-studio')
     expect(text).toContain('https://github.com/gazetta-studio/gazetta-studio/blob/main/ROADMAP.md')
     expect(text).toContain('column by Section')
+    expect(text).toContain("hide the other buckets' sections")
     expect(text).toContain('group by Area')
     expect(text).toContain('filter `is:issue is:open`')
+  })
+})
+
+const field = (id: string, name: string, options: string[]) => ({
+  id,
+  name,
+  options: options.map((o, i) => option(`${id}-${i}`, o)),
+})
+
+const state: ProjectState = {
+  id: 'P',
+  url: '',
+  fieldIds: new Map(),
+  status: field('F_status', 'Status', ['Now', 'Next', 'Done']),
+  section: field('F_section', 'Section', ['Bug backlog', 'Offline']),
+  area: field('F_area', 'Area', ['cms', 'cli']),
+  items: [],
+  views: [],
+}
+
+describe('fieldMutation: one request per card (Q13)', () => {
+  it('sets every field of a card in a single mutation', () => {
+    const m = fieldMutation(
+      state,
+      'ITEM',
+      { status: 'Now', section: 'Bug backlog', area: 'cms' },
+      { clearEmpty: false },
+    )
+    expect(m?.query.match(/updateProjectV2ItemFieldValue/g)).toHaveLength(3)
+    expect(m?.variables).toMatchObject({ project: 'P', item: 'ITEM' })
+    expect(Object.values(m?.variables ?? {})).toEqual(
+      expect.arrayContaining(['F_status', 'F_status-0', 'F_section', 'F_section-0', 'F_area', 'F_area-0']),
+    )
+  })
+
+  it("doesn't clear empty fields on a card it has just added", () => {
+    const m = fieldMutation(state, 'ITEM', { status: null, section: null, area: 'cli' }, { clearEmpty: false })
+    expect(m?.query).not.toMatch(/clearProjectV2ItemFieldValue/)
+    expect(m?.query.match(/updateProjectV2ItemFieldValue/g)).toHaveLength(1)
+  })
+
+  it('clears a field an update empties, in the same request as the other changes', () => {
+    const m = fieldMutation(state, 'ITEM', { status: null, section: 'Offline' }, { clearEmpty: true })
+    expect(m?.query.match(/clearProjectV2ItemFieldValue/g)).toHaveLength(1)
+    expect(m?.query.match(/updateProjectV2ItemFieldValue/g)).toHaveLength(1)
+  })
+
+  it('sends nothing when there is nothing to write', () => {
+    expect(fieldMutation(state, 'ITEM', {}, { clearEmpty: true })).toBeNull()
+    expect(fieldMutation(state, 'ITEM', { section: null }, { clearEmpty: false })).toBeNull()
+  })
+
+  it('refuses a value the field has no option for', () => {
+    expect(() => fieldMutation(state, 'ITEM', { section: 'Gone' }, { clearEmpty: false })).toThrow(/no option "Gone"/)
+  })
+})
+
+describe('applyPlan: two requests per new card, and no clears on it (Q13)', () => {
+  const emptyPlan: SyncPlan = {
+    addIssues: [],
+    addDrafts: [],
+    updates: [],
+    removals: [],
+    offRoadmap: [],
+    untouched: [],
+    notIssues: [],
+    multiArea: [],
+    blocked: null,
+  }
+
+  it('adds each card, then writes its fields in one request; an update still clears what it empties', async () => {
+    const sent: string[] = []
+    const gql = async <T>(query: string): Promise<T> => {
+      sent.push(query)
+      if (query.includes('addProjectV2ItemById')) return { addProjectV2ItemById: { item: { id: 'I' } } } as T
+      if (query.includes('addProjectV2DraftIssue')) return { addProjectV2DraftIssue: { projectItem: { id: 'D' } } } as T
+      return {} as T
+    }
+    await applyPlan(
+      gql,
+      state,
+      {
+        ...emptyPlan,
+        addIssues: [
+          { number: 1, contentId: 'C1', fields: { status: null, section: null, area: 'cms' } },
+          { number: 2, contentId: 'C2', fields: { status: 'Now', section: 'Bug backlog', area: 'cli' } },
+        ],
+        addDrafts: [{ title: 'Row', body: '', fields: { status: 'Next', section: 'Offline', area: null } }],
+        updates: [{ itemId: 'U', label: '#3', fields: { section: null } }],
+      },
+      () => {},
+    )
+    const adds = sent.filter(q => q.includes('addProjectV2'))
+    const fieldWrites = sent.filter(q => !q.includes('addProjectV2'))
+    expect(adds).toHaveLength(3)
+    expect(fieldWrites).toHaveLength(4)
+    expect(fieldWrites.slice(0, 3).some(q => q.includes('clearProjectV2ItemFieldValue'))).toBe(false)
+    expect(fieldWrites[3]).toContain('clearProjectV2ItemFieldValue')
   })
 })

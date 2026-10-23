@@ -118,7 +118,7 @@ Cards without an issue are drafts: items the file lists without one.
 The API can't set a view's columns or grouping, or the auto-add rule, so they're set by hand once:
 
 - Roadmap and By area: column by Status. By area: group by Area.
-- Now, Next and Later: column by Section.
+- Now, Next and Later: column by Section, and in the column menu hide the other buckets' sections, so each tab shows only its own.
 - All: group by Section.
 - Workflows, "Auto-add to project": repository \`${repo}\`, filter \`is:issue is:open\`.
 `
@@ -368,8 +368,8 @@ export async function applyPlan(
       `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } } }`,
       { project: state.id, content: a.contentId },
     )
-    // Set every field, empty ones too: a project rule may have filled one in when the item was added.
-    await setFields(gql, state, data.addProjectV2ItemById.item.id, a.fields)
+    // A new card has nothing to clear (Q13). A value a project rule sets on it differs from the plan, so the next sync resets it.
+    await setFields(gql, state, data.addProjectV2ItemById.item.id, a.fields, { clearEmpty: false })
     log(`added #${a.number}`)
   }
   for (const d of plan.addDrafts) {
@@ -379,11 +379,11 @@ export async function applyPlan(
       }`,
       { project: state.id, title: d.title, body: d.body },
     )
-    await setFields(gql, state, data.addProjectV2DraftIssue.projectItem.id, d.fields)
+    await setFields(gql, state, data.addProjectV2DraftIssue.projectItem.id, d.fields, { clearEmpty: false })
     log(`added draft "${d.title}"`)
   }
   for (const u of plan.updates) {
-    await setFields(gql, state, u.itemId, u.fields)
+    await setFields(gql, state, u.itemId, u.fields, { clearEmpty: true })
     if (u.body) {
       await gql(
         `mutation($draft: ID!, $body: String!) { updateProjectV2DraftIssue(input: { draftIssueId: $draft, body: $body }) { clientMutationId } }`,
@@ -394,7 +394,32 @@ export async function applyPlan(
   }
 }
 
-async function setFields(gql: GraphQL, state: ProjectState, itemId: string, fields: Partial<Fields>): Promise<void> {
+async function setFields(
+  gql: GraphQL,
+  state: ProjectState,
+  itemId: string,
+  fields: Partial<Fields>,
+  options: { clearEmpty: boolean },
+): Promise<void> {
+  const mutation = fieldMutation(state, itemId, fields, options)
+  if (mutation) await gql(mutation.query, mutation.variables)
+}
+
+/**
+ * One mutation that writes all of a card's fields (Q13), each field an aliased
+ * update or clear. Empty fields are cleared only when `clearEmpty` is set: an
+ * update that empties a field clears it, a card just added has nothing to clear.
+ * Returns null when there's nothing to write.
+ */
+export function fieldMutation(
+  state: ProjectState,
+  itemId: string,
+  fields: Partial<Fields>,
+  options: { clearEmpty: boolean },
+): { query: string; variables: Record<string, unknown> } | null {
+  const params = ['$project: ID!', '$item: ID!']
+  const variables: Record<string, unknown> = { project: state.id, item: itemId }
+  const writes: string[] = []
   for (const [key, field] of [
     ['status', state.status],
     ['section', state.section],
@@ -402,24 +427,27 @@ async function setFields(gql: GraphQL, state: ProjectState, itemId: string, fiel
   ] as const) {
     if (!(key in fields) || !field) continue
     const value = fields[key]
+    const n = writes.length
     if (value === null || value === undefined) {
-      await gql(
-        `mutation($project: ID!, $item: ID!, $field: ID!) {
-          clearProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field }) { clientMutationId }
-        }`,
-        { project: state.id, item: itemId, field: field.id },
+      if (!options.clearEmpty) continue
+      params.push(`$field${n}: ID!`)
+      variables[`field${n}`] = field.id
+      writes.push(
+        `w${n}: clearProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field${n} }) { clientMutationId }`,
       )
       continue
     }
     const option = field.options.find(o => o.name === value)
     if (!option) throw new Error(`${field.name} has no option "${value}"`)
-    await gql(
-      `mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
-        updateProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option } }) { clientMutationId }
-      }`,
-      { project: state.id, item: itemId, field: field.id, option: option.id },
+    params.push(`$field${n}: ID!`, `$option${n}: String!`)
+    variables[`field${n}`] = field.id
+    variables[`option${n}`] = option.id
+    writes.push(
+      `w${n}: updateProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field${n}, value: { singleSelectOptionId: $option${n} } }) { clientMutationId }`,
     )
   }
+  if (writes.length === 0) return null
+  return { query: `mutation(${params.join(', ')}) {\n  ${writes.join('\n  ')}\n}`, variables }
 }
 
 export async function updateProjectText(

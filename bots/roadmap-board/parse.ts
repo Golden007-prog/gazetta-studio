@@ -54,7 +54,8 @@ const BUCKETS: readonly Bucket[] = ['Now', 'Next', 'Later', 'Deferred']
 /** Longer spans in `#A–#B` are more likely a typo than a list of issues. */
 const MAX_RANGE = 30
 const MAX_TITLE = 256
-const ISSUE_LINK = /\[#(\d+)\]\(https:\/\/github\.com\/gazetta-studio\/gazetta-studio\/(?:issues|pull)\/\d+\)/g
+/** A link to an issue or PR, whatever its text; the URL's number is the reference. */
+const ISSUE_LINK = /\[[^\]]*\]\(https:\/\/github\.com\/gazetta-studio\/gazetta-studio\/(?:issues|pull)\/(\d+)[^)]*\)/g
 const RANGE = /#(\d+)\s*[–—-]\s*#(\d+)/g
 const REF = /(^|[^\w&])#(\d+)\b/g
 const LIST_ITEM = /^(\s*)(?:[-*+]|\d+\.)\s+/

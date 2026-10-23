@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { octokitFromEnv } from '../_lib/github.js'
+import { paceMutations } from './pace.js'
 import { type Bucket, type ParsedRoadmap, parseRoadmap } from './parse.js'
 import { AREA_ORDER, areaOf, type IssueInfo, planSync, type SyncPlan } from './plan.js'
 import {
@@ -59,7 +60,9 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const octokit = octokitFromEnv()
-  const gql = withRetry(<T>(query: string, variables?: Record<string, unknown>) => octokit.graphql<T>(query, variables))
+  const gql = withRetry(
+    paceMutations(<T>(query: string, variables?: Record<string, unknown>) => octokit.graphql<T>(query, variables)),
+  )
   const projectId = await findProject(gql, OWNER, TITLE)
   if (!projectId) {
     console.error(
@@ -167,7 +170,7 @@ function report(roadmap: ParsedRoadmap, plan: SyncPlan, commit: string, url: str
   if (plan.untouched.length > 0) console.log(`Left alone: ${plan.untouched.join(', ')}`)
 }
 
-/** Retry on GitHub's rate limits; a first sync makes a few hundred calls. */
+/** Retry on GitHub's rate limits, waiting at least a minute as its docs ask; writes are paced besides (Q13). */
 function withRetry(gql: GraphQL): GraphQL {
   return async <T>(query: string, variables?: Record<string, unknown>): Promise<T> => {
     for (let attempt = 1; ; attempt++) {
