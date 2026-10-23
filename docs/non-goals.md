@@ -109,6 +109,8 @@ The stateless property is what differentiates Gazetta from WordPress / Strapi / 
 
 **Why not**: per [seo-plan.md](../.claude/rules/seo-plan.md), content scoring correlates weakly with rankings (r = 0.10-0.32 in studies) and encourages over-optimization. The SERP preview tells authors what Google will display, which is what they actually need. Yoast-style green/red dots add noise without signal.
 
+AI SEO and GEO review reports are content scoring with AI, and a non-goal for the same reason. For example, Hygraph's SEO agent produces Generative Engine Optimization review reports ([changelog](https://hygraph.com/changelog), 2026-07-30).
+
 **Integration path**: don't.
 
 ---

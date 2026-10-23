@@ -270,7 +270,7 @@ From competitor research (Sanity, Payload, Strapi, Storyblok, Directus, Contentf
 
 | Feature | Competitors shipping it | Notes |
 |---|---|---|
-| ✓ **AI alt-text adapter** (shipped in v1.5) | Strapi (Growth default), Storyblok, Directus (v11.16, 3-provider adapter pattern) | Universal expectation in 2026. Three providers shipped: Anthropic, OpenAI, Ollama. See [`design-ai.md`](design-ai.md) and [`design-ai-implementation.md`](design-ai-implementation.md). |
+| ✓ **AI alt-text adapter** (shipped in v1.5) | Strapi (Growth default), Storyblok (Growth plan and up); Directus 11.16 uses a similar 3-provider adapter for AI-assistant attachments, not alt text | Universal expectation in 2026. Three providers shipped: Anthropic, OpenAI, Ollama. See [`design-ai.md`](design-ai.md) and [`design-ai-implementation.md`](design-ai-implementation.md). |
 | **Paste-URL / import-from-URL upload** | Payload (`pasteURL` w/ allowList), Strapi (`strapi.fetch`) | Low-cost convenience. Safer than "download then re-upload." Needs SSRF allowlist from day one. |
 | **MIME allowlist + magic-bytes validation** | Directus (hardened across 3 releases in Q1 2026) | Security. Cheap to ship right the first time. Pair with the existing `file-type` MIME sniffing. |
 | **Asset versions with "sync all usage"** | Sanity (2026 — Asset Versions in Media Library) | Our replace-and-delete destroys history; versioning preserves it. Fits our content-addressed model naturally — each byte change is already a new hash. |

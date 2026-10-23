@@ -12,7 +12,7 @@ paths:
 
 Foundational dimension #7 of 13. Extension surface for save/publish/load lifecycles. Auto-slugify, auto-tag, validate against external API, enrich content at save time, send notifications on publish.
 
-**Status**: design pass complete (2026-05). Implementation phases sit in Tier 3.
+**Status**: design pass complete (2026-05); implementation shipped (factory contributions in `admin.hooks`; operator guide [`docs/hooks.md`](../../docs/hooks.md)).
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Hook check** every new primitive design must answer

@@ -9,7 +9,7 @@ paths:
 
 Foundational dimension #11 of 13. Pluggable caching layer at the admin / origin server tier (L4 in the layered cache model). v1 ships `MemoryCache` only; abstraction in place so multi-instance deployments can swap providers without changing consumers.
 
-**Status**: design pass complete (2026-05). Implementation phases sit in Tier 3.
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 (`MemoryCache`, per-site keys, SSE invalidation, stats; [`design-cache-implementation.md`](design-cache-implementation.md)). Other cache providers are demand-driven.
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Cache check** every new feature design must answer

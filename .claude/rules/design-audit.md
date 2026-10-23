@@ -10,7 +10,7 @@ paths:
 
 Foundational dimension #5 of 13. Pluggable audit-event recording with multiple provider implementations (history-extended at v1; external sinks reserved). Composes with auth/RBAC's `Principal` for actor identity and with the real-time event-source discipline (audit log = source of real-time events for presence + live publish status).
 
-**Status**: design pass complete (2026-05). Implementation phases sit in Tier 3.
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). External audit sinks are demand-driven.
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Audit check** every new feature design must answer

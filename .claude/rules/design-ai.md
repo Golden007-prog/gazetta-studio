@@ -587,8 +587,8 @@ For sites uploading user-generated content (future use case), authors should rev
 ### Compared to other CMSes
 
 - **Strapi Growth** — built-in AI alt, but coupled to Strapi's specific deployment model. Gazetta's adapter abstraction is provider-agnostic and admin-process-local.
-- **Storyblok** — AI alt as a paid add-on. Gazetta ships in v1.5, no upsell.
-- **Directus 11.16** — three-provider adapter pattern (similar architectural choice). Gazetta's pattern is similar but explicitly cross-task-ready (the `ai:` block + `ai/` infrastructure code anticipates translation, summarization, etc.).
+- **Storyblok** — AI alt text included from the Growth plan up, not on Starter ([pricing](https://www.storyblok.com/pricing), checked 2026-10-23). Gazetta ships it in v1.5 for every site.
+- **Directus 11.16** — a three-provider adapter (OpenAI, Anthropic, Gemini) for image and PDF uploads to its AI assistant, not alt-text generation ([release notes](https://github.com/directus/directus/releases/tag/v11.16.0)); a similar architectural choice. Gazetta's pattern is similar but explicitly cross-task-ready (the `ai:` block + `ai/` infrastructure code anticipates translation, summarization, etc.).
 - **Sanity / Contentful / Payload** — no shipped AI alt as of design time. Operators wire their own integrations.
 
 ### Architectural choices

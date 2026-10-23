@@ -9,7 +9,7 @@ paths:
 
 Operator-facing config format for Gazetta. **Reference doc, not a foundational dimension.** Captures the patterns operators and plugin authors need; the format is set once via [`docs/adr/0005-typescript-config-format.md`](../../docs/adr/0005-typescript-config-format.md).
 
-**Status**: design pass complete (2026-05). Implementation pending — Tier 3.
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 ([`design-config-implementation.md`](design-config-implementation.md)).
 
 **Companion docs**:
 - [`docs/adr/0005-typescript-config-format.md`](../../docs/adr/0005-typescript-config-format.md) — the load-bearing decision (TS over YAML, identity functions, global + site split)

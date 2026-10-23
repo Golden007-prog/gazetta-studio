@@ -10,7 +10,7 @@ paths:
 
 Foundational dimension #12 of 13. Admin works through transient connectivity loss (server restart, Wi-Fi drop, VPN issue) and degrades gracefully. Read paths serve from a local persistent cache; write paths queue and replay on reconnect; conflict resolution preserves author intent.
 
-**Status**: design pass complete (2026-05). Implementation phases sit in Tier 3.
+**Status**: design pass complete (2026-05); implementation shipped except Cut 15, replay metadata on audit events ([`design-offline-implementation.md`](design-offline-implementation.md)).
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Offline check** every new feature design must answer
