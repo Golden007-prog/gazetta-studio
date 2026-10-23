@@ -79,6 +79,10 @@ work for either source or target storage:
 3. write the new edges, computed from the manifest being published (in memory);
 4. write the new record last.
 
+These steps run only once the item's render and write have succeeded; an item that fails keeps its old edges and record, which describe what the target still serves (`design-target-removal.md` Q15). A save on an editable target, such as a production that accepts hotfixes, writes the item's forward record along with its edges, so items saved there directly are checked like published ones (`design-target-removal.md` Q12).
+
+Decided: maintainer, 2026-10-23 (#1120).
+
 No target manifest is read, so the order of the manifest copy and missing manifests on static targets don't matter. A crashed run is safe to retry: it deletes and rewrites the same edges. Two concurrent publishes of the same item can leave a stray edge, which the next publish of that item clears. An item removed from the target (publish undo, `design-publish-undo.md` Q4) has its edges and record deleted. Cost is a few small operations per published item, proportional to the publish, not the site.
 
 **Static targets get flattened edges.** On a static target only pages are rendered and fragments are baked in, and fragment manifests are on the target only if the fragment itself was published there. So a page published to a static target gets an edge to **every** fragment it bakes, direct or nested, and an `asset-refs` edge to every asset those fragments use, from a walk of the in-memory site's fragment references. That is the graph a static page really has, and `/api/dependents` needs one directory listing per fragment, no transitive walk. ESI targets keep direct edges; fragments are published separately there and `findDependentsFromSidecars` walks them transitively.
@@ -103,7 +107,7 @@ No target manifest is read, so the order of the manifest copy and missing manife
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
-| 1 | Per-item edge replacement with forward records on publish (all three relations, per locale, removals), replacing the whole-source rebuild in `publishDepIndices`; a full `--force` publish wipes and rebuilds; history restore rebuilds all three relations | — | api-first | Medium |
+| 1 | Per-item edge replacement with forward records on publish (all three relations, per locale, removals; only for items whose render and write succeeded) and on saves to an editable target, replacing the whole-source rebuild in `publishDepIndices`; a full `--force` publish wipes and rebuilds; history restore rebuilds all three relations | — | api-first | Medium |
 | 2 | Static targets: flattened page → fragment and page → asset edges from the in-memory site's fragment references | 1 | unit + api | Medium |
 | 3 | Run `gazetta publish production --force` for gazetta.studio once cuts 1–2 ship (maintainer step) | 1, 2 | (manual) | Low |
 | 4 | Update this section and the "Where sidecars live" table to the shipped state | 1–3 | docs | Low |
