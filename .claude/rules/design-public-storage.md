@@ -126,7 +126,7 @@ The operator states one fact; Gazetta applies the consequences, and validation p
 
 `.gazetta/publish-generation` is written on public targets too, so the registry (cut 3) marks it safe. It holds only a publish id, and the Cloudflare worker's cache key reads it (#1125, #1201).
 
-Decided: maintainer, 2026-10-23 (#PR)
+Decided: maintainer, 2026-10-23 (#1217)
 
 | Rejected | Why |
 |---|---|
