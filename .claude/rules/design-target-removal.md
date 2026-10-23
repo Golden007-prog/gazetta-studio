@@ -367,8 +367,8 @@ Composition with designs in flight:
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Archive sidecars on targets (`.gone`, `.alias-<name>`, one per page): written with the marker, deleted when a live version replaces it; `listSidecars` reports them; `_redirects` built from the target's listing, with this publish's own sidecar writes merged in, in the shared post-publish function | publish undo cut 1 | unit + api | Medium |
-| 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (#526, #527) | api-first | Medium-high |
-| 3 | Publish panel: rows per the UX table; target-only rows no longer sent in `items`; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
+| 2 | Removal in publish: the `remove` request field, and the panel no longer sending target-only rows in `items` (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (#526, #527) | api-first | Medium-high |
+| 3 | Publish panel: rows per the UX table; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
 | 4 | CLI: list items only on the target; `--remove`, running compare even with `--force` | 2 | integration | Low |
 | 5 | Docs: removals in the publishing docs; purge and 410 guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
 | 6 | Add `--remove` to gazetta.studio's `deploy-site.yml` (maintainer PR; bots can't push workflow files) | 4 | manual | Low |
@@ -381,6 +381,15 @@ Decided: maintainer, 2026-10-23 (#1120).
 |---|---|
 | Review workflow cut 12 waits for cut 2 | The approval gate, waiting since June, would also wait for publish undo cut 2 and #1093's cuts 1–2. |
 | A new review workflow cut after cut 13 and cut 2 | One more cut, in another feature, for what only removals need. |
+
+Cut 2 also makes the panel stop sending target-only rows in `items`, so the server's Q16 check and the panel ship together: today's panel pre-selects those rows and sends them, and once cut 2 rejects them a publish from the admin would otherwise fail until cut 3 lands. Cut 3 keeps the removal rows, the select-removals link and the confirmation.
+
+Decided: maintainer, 2026-10-23 (#1120).
+
+| Rejected | Why |
+|---|---|
+| Cut 2 ignores target-only entries in `items`, as today, and cut 3 adds the rejection | Splits Q16's server checks across two cuts. |
+| Merge cuts 2 and 3 | One bigger cut (server, panel rows and their stories) to close a gap a small change closes. |
 
 ## Migration
 
