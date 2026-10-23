@@ -14,8 +14,10 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createWorker } from '../src/workers/cloudflare-r2.js'
+import { PUBLISH_GENERATION_PATH } from '../src/publish-generation.js'
 
-const GENERATION_PATH = '.gazetta/publish-generation'
+// Writer path shared with the worker key: drift fails the generation-change test.
+const GENERATION_PATH = PUBLISH_GENERATION_PATH
 const LIVE_A = '<!DOCTYPE html><html><body>Version A</body></html>'
 const LIVE_B = '<!DOCTYPE html><html><body>Version B</body></html>'
 
