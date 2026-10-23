@@ -220,7 +220,7 @@ Override target-level cache in a page manifest:
 
 ### Publish generation
 
-Every publish writes a value unique to that publish to `.gazetta/publish-generation` on the target, after the content files and before the purge, whether or not `purge` is configured. The worker includes the generation in its edge cache keys and re-reads it at most every 5 seconds, so pages update within 5 seconds of a publish; the purge then frees the old cached copies.
+Every publish writes a value unique to that publish to `.gazetta/publish-generation` on the target, after the content files and before the purge, whether or not `purge` is configured. The worker includes the generation in its edge cache keys and re-reads it at most every 5 seconds, so pages update within 5 seconds of a publish. The CLI's purge-everything also frees the old cached copies; the admin route's per-page purge no longer matches the generation-keyed entries, which are unreachable and expire with `s-maxage`.
 
 ## Audit log
 
