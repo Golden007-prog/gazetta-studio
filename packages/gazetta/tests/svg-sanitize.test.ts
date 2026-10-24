@@ -129,8 +129,8 @@ describe('sanitizeSvg — external CSS references stripped', () => {
       ).bytes,
     )
     expect(out).toContain('fill="url(#g)"')
-    expect(out).toContain(".a{fill:url(#g)}")
-    expect(out).toContain('url( \'#s\' )')
+    expect(out).toContain('.a{fill:url(#g)}')
+    expect(out).toContain("url( '#s' )")
   })
 })
 
