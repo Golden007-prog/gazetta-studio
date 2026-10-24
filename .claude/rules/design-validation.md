@@ -140,6 +140,15 @@ export interface Issue {
 
 - **cli**: `gazetta validate` runs all validators in non-interactive mode. Exit non-zero on any error. Useful for CI gating before deploy.
 
+On a target without `publishAudit.strict`, the publish audit neither shows nor blocks on warnings, `broken-links` included: the dialog publishes without showing them, and the server gate blocks only on errors. They show in Site health.
+
+Decided: maintainer, 2026-10-24 (#1295)
+
+| Rejected | Why |
+|---|---|
+| Show warning-only results in the dialog before publishing | One more click on every publish whose audit finds warnings |
+| Run `broken-links` at publish only on strict targets | It would change where the check runs (the stage matrix below), and #1294's fix brings its cost to about 3 ms a page |
+
 ### Stage × validator matrix
 
 | Validator | save-delta | background | pre-publish | cli |
@@ -158,7 +167,7 @@ export interface Issue {
 | `orphaned-locale-file` | — | ✓ warn | — | ✓ warn |
 | `unused-fragment` | — | ✓ info | — | ✓ info |
 
-`broken-links` runs for every page in the background scan and on every Publish from the admin; [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost.
+`broken-links` runs for every page in the background scan and on every Publish from the admin (at publish, its warnings show or block only on strict targets, as above); [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost.
 
 Decided: maintainer, 2026-10-24 (#1295)
 
