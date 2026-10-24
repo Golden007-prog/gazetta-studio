@@ -668,7 +668,7 @@ How soft-delete composes with each of the other 12 foundational dimensions plus 
 - Per-locale archive deferred; future-additive.
 
 ### Auth + RBAC (#4)
-- `delete:pages` / `delete:fragments` capability gates archive, purge, and a rename that drops the old name's alias (`keepAlias: false`), which also refuses while other items use the old name, as archiving without an alias does. A rename that keeps the alias needs `edit:pages` / `edit:fragments`: nothing breaks, the same reasoning as manual redirects (`design-redirect-ui.md` Q8). Decided: maintainer, 2026-10-24 (#PR).
+- `delete:pages` / `delete:fragments` capability gates archive, purge, and a rename that drops the old name's alias (`keepAlias: false`), which also refuses while other items use the old name, as archiving without an alias does. A rename that keeps the alias needs `edit:pages` / `edit:fragments`: nothing breaks, the same reasoning as manual redirects (`design-redirect-ui.md` Q8). Decided: maintainer, 2026-10-24 (#1354).
 - Admin-only `?force=true` bypass on purge.
 - Archive's `archivedBy` is a `Principal` snapshot.
 
