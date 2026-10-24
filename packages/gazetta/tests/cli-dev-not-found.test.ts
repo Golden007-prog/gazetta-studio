@@ -23,4 +23,17 @@ describe("gazetta dev's not-found page", () => {
     expect(body).toContain('/admin → CMS editor')
   })
 
+  it('shows the requested path as text', async () => {
+    const body = await (await devApp({ home: '/' }).request('/%3Cb%3Ebold%3C/b%3E')).text()
+
+    expect(body).toContain('Page not found: /&lt;b&gt;bold&lt;/b&gt;')
+    expect(body).not.toContain('<b>')
+  })
+
+  it('shows page names and routes as text', async () => {
+    const body = await (await devApp({ 'a<i>': '/a<i>' }).request('/missing')).text()
+
+    expect(body).toContain('/a&lt;i&gt; → a&lt;i&gt;')
+    expect(body).not.toContain('<i>')
+  })
 })
