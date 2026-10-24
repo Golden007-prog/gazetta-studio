@@ -131,7 +131,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 
 Later the same day, research on agent files ("Agent files" below) split the question. No AI platform says it reads other sites' `llms.txt`, and Google says Search ignores it; coding agents (Claude Code, VS Code Copilot, OpenCode) do ask for Markdown. So the door on gazetta.studio is an experiment: the site serves its docs pages in Markdown when an agent asks for Markdown, serves an `llms.txt`, links to both, and logs requests to them by user agent. The product feature stays Deferred as two rows in ROADMAP, each with its own trigger: `llms.txt` for every site waits for evidence that AI platforms read it, or an operator asking; Markdown versions of every site's pages wait for gazetta.studio's logs to show agents fetching its Markdown docs.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1268)
 
 | Rejected | Why |
 |---|---|

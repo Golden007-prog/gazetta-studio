@@ -254,7 +254,7 @@ Decided: maintainer, 2026-10-23 (#1179)
 
 The two rows for agent files were one row until 2026-10-24, when the evidence split them: no AI platform says it reads other sites' `llms.txt`, while Claude Code, VS Code Copilot and OpenCode ask for Markdown ([`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md), "Agent files").
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1268)
 
 ## Non-goals
 
