@@ -25,7 +25,7 @@ Thirteen main jobs came out of the research, plus three from the maintainer's id
 |---|---|---|---|
 | **Contributors first** | Supported before 1.0: "In the early stages… Most of the interested visitors you get will be developers" ([Fogel](https://producingoss.com/en/getting-started.html)); newcomers prefer young, small, active projects with clear guidelines ([Nirmani et al. 2026](https://arxiv.org/abs/2607.25126)). Already happening here. No study shows contributors become users. | Works today: contributors run `main` | Main button now |
 | **Path to a first install** | htmx 2020, Bun 2022, Vite 2021, Pages CMS, Outstatic, TinaCMS. Pages CMS had about 900 stars 11 days after a 351-point Show HN; Outstatic about 1,300 after a 203-point one | Broken today | Main button after the release |
-| **A door for coding agents** | 11 of 14 CMS sites serve `llms.txt`, but nobody measured its value; Deno: "Paste this into any coding agent: Read deno.com/agents.md"; Outstatic: "Install with Claude" | Cheap: generated from the docs | Yes, on gazetta.studio only (see "Channels by stage") |
+| **A door for coding agents** | 11 of 14 CMS sites serve `llms.txt`, but no AI platform says it reads other sites' files; coding agents do ask for Markdown (see "Agent files"); Deno: "Paste this into any coding agent: Read deno.com/agents.md"; Outstatic: "Install with Claude" | Cheap: generated from the docs | Yes, as an experiment on gazetta.studio only (see "Channels by stage") |
 | **Docs as the site** | Needed under every option; Elysia's, Rome's and Hono's early homepages were their docs | /docs is a third copy | Yes, one source built from the repo |
 | **README as the site** | Zod (README-only through 3.0), Vite v1, Deno 2018–19, Sveltia for about two years | npm page empty | The npm README yes; the whole site no |
 | **Real-world test of Gazetta** | 9 of 14 CMS sites confirmed built with their own product, 2 partly; nobody measured the effect | Already true | Yes, and say so |
@@ -88,7 +88,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 | 0 | **gazetta.studio home** | Thin page; status line; "Built and published with Gazetta"; blog link removed | Fleet | — |
 | 0 | **Contribute page** | "Agents welcome", what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, live list of good first issues, design docs, credits | Fleet; you approve the review rules | — |
 | 0 | **Docs on the site** | Built from the repo's `docs/` instead of the hand-copied page | Fleet | — |
-| 0 | **Door for coding agents** | On gazetta.studio only: `llms.txt`, Markdown copies of the docs pages, a link to AGENTS.md | Fleet | — |
+| 0 | **Door for coding agents** | An experiment on gazetta.studio only: its docs pages in Markdown when an agent asks for Markdown (`Accept: text/markdown`), an `llms.txt`, links to both, a link to AGENTS.md; requests to them logged by user agent | Fleet | — |
 | 0 | **up-for-grabs.net** | A PR adding a YAML entry pointing at the label | Fleet | ✓ |
 | 0 | goodfirstissue.dev | Listing requirements | Fleet checks first | ✗ |
 | 0 | **PR limits, ready but off** | GitHub's open-PR cap with a bypass list; on only if PRs outpace the fleet | You decide when | ✓ |
@@ -128,6 +128,16 @@ Decided: maintainer, 2026-10-24 (#1266)
 |---|---|
 | Keep it deferred, for gazetta.studio too (only the AGENTS.md link at Stage 0) | Gives up a cheap door for the agents outside contributors already use |
 | Gazetta generates them for every site now, and gazetta.studio uses that | More work, and it reverses the 2026-10-23 decision for the product without new evidence |
+
+Later the same day, research on agent files ("Agent files" below) split the question. No AI platform says it reads other sites' `llms.txt`, and Google says Search ignores it; coding agents (Claude Code, VS Code Copilot, OpenCode) do ask for Markdown. So the door on gazetta.studio is an experiment: the site serves its docs pages in Markdown when an agent asks for Markdown, serves an `llms.txt`, links to both, and logs requests to them by user agent. The product feature stays Deferred as two rows in ROADMAP, each with its own trigger: `llms.txt` for every site waits for evidence that AI platforms read it, or an operator asking; Markdown versions of every site's pages wait for gazetta.studio's logs to show agents fetching its Markdown docs.
+
+Decided: maintainer, 2026-10-24 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Markdown by content negotiation for every Gazetta site now, as a design pass in Next | The evidence covers coding agents reading documentation; most Gazetta sites are marketing sites and blogs, whose readers' assistants fetch HTML. The worker's cache key and the templates would change before there's first-party evidence |
+| `llms.txt` and Markdown copies for every site, as one design pass in Next | Builds the half with no evidence (`llms.txt`) along with the half with some |
+| Leave it as #1266 merged it | One Deferred row with one trigger can't tell the two halves apart, and gazetta.studio would serve the files without measuring whether anything reads them |
 
 ### How it runs
 
@@ -202,6 +212,26 @@ Fourteen sites: Payload, Sanity, Strapi, Storyblok, Directus, TinaCMS, Decap, Ke
 - **Per-visitor sandboxes** on Cloudflare Containers need the $5/month Workers Paid plan ([pricing](https://developers.cloudflare.com/containers/pricing/)); an estimate from that page puts it at about 60–90 included sessions a month, then about $6 per 1,000.
 - **A demo in the browser** (Decap's and Sveltia's model) costs nothing to host and has nothing to moderate, but needs the admin API, templates and storage to run in the browser.
 
+### Agent files (checked 2026-10-24)
+
+- **Google:** "It's completely fine if you decide to create and maintain LLMS.txt files … for other services or systems that use these files. Doing so will neither harm nor help your site's visibility or rankings in Google Search, as Google Search ignores them" ([AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide), updated 2026-07-10).
+- **OpenAI, Anthropic and Perplexity** document their crawlers and assistants ([OpenAI](https://developers.openai.com/api/docs/bots), [Anthropic](https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler), [Perplexity](https://docs.perplexity.ai/guides/bots)) without saying they read other sites' `llms.txt`. They publish their own for their developer docs.
+- **Server logs:**
+  - Ahrefs, 137,210 domains in May 2026: 97% of the `llms.txt` files got no requests at all ([study](https://ahrefs.com/blog/llmstxt-study/)).
+  - 83 small-business sites over 12 weeks: OpenAI fetched `llms.txt` 7 times against 3,990 `robots.txt` fetches; Anthropic 9 against 3,120; Perplexity 0 against 775 ([EZY Research](https://www.ezy.ai/research/do-ai-bots-read-llms-txt)).
+  - Claude Code received Markdown on 76% of 23,300 requests to one site that offers it ([Evil Martians](https://evilmartians.com/chronicles/which-ai-actually-reads-your-site-two-months-of-llm-traffic-measured)), and on about 98 in 100 at another ([GoodBarber](https://www.goodbarber.com/blog/do-ai-agents-read-markdown-what-two-weeks-of-our-own-server-logs-say-a1622/)). ChatGPT, Claude.ai, Perplexity and Googlebot fetched HTML.
+  - All of these are vendors' or site owners' own measurements, classifying bots by user agent.
+- **Coding agents:** Claude Code's WebFetch sends "an `Accept` header that prefers Markdown over HTML so servers that support content negotiation can return Markdown directly" ([tools reference](https://code.claude.com/docs/en/tools-reference.md)). VS Code's Copilot and OpenCode ask for Markdown in their source code. No coding agent documents fetching `llms.txt` unprompted; agents read it when a page links to it.
+- **The spec:** llms.txt v2 (August 2026) puts the Markdown copy at the page's own address and links it with `rel="alternate" type="text/markdown"` and `rel="describedby"` ([llmstxt.org](https://llmstxt.org/)). No standards body handles it.
+- **Cloudflare:** "Markdown for Agents" converts HTML to Markdown when asked, but its docs list Pro, Business, Enterprise and SSL for SaaS, not the Free plan, and don't say whether pages a Worker generates are converted ([docs](https://developers.cloudflare.com/fundamentals/reference/markdown-for-agents/)). AI Crawl Control, on all plans, has a Content Format chart of what AI systems request against what the origin serves ([docs](https://developers.cloudflare.com/ai-crawl-control/features/analyze-ai-traffic/)).
+- **gazetta.studio today:** `/llms.txt` answers 404, and a request asking for Markdown gets the cached HTML. The worker caches by address and publish generation, so Markdown responses would need the format in the cache key.
+- **One way to run the experiment** (the researcher's suggestion, not decided):
+  1. Serve the Markdown for two weeks with nothing linking to it.
+  2. Then add the `rel` links.
+  3. Then link `llms.txt` from the footer, README and AGENTS.md.
+
+  Compare requests per user-agent family at each step. Cloudflare's Workers Logs (`[observability] enabled = true` in `wrangler.toml`) keep 3 days on the Free plan ([docs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)).
+
 ### Docs and release sync
 
 - Build the default docs from the latest release tag and put `main`'s docs at an "unreleased" address, as Vite does (`main.vite.dev`).
@@ -229,5 +259,8 @@ Fourteen sites: Payload, Sanity, Strapi, Storyblok, Directus, TinaCMS, Decap, Ke
 | Google's scaled content abuse policy | Verified: fetched |
 | Gazetta's repo, npm and traffic figures | Verified: GitHub API and npm registry, 2026-10-24 |
 | Cloudflare Containers session estimate | Inference from the pricing page |
+| Google ignores `llms.txt`; Claude Code asks for Markdown | Verified: fetched 2026-10-24 |
+| `llms.txt` and Markdown server-log figures (Ahrefs, EZY, Evil Martians, GoodBarber) | Third-party measurements: read, method not audited |
+| VS Code Copilot and OpenCode ask for Markdown | Verified by the research agent in their source code; not re-checked |
 | "Agents welcome" as a difference; no study of contributors becoming users | Inference; searched, nothing found |
 | Time costs | Estimates; no source gives hours |

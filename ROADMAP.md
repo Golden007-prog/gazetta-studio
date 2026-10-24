@@ -57,7 +57,7 @@ Stage 0:
 - gazetta.studio home page: a status line, "Built and published with Gazetta", the blog link removed
 - A Contribute page: agents welcome, what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, the good first issues, design docs, credits
 - Docs on the site built from the repo's `docs/` instead of the hand-copied page
-- On gazetta.studio only: `llms.txt`, Markdown copies of the docs pages, a link to AGENTS.md. Gazetta generating them for every site stays Deferred
+- An experiment on gazetta.studio only: its docs pages in Markdown when an agent asks for Markdown, an `llms.txt`, links to both, and a link to AGENTS.md, with requests to them logged by user agent. Gazetta doing this for every site stays Deferred
 - A listing on up-for-grabs.net; goodfirstissue.dev once its rules are checked
 - GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet
 
@@ -245,11 +245,16 @@ Decided: maintainer, 2026-10-24 (#1243)
 | Google Cloud Storage provider ([#8](https://github.com/gazetta-studio/gazetta-studio/issues/8)) | Operator asks |
 | Pass dynamic route params at request time ([#80](https://github.com/gazetta-studio/gazetta-studio/issues/80)) | Composes with `design-rendering.md` request-SSR work when shipped |
 | Publish from static target ([#92](https://github.com/gazetta-studio/gazetta-studio/issues/92)): CLI publishes to a static target copy no fragment manifests, so it can't be a publish source | A real "publish from a static target" workflow surfaces |
-| `llms.txt` and Markdown versions of pages for AI agents | Evidence that AI platforms read them, or an operator asks |
+| `llms.txt` for every site Gazetta publishes | Evidence that AI platforms read other sites' `llms.txt` (none found on 2026-10-24: Google says Search ignores it), or an operator asks |
+| Markdown versions of every site's pages, served when an agent asks for Markdown | gazetta.studio's own logs show agents fetching its Markdown docs (Stage 0 experiment); coding agents already ask for Markdown |
 | Agent instructions (skills) for template developers | The MCP server ships |
 | Asset folders and a crop rectangle | Operators ask |
 
 Decided: maintainer, 2026-10-23 (#1179)
+
+The two rows for agent files were one row until 2026-10-24, when the evidence split them: no AI platform says it reads other sites' `llms.txt`, while Claude Code, VS Code Copilot and OpenCode ask for Markdown ([`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md), "Agent files").
+
+Decided: maintainer, 2026-10-24 (#PR)
 
 ## Non-goals
 
