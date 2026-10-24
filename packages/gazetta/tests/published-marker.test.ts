@@ -92,6 +92,28 @@ describe('parsePublishedMarkers', () => {
     expect(parsePublishedMarkers(truncated)).toEqual({ page: outputHash(page), fragments: [] })
   })
 
+  it('takes the last marker in the head, the one publish wrote', () => {
+    const withAuthored = page.replace(
+      '<meta charset="UTF-8">',
+      '<meta charset="UTF-8">\n<!-- gazetta:published hash=00000000 -->',
+    )
+    expect(parsePublishedMarkers(insertPageMarker(withAuthored)).page).toBe(outputHash(withAuthored))
+  })
+
+  it('reads a head written in capitals', () => {
+    expect(parsePublishedMarkers('<HEAD>\n<!-- gazetta:published hash=ab12cd34 -->\n</HEAD>')).toEqual({
+      page: 'ab12cd34',
+      fragments: [],
+    })
+  })
+
+  it('does not take a <header> for the head', () => {
+    expect(parsePublishedMarkers(appendFragmentMarker('<header>h</header>'))).toEqual({
+      page: null,
+      fragments: [outputHash('<header>h</header>')],
+    })
+  })
+
   it('counts markers outside any head as fragment markers', () => {
     expect(parsePublishedMarkers(appendFragmentMarker('<nav></nav>'))).toEqual({
       page: null,

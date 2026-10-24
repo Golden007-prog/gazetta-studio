@@ -19,6 +19,9 @@
 import { createHash } from 'node:crypto'
 
 const MARKER_RE = /<!-- gazetta:published hash=([0-9a-f]{8}) -->/g
+// `<head>` or `<head ...>` in any case, not `<header>`.
+const HEAD_OPEN_RE = /<head(?=[\s>/])/i
+const HEAD_CLOSE_RE = /<\/head\s*>/i
 
 /** The marker comment for an output hash. */
 export function publishedMarker(hash: string): string {
@@ -63,22 +66,23 @@ export interface PublishedMarkers {
 /**
  * Read the markers from any HTML a host returns. Never throws.
  *
- * The head region runs from `<head` to the first `</head>`; when the closing
+ * The head region runs from `<head>` to the first `</head>`; when the closing
  * tag is missing (a truncated response) it runs to the end, so a page marker
- * isn't mistaken for a fragment's. Without a `<head`, every marker counts as
- * a fragment marker.
+ * isn't mistaken for a fragment's. Without a head, every marker counts as a
+ * fragment marker. Publish writes the page marker last in the head, so the
+ * last one there wins over a marker-shaped comment a template wrote earlier.
  */
 export function parsePublishedMarkers(html: unknown): PublishedMarkers {
   const result: PublishedMarkers = { page: null, fragments: [] }
   if (typeof html !== 'string' || html.length === 0) return result
-  const headStart = html.indexOf('<head')
-  const closeAt = headStart === -1 ? -1 : html.indexOf('</head>', headStart)
-  const headEnd = headStart === -1 ? -1 : closeAt === -1 ? html.length : closeAt
+  const headStart = html.search(HEAD_OPEN_RE)
+  const closeAt = headStart === -1 ? -1 : html.slice(headStart).search(HEAD_CLOSE_RE)
+  const headEnd = headStart === -1 ? -1 : closeAt === -1 ? html.length : headStart + closeAt
   for (const match of html.matchAll(MARKER_RE)) {
     const at = match.index ?? 0
     const inHead = headStart !== -1 && at > headStart && at < headEnd
     if (inHead) {
-      if (result.page === null) result.page = match[1]
+      result.page = match[1]
     } else {
       result.fragments.push(match[1])
     }

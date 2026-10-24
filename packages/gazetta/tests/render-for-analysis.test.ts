@@ -29,6 +29,8 @@ describe('renderPageForAnalysis', () => {
     expect(out).not.toBeNull()
     expect(out!.html.toLowerCase()).toContain('<!doctype html>')
     expect(out!.html).toContain('</html>')
+    // Only publish marks output (design-live-check.md Q4).
+    expect(out!.html).not.toContain('gazetta:published')
   })
 
   it('cache hit on repeat call returns the same output without re-render', async () => {

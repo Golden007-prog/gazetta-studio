@@ -182,10 +182,9 @@ export function hashManifest(manifest: PageManifest | FragmentManifest, opts: Ha
         opts.topLevelFragmentsComposedAtRequest,
       ) ?? null,
   }
-  // Only when it has a field: pages without metadata keep the hash they had
-  // before metadata counted, and `{}` renders the same as no metadata.
+  // Metadata only when it has a field: `{}` renders the same as no metadata.
   // An archived item publishes as a marker naming its alias target, so a
-  // retargeted alias is a change. Live items hash as before.
+  // retargeted alias is a change.
   if (manifest.archived) {
     normalized.archived = true
     normalized.aliasOf = manifest.aliasOf ?? null

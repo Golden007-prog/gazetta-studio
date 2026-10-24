@@ -424,6 +424,8 @@ describe('GET /preview/*', () => {
     expect(status).toBe(200)
     expect(body).toContain('Welcome to Gazetta')
     expect(body).toContain('<!DOCTYPE html>')
+    // Only publish marks output (design-live-check.md Q4).
+    expect(body).not.toContain('gazetta:published')
   })
 
   it('renders about page', async () => {
@@ -522,6 +524,7 @@ describe('GET /preview/@fragment', () => {
     const { status, body } = await getText('/preview/@header')
     expect(status).toBe(200)
     expect(body).toContain('<!DOCTYPE html>')
+    expect(body).not.toContain('gazetta:published')
   })
 
   it('returns 500 for missing fragment', async () => {
