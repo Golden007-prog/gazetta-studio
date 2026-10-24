@@ -293,6 +293,7 @@ export default defineSite({
         bucket: 'my-site',
       }),
       environment: 'production',                // optional — 'local' | 'staging' | 'production'. Default: local for filesystem, production otherwise. Drives admin UI confirmation prompts and badges.
+      publicStorage: false,                     // optional — can visitors reach this storage? Default: public, except an editable filesystemStorage() or a copy deploy adapter. Public targets default to editable: false (design-public-storage.md).
       siteUrl: 'https://mysite.com',            // optional — for cache purge URL resolution
       cache: {                                  // optional — HTTP/CDN caching configuration (separate from site-level AdminCache)
         browser: 0,                             // browser cache TTL in seconds

@@ -219,8 +219,8 @@ describe('createTargetRegistryView', () => {
     it('returns the first editable target in declaration order', () => {
       const configs: Record<string, TargetConfig> = {
         prod: { storage: mockProvider(), environment: 'production' },
-        dev: { storage: mockProvider() },
-        staging: { storage: mockProvider(), environment: 'staging', editable: true },
+        dev: { storage: mockProvider(), publicStorage: false },
+        staging: { storage: mockProvider(), environment: 'staging', editable: true, publicStorage: false },
       }
       const registry = createTargetRegistryView(new Map(), configs)
       expect(registry.defaultEditable()).toBe('dev')
@@ -243,6 +243,15 @@ describe('createTargetRegistryView', () => {
       expect(() => registry.defaultEditable()).toThrow(NoEditableTargetError)
     })
 
+    it('skips a target whose storage defaults to public', () => {
+      const configs: Record<string, TargetConfig> = {
+        bucket: { storage: mockProvider() },
+        local: { storage: mockProvider(), publicStorage: false },
+      }
+      const registry = createTargetRegistryView(new Map(), configs)
+      expect(registry.defaultEditable()).toBe('local')
+    })
+
     it('throws when no targets at all', () => {
       const registry = createTargetRegistryView(new Map(), {})
       expect(() => registry.defaultEditable()).toThrow(NoEditableTargetError)
@@ -253,10 +262,12 @@ describe('createTargetRegistryView', () => {
 describe('listEditableTargets', () => {
   it('filters to editable targets in declaration order', () => {
     const configs: Record<string, TargetConfig> = {
-      local: { storage: mockProvider() },
+      local: { storage: mockProvider(), publicStorage: false },
       staging: { storage: mockProvider(), environment: 'staging' },
-      prod: { storage: mockProvider(), environment: 'production', editable: true },
-      secondLocal: { storage: mockProvider() },
+      prod: { storage: mockProvider(), environment: 'production', editable: true, publicStorage: false },
+      secondLocal: { storage: mockProvider(), publicStorage: false },
+      // Public storage defaults to not editable, even with environment unset.
+      bucket: { storage: mockProvider() },
     }
     expect(listEditableTargets(configs)).toEqual(['local', 'prod', 'secondLocal'])
   })

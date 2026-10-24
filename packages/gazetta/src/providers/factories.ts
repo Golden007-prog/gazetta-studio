@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
-import type { StorageProvider } from '../types.js'
+import type { StorageKind, StorageProvider } from '../types.js'
 import { createFilesystemProvider } from './filesystem.js'
 
 /**
@@ -73,9 +73,9 @@ export interface FilesystemStorageOptions {
  *  paths fall back to CWD-relative resolution. */
 export function filesystemStorage(opts: FilesystemStorageOptions = {}): StorageProvider {
   const path = opts.path ?? './targets/local'
-  if (isAbsolute(path)) return createFilesystemProvider(path)
   const anchor = getConfigAnchor()
-  return createFilesystemProvider(anchor ? resolve(anchor, path) : resolve(path))
+  const root = isAbsolute(path) ? path : anchor ? resolve(anchor, path) : resolve(path)
+  return { ...createFilesystemProvider(root), kind: 'filesystem' }
 }
 
 export interface R2StorageOptions {
@@ -102,6 +102,7 @@ export function r2Storage(opts: R2StorageOptions): StorageProvider {
     throw new Error('r2Storage: "secretAccessKey" is required. Set R2_SECRET_ACCESS_KEY in your env.')
   }
   return lazyS3Provider(
+    'r2',
     'r2Storage',
     {
       endpoint: `https://${opts.accountId}.r2.cloudflarestorage.com`,
@@ -131,6 +132,7 @@ export function s3Storage(opts: S3StorageOptions): StorageProvider {
   if (!opts.accessKeyId) throw new Error('s3Storage: "accessKeyId" is required')
   if (!opts.secretAccessKey) throw new Error('s3Storage: "secretAccessKey" is required')
   return lazyS3Provider(
+    's3',
     's3Storage',
     {
       endpoint: opts.endpoint,
@@ -174,7 +176,12 @@ interface S3FactoryArgs {
  * use (per Path X's construction-timing convention — see
  * `design-provider-config.md` "Construction timing").
  */
-function lazyS3Provider(factoryName: string, args: S3FactoryArgs, missingSdkMessage: string): StorageProvider {
+function lazyS3Provider(
+  kind: StorageKind,
+  factoryName: string,
+  args: S3FactoryArgs,
+  missingSdkMessage: string,
+): StorageProvider {
   let real: StorageProvider | null = null
   const ensure = async (): Promise<StorageProvider> => {
     if (real) return real
@@ -187,7 +194,7 @@ function lazyS3Provider(factoryName: string, args: S3FactoryArgs, missingSdkMess
     real = createS3Provider(args)
     return real
   }
-  return makeLazyStorageProxy(ensure)
+  return makeLazyStorageProxy(kind, ensure)
 }
 
 function lazyAzureProvider(connectionString: string, container: string): StorageProvider {
@@ -205,7 +212,7 @@ function lazyAzureProvider(connectionString: string, container: string): Storage
     real = createAzureBlobProvider({ connectionString, container })
     return real
   }
-  return makeLazyStorageProxy(ensure)
+  return makeLazyStorageProxy('azure', ensure)
 }
 
 /**
@@ -216,9 +223,15 @@ function lazyAzureProvider(connectionString: string, container: string): Storage
  * `init()` is exposed because the internal S3 + Azure providers offer it for
  * connectivity probes (target registry's parallel-init pattern); the proxy
  * forwards to the real provider's `init` when present.
+ *
+ * `kind` is a plain field on the proxy so reading it never loads the SDK.
  */
-function makeLazyStorageProxy(ensure: () => Promise<StorageProvider>): StorageProvider & { init(): Promise<void> } {
+function makeLazyStorageProxy(
+  kind: StorageKind,
+  ensure: () => Promise<StorageProvider>,
+): StorageProvider & { init(): Promise<void> } {
   return {
+    kind,
     async readFile(path) {
       return (await ensure()).readFile(path)
     },

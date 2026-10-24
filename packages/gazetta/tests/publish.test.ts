@@ -654,19 +654,14 @@ describe('archived-page publish — live-to-archive cleanup (Cut 3)', () => {
 })
 
 describe('isEditable', () => {
-  it('defaults to true for local environment (explicit or unset)', async () => {
+  it('defaults to true for a private local target (explicit or unset environment)', async () => {
     const { isEditable } = await import('../src/types.js')
-    expect(isEditable({ storage: filesystemStorage({ path: './dist' }) })).toBe(true)
-    expect(
-      isEditable({
-        storage: r2Storage({ accountId: 'a', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' }),
-        environment: 'local',
-      }),
-    ).toBe(true)
-    // Unset environment → defaults to 'local' → editable
-    expect(
-      isEditable({ storage: r2Storage({ accountId: 'a', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' }) }),
-    ).toBe(true)
+    const r2 = () => r2Storage({ accountId: 'a', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' })
+    expect(isEditable({ storage: filesystemStorage({ path: './dist' }), publicStorage: false })).toBe(true)
+    expect(isEditable({ storage: r2(), environment: 'local', publicStorage: false })).toBe(true)
+    // Storage left to the default resolves public, so not editable
+    expect(isEditable({ storage: r2() })).toBe(false)
+    expect(isEditable({ storage: filesystemStorage({ path: './dist' }) })).toBe(false)
   })
 
   it('defaults to false for staging and production', async () => {

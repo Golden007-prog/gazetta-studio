@@ -207,6 +207,9 @@ export type TargetEnvironment = 'local' | 'staging' | 'production'
 
 export type TargetType = 'static' | 'dynamic'
 
+/** Built-in storage factories, as reported by `StorageProvider.kind`. */
+export type StorageKind = 'filesystem' | 'r2' | 's3' | 'azure'
+
 /** Target configuration in site.config.ts */
 export interface TargetConfig {
   /**
@@ -238,8 +241,22 @@ export interface TargetConfig {
    * and `production`.
    * Override explicitly for hotfix-tolerant staging/prod setups
    * (`editable: true`) or locked-down local targets (`editable: false`).
+   * A target whose storage is public (see `publicStorage`) defaults to
+   * `false`, and must not set `true`: an editing target keeps history.
    */
   editable?: boolean
+  /**
+   * Whether visitors can reach this target's storage directly (a host
+   * serving the bucket or folder as the site). A public target keeps no
+   * history, audit or review state there. When unset, a target is private
+   * only if its storage is `filesystemStorage()` and it sets
+   * `editable: true`, or if its deploy adapter copies site files to the
+   * host; every other target is assumed public. Set `false` for storage
+   * visitors can't reach (e.g. a bucket served only through a worker).
+   * Read the resolved value with `isPublicStorage(target)`.
+   * See `.claude/rules/design-public-storage.md` Q5–Q6.
+   */
+  publicStorage?: boolean
   /** Base URL of the site (e.g. https://gazetta.studio) */
   siteUrl?: string
   /**
@@ -615,11 +632,28 @@ export function getEnvironment(target: TargetConfig): TargetEnvironment {
 }
 
 /**
+ * Whether visitors can reach this target's storage directly. An explicit
+ * `publicStorage` wins. Otherwise the target is private only when its
+ * storage is a filesystem it explicitly edits, or when its deploy adapter
+ * copies site files to the host; anything else is assumed public, so a
+ * forgotten declaration never leaks history or audit data. `environment`
+ * plays no part: it defaults to `'local'`, so it can't show privacy.
+ */
+export function isPublicStorage(target: TargetConfig): boolean {
+  if (target.publicStorage !== undefined) return target.publicStorage
+  if (target.storage.kind === 'filesystem' && target.editable === true) return false
+  if (target.deploy?.copiesSiteFiles === true) return false
+  return true
+}
+
+/**
  * Whether the author can save and receive publishes on this target from the CMS.
- * Default: true for `environment: local`, false for `staging` / `production`.
+ * Public storage resolves first: a public target defaults to not editable.
+ * Otherwise the default is true for `environment: local`, false for
+ * `staging` / `production`.
  */
 export function isEditable(target: TargetConfig): boolean {
-  return target.editable ?? getEnvironment(target) === 'local'
+  return target.editable ?? (isPublicStorage(target) ? false : getEnvironment(target) === 'local')
 }
 
 /** Default retention: keep the last 50 revisions. Matches design-publishing.md. */
@@ -860,6 +894,12 @@ export interface ByteRange {
  * at publish time.
  */
 export interface StorageProvider {
+  /**
+   * Which built-in storage this is. Set by the built-in factories; custom
+   * providers leave it unset. `isPublicStorage` reads it: only filesystem
+   * storage can default to private.
+   */
+  readonly kind?: StorageKind
   readFile(path: string): Promise<string>
   readDir(path: string): Promise<DirEntry[]>
   exists(path: string): Promise<boolean>

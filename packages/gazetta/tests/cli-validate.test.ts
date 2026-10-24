@@ -12,11 +12,11 @@
  *   - --verbose prints full Issue messages
  *   - --include-quality runs the heavier validators
  */
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { existsSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const cliEntry = resolve(here, '../dist/cli/index.js')
@@ -80,5 +80,33 @@ describe('gazetta validate (CLI)', () => {
     // surface on the starter (some violations are normal on real templates).
     const { status } = run(['sites/main', '--include-quality', '--no-warn-as-error', '--severity', 'all'])
     expect([0, 1]).toContain(status) // either is fine — we just want no crash
+  })
+})
+
+describe('gazetta validate (CLI) — site-config validators', () => {
+  const copyDir = resolve(here, '../../../.tmp', `cli-validate-public-storage-${Date.now()}`)
+
+  afterAll(() => {
+    rmSync(copyDir, { recursive: true, force: true })
+  })
+
+  it('reports public-storage errors and the assumed-public info line, and exits 1', { timeout: 30_000 }, () => {
+    cpSync(starterDir, copyDir, { recursive: true, filter: src => !src.includes('node_modules') })
+    const configPath = join(copyDir, 'sites/main/site.config.ts')
+    // Added after `local`, which must stay the first editable target (the source).
+    const bucket =
+      "    bucket: { storage: azureBlobStorage({ connectionString: 'UseDevelopmentStorage=true', container: 'b' }), editable: true },\n"
+    writeFileSync(
+      configPath,
+      readFileSync(configPath, 'utf-8').replace('    staging: {\n', bucket + '    staging: {\n'),
+    )
+    const result = spawnSync('node', [cliEntry, 'validate', 'sites/main'], {
+      cwd: copyDir,
+      env: { ...process.env, NO_COLOR: '1' },
+      encoding: 'utf-8',
+    })
+    expect(result.stdout).toContain('`bucket` is editable, so its storage must be private (`publicStorage: false`).')
+    expect(result.stdout).toContain('`bucket`: storage assumed public')
+    expect(result.status).toBe(1)
   })
 })

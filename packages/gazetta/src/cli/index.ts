@@ -16,9 +16,11 @@ import { REQUIRED_NODE_FLOOR } from '../node-floor.js'
 import { isTemplateEventRecent, TEMPLATE_RECENT_CHANGE_WINDOW_MS } from './dev-template-watcher.js'
 // createTargetRegistry is used lazily by admin-api publish routes
 import type { SiteManifest } from '../types.js'
+import type { Issue } from '../validation/types.js'
 import { getEnvironment, getType, isEditable } from '../types.js'
 import { buildHooksRegistry, createAdminApp } from '../admin-api/index.js'
 import { parseValidateFlags } from './validate-flags.js'
+import { logDefaultedPublicTargets } from '../validation/validators/public-storage-config.js'
 import { parseArgs } from './args.js'
 import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
 import { viteCacheDir } from './vite-cache-dir.js'
@@ -432,8 +434,10 @@ export default defineSite({
   targets: {
     local: {
       storage: filesystemStorage(),
-      // environment: 'local' (default); editable: true (default for local);
-      // filesystemStorage() defaults path to ./targets/local
+      // The editing target keeps history, so its storage must be private.
+      publicStorage: false,
+      // environment: 'local' (default); editable: true (default for a
+      // private local target); filesystemStorage() defaults path to ./targets/local
     },
   },
 })
@@ -1482,7 +1486,22 @@ async function runValidate(siteDir: string, rawArgs: readonly string[] = []) {
     loadSiteImpl: async () => site,
   })
   await scanner.scanAll()
-  const allIssues = scanner.allIssues()
+  // Site-config validators (targets, deploy adapters) check the whole config
+  // once rather than per item, so the scanner never runs them.
+  const configIssues: Issue[] = []
+  for (const validator of filtered.forStage('cli')) {
+    if (validator.stages.includes('background')) continue
+    configIssues.push(
+      ...(await validator.validate({
+        stage: 'cli',
+        site,
+        contentRoot: source.contentRoot,
+        storage: source.storage,
+        scope: { kind: 'cli' },
+      })),
+    )
+  }
+  const allIssues = [...scanner.allIssues(), ...configIssues]
 
   // 4. Per-item summary. Pages first, then fragments — matches the existing
   //    output ordering for unsurprising diff vs. the prior implementation.
@@ -1511,6 +1530,12 @@ async function runValidate(siteDir: string, rawArgs: readonly string[] = []) {
     if (opts.severity === 'all') return true
     if (opts.severity === 'warn') return severity !== 'info'
     return severity === 'error'
+  }
+
+  // Config issues are about the site's setup, so like the project-structure
+  // checks below they show whatever `--severity` is; info never fails.
+  for (const issue of configIssues) {
+    console.log(`  ${severityIcon(issue.severity)} ${issue.message}`)
   }
 
   for (const [pageName, page] of site.pages) {
@@ -2229,6 +2254,7 @@ async function setupCmsApi(
   // contributions before wiring the admin app. Hooks are an opt-in
   // extension surface; sites without `admin.hooks` get an empty
   // registry (no overhead).
+  logDefaultedPublicTargets(targetConfigs)
   const hooks = await buildHooksRegistry({ contributions })
   const validationScanner = await buildValidationScanner({ source, templatesDir, manifest })
   // Mount SSE on the OUTER Hono app — matches `/__reload`'s placement so
@@ -2285,6 +2311,7 @@ async function setupProductionMode(
 ) {
   // Same shape as dev mode — `gazetta serve` reads `admin.hooks`
   // factory contributions from the same site config.
+  logDefaultedPublicTargets(targetConfigs)
   const hooks = await buildHooksRegistry({ contributions })
   const validationScanner = await buildValidationScanner({ source, templatesDir, manifest })
   // SSE channel at the outer app's root; see setupCmsApi for rationale.

@@ -7,10 +7,14 @@ export default defineSite({
     local: {
       // Relative paths are anchored to this config file's directory.
       storage: filesystemStorage({ path: './targets/local' }),
+      // The editing target: keeps history, so its storage must be private.
+      publicStorage: false,
       // Defaults: environment=local (editable)
     },
     production: {
       type: 'dynamic',
+      // The bucket has no public access; visitors reach it only through the worker.
+      publicStorage: false,
       storage: r2Storage({
         accountId: '30ec7440a8cdafa137c993cd4a0f4c67',
         bucket: 'gazetta-studio-site',

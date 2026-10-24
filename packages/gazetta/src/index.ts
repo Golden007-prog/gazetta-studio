@@ -13,11 +13,12 @@ export type {
   TargetConfig,
   CacheConfig,
   DirEntry,
+  StorageKind,
   StorageProvider,
   ByteRange,
   PurgeStrategy,
 } from './types.js'
-export { getType, isEditable } from './types.js'
+export { getType, isEditable, isPublicStorage } from './types.js'
 export type { TargetType } from './types.js'
 export {
   createTargetRegistryView,

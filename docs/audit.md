@@ -96,6 +96,33 @@ If the web server or host serves the storage folder or bucket directly, `.gazett
 - A filesystem target's folder (such as `./dist/production`) is uploaded as-is to a static host, or served by nginx, Caddy or Apache
 - **`gazetta serve` on a static target (`type: 'static'`)**: it currently returns any file in storage, `.gazetta/` included. Fix tracked in [#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071); until it lands, put it behind a proxy rule like the one below.
 
+### Telling Gazetta whether storage is public: `publicStorage`
+
+Each target can say whether visitors can reach its storage:
+
+```ts
+targets: {
+  local: {
+    storage: filesystemStorage({ path: './targets/local' }),
+    publicStorage: false,          // the editing folder; nobody serves it
+  },
+  production: {
+    storage: r2Storage({ /* ... */ }),
+    publicStorage: false,          // bucket is private; only the worker serves it
+  },
+},
+```
+
+When `publicStorage` is left out, Gazetta assumes the storage is **public**, unless the target is `filesystemStorage()` with `editable: true`, or its deploy adapter copies only site files to the host. `environment` doesn't count: it defaults to `'local'`, so it can't show that a bucket is private.
+
+What follows from the setting:
+
+- A public target defaults to `editable: false`. Setting `editable: true` on it is a validation error: an editing target keeps history, so its storage must be private.
+- `history: { enabled: true }` on a public target is a validation error.
+- A target assumed public (no `publicStorage` set) gets one info line in `gazetta validate` and when the admin starts: "storage assumed public, so history and audit aren't kept. Set `publicStorage: false` if visitors can't reach it."
+
+`gazetta init`, the starter and gazetta.studio set `publicStorage` on every target. Upcoming releases stop writing history and audit to public targets ([design](../.claude/rules/design-public-storage.md)).
+
 ### What to do if your storage is public
 
 Pick one, in this order of preference:

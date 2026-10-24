@@ -64,15 +64,21 @@ export default defineSite({
       // Relative paths are anchored to this config file's directory
       // (./targets/local resolves under sites/main/targets/local).
       storage: filesystemStorage({ path: './targets/local' }),
+      // The editing target: keeps history, so its storage must be private.
+      publicStorage: false,
       // environment: 'local' (default)
-      // editable: true (default for local environment)
+      // editable: true (default for a private local target)
     },
     staging: {
       storage: filesystemStorage({ path: './dist/staging' }),
+      // Served by `gazetta serve`, which never serves `.gazetta/`, so history stays private.
+      publicStorage: false,
       environment: 'staging',
     },
     'esi-test': {
       storage: filesystemStorage({ path: './dist/esi-test' }),
+      // Served by `gazetta serve`, which never serves `.gazetta/`, so history stays private.
+      publicStorage: false,
       type: 'dynamic',
       environment: 'staging',
     },
@@ -81,6 +87,8 @@ export default defineSite({
         connectionString: 'UseDevelopmentStorage=true',
         container: 'gazetta-production',
       }),
+      // Local Azurite emulator: visitors can't reach it, so history stays.
+      publicStorage: false,
       environment: 'production',
       // Uncomment to require explicit click-to-suggest on production
       // (review-first workflow). Behavior fields live at the root of altText:

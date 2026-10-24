@@ -85,7 +85,7 @@ describe('createSourceContext', () => {
 
 describe('createSourceContextFromRegistry', () => {
   const configs: Record<string, TargetConfig> = {
-    local: { storage: memoryStorage() },
+    local: { storage: memoryStorage(), publicStorage: false },
     staging: { storage: memoryStorage(), environment: 'staging' },
     prod: { storage: memoryStorage(), environment: 'production' },
   }
@@ -146,7 +146,7 @@ describe('staticSourceResolver', () => {
 
 describe('registrySourceResolver', () => {
   const configs: Record<string, TargetConfig> = {
-    local: { storage: memoryStorage() },
+    local: { storage: memoryStorage(), publicStorage: false },
     staging: { storage: memoryStorage(), environment: 'staging', editable: true },
     prod: { storage: memoryStorage(), environment: 'production' },
   }

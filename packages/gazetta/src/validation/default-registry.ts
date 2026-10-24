@@ -9,6 +9,7 @@ import { danglingAlias } from './validators/dangling-alias.js'
 import { deployTargetTypeSupported } from './validators/deploy-target-type-supported.js'
 import { dynamicRouteConflict } from './validators/dynamic-route-conflict.js'
 import { htmlValidity } from './validators/html-validity.js'
+import { publicStorageConfig } from './validators/public-storage-config.js'
 import { orphanedLocaleFile } from './validators/orphaned-locale-file.js'
 import { referencedArchivedWithoutAlias } from './validators/referenced-archived-without-alias.js'
 import { referencedAssetExists } from './validators/referenced-asset-exists.js'
@@ -51,5 +52,7 @@ export function defaultValidatorRegistry(): ValidatorRegistry {
     // Deploy validators per design-deploy.md Cut 2.
     deployTargetTypeSupported,
     targetDeployCoverage,
+    // Public storage config per design-public-storage.md Q6.
+    publicStorageConfig,
   ])
 }

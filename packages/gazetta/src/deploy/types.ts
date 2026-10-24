@@ -41,6 +41,13 @@ import type { Issue } from '../validation/types.js'
 export interface DeployAdapter {
   readonly name: string
   readonly supports: readonly TargetType[]
+  /**
+   * Set by static copy adapters that upload only site files from the
+   * target's storage to the host. The storage itself then stays private,
+   * so `isPublicStorage` defaults such a target to private
+   * (design-public-storage.md Q2).
+   */
+  readonly copiesSiteFiles?: true
   execute(ctx: DeployContext): Promise<DeployResult>
   validate?(ctx: ValidateContext): Issue[]
 }
