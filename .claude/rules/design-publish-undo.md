@@ -19,7 +19,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - Undo and rollback on a publish destination restore the previous content and re-render it through the publish pipeline, removing items the undone publish added
 - A check against current templates before anything is written
 - The same flow for the publish panel's Undo, the History panel's Restore, and `gazetta undo` / `gazetta rollback`
-- Post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge) in one shared function used by the CLI, the admin and undo
+- Post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge) in one shared function used by the CLI, the admin and undo (follows from Q4)
 
 **Out of v1:**
 - Restoring old template output (templates are code, versioned in git)
@@ -34,7 +34,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - `restoreRevision` (`history-restorer.ts`) writes the revision's snapshot back to the target: page and fragment manifests plus `site.config.ts` (`DEFAULT_SCAN_LOCATIONS`, `DEFAULT_SCAN_ROOT_FILES`). It doesn't render.
 - Visitors of a publish destination get rendered output: static pages are pre-rendered HTML; ESI targets hold pre-rendered fragments the worker assembles.
 - The publish panel offers Undo per destination and shows "Undone on `<target>`" (`PublishPanel.vue:257`) although nothing visitors see changed.
-- The admin route copies source manifests to the target (`publishItems`) before recording history; the CLI path didn't until #1082 (merged 2026-10-21), so targets the CLI published to before then hold no manifests.
+- The admin route records history, then copies the source manifests to the target (`publishItems`), so the revision's baseline stays pre-publish. The CLI copied no manifests until #1082 (merged 2026-10-21), which records and then copies too, so targets the CLI published to before then hold no manifests.
 - `sitemap.xml`, `robots.txt`, `_redirects` and the CDN purge are written separately by the CLI (`cli/index.ts`, around lines 866–1071 on 2026-10-23) and the admin route (`admin-api/routes/publish.ts`, around 599–724); `publishRun`'s purge step is reserved.
 - Since #1201 (2026-10-23), both also write `.gazetta/publish-generation` after the content and before the purge; the Cloudflare worker's cache key reads it (#1125).
 - No code removes a published item from a target.
@@ -171,7 +171,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 - **Render:** the normal publish render; templates are today's.
 - **Validation:** `schema-conformance` runs as the pre-write check.
 - **Plugin:** the hook field only.
-- **Cache:** the shared function writes the publish generation and runs the CDN purge, so an undo, like any publish, changes the worker's cache key (#1201).
+- **Cache:** the shared function writes the publish generation and runs the CDN purge (follows from Q4), so an undo, like any publish, changes the worker's cache key (#1201).
 - **Offline:** undo needs the target; offline admins can't undo (as with publish).
 - **Collaboration:** none.
 
@@ -181,7 +181,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 |---|---|---|---|---|
 | 1 | The shared target-publish function (Q4), called by the CLI and the admin route: it wraps `publishRun`, takes over the admin route's history record and manifest copy, has the approval gate's place at its start (`design-review-workflow.md` lock 1), and runs the post-publish steps (`sitemap.xml`, `robots.txt`, `_redirects`, the publish generation, CDN purge); generated files are written or deleted, never skipped | — | unit + api | Medium |
 | 2 | Removals in the shared function: delete an item's own files (static route `index.html` and locale variants; ESI `index*.html` under `pages/<name>/`; a nested item's folder stays), sidecars and manifest; removal by route for route changes | 1 | unit + api | Medium |
-| 3 | Destinations hold manifests: the CLI copies them before recording history ([#1082](https://github.com/gazetta-studio/gazetta-studio/pull/1082)) | — | api | Low |
+| 3 | Destinations hold manifests: the CLI copies them after recording history, as the admin route does ([#1082](https://github.com/gazetta-studio/gazetta-studio/pull/1082)) | — | api | Low |
 | 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, rollback requests and the undo-latest rule at the approval gate (`design-review-workflow.md` locks 3–5), hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088), review workflow cuts 12–13 (#526, #527) | api-first | High |
 | 5 | Admin and CLI: the publish panel flow per the UX table, History Restore through the same flow, CLI output and `--yes`, Storybook stories from the table | 4 | component + e2e | Medium |
 | 6 | Docs: "undo restores content, not templates" (History help and docs), `docs/hooks.md` trigger field, alignment note in `design-publishing.md` | 4 | docs | Low |
