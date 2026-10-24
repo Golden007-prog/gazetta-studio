@@ -146,9 +146,12 @@ export function createHistoryAuditProvider(opts: HistoryAuditProviderOptions): A
       await appendEvent(event)
     },
     async query(filter: AuditQuery): Promise<AuditEvent[]> {
-      const all = await readAllEvents()
-      // Sort newest-first per audit-drawer convention. Stable sort
-      // by timestamp (string compare on ISO-8601 works correctly).
+      // Newest first, per the audit drawer's convention. Each instance's
+      // file is in write order, and timestamps have millisecond resolution,
+      // so back-to-back events often share one: reversing before the stable
+      // sort keeps those newest-first too (#1244). Events from different
+      // instances in the same millisecond have no recorded order.
+      const all = (await readAllEvents()).reverse()
       all.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       const matched = all.filter(e => matchesFilter(e, filter))
       const limit = filter.limit ?? 100
