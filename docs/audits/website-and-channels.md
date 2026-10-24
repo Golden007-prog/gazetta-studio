@@ -263,6 +263,17 @@ Decided: maintainer, 2026-10-24 (#1266)
 | Many AI-written comparison pages for search | Google's spam policy on scaled content abuse |
 | Stars or npm downloads as targets | Both are inflated by bots and fake stars; they follow use, they don't measure it |
 
+Docs quality belongs to this plan: the Claude Code session that runs it also owns whether the public docs are correct, complete and well structured, along with the site, the README, getting-started and the Stage 1 tutorial. Its helper session audits one doc at a time against the code, starting with getting-started. Each finding becomes an issue for the fleet, and AGENTS.md's same-PR rule keeps the docs in step after that. Doc changes inside bot PRs stay with the PR-shepherding session.
+
+Decided: maintainer, 2026-10-24 (#PR)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| A separate docs session | Full attention on doc quality, but a third session to coordinate, overlapping with this plan (pipeline, tutorial, getting-started) and with doc changes in bot PRs |
+| Leave it as it is | Doc mistakes are found only by chance, as in the onboarding walk, and Stage 1's tutorial has no owner |
+
+A separate docs session can follow if the audits find more than the helper can handle, or Stage 2 needs a lot of new writing.
+
 ## Evidence
 
 ### Early-stage sites: one screen, one artefact that persuades
