@@ -88,6 +88,16 @@ cd packages/gazetta && npx vitest run tests/some-file.test.ts
 npx playwright test                        # e2e
 ```
 
+The gazetta workspace's tests need its build first: run `npm run build -w packages/gazetta`
+before them, and again after changing `packages/gazetta/src`. Without it the suite stops
+at once with "Run `npm run build` before the tests". To run only the tests a change
+affects:
+
+```bash
+cd packages/gazetta && npx vitest related src/<changed-file>.ts --run   # tests touching a source file
+cd packages/gazetta && npx vitest run --changed origin/main             # tests touching your branch's changes
+```
+
 The admin workspace's tests end with `apps/admin/tests/docker.test.ts`, which starts
 MinIO and Azurite through Docker. Without Docker running, that step fails; run the
 workspace you changed instead, for example `npm test -w packages/gazetta`.
