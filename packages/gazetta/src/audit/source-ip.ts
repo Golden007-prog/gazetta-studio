@@ -21,12 +21,15 @@
  * naive read is an OWASP Trust Boundary Violation. The IP source
  * differs per trust mode:
  *
- *   - `none`              — TCP peer (no proxy assumed)
+ *   - `none`              — the connection's address (no proxy assumed)
  *   - `forwarded-user`    — X-Forwarded-For with trustedProxyCount
  *   - `cloudflare-access` — Cf-Connecting-IP (signed/trusted)
  *   - `azure-easy-auth`   — X-Forwarded-For (Azure appends one entry)
  *   - `aws-cognito`       — X-Forwarded-For (ALB appends one entry)
- *   - `tailscale`         — TCP peer (serves direct)
+ *   - `tailscale`         — the connection's address
+ *
+ * A missing header, or fewer X-Forwarded-For entries than
+ * trustedProxyCount, leaves the field out.
  *
  * # SOLID lenses
  *
@@ -41,15 +44,15 @@ export type SourceIpMode = 'none' | 'raw' | 'hashed' | 'truncated'
 export interface SourceIpExtractionContext {
   /** Trust mode determines which header carries the client IP. */
   trustMode: string
-  /** TCP peer IP (when available — Hono's c.req.raw.headers may not expose). */
+  /** Address of the connection the request arrived on, when the server exposes it. */
   peerIp?: string
   /** All request headers (for X-Forwarded-For / Cf-Connecting-IP / X-Real-IP lookup). */
   headers: ReadonlyMap<string, string>
   /**
    * For trust modes that read X-Forwarded-For, how many trusted
-   * proxies are between Gazetta and the client. Counts back from
-   * the rightmost; everything to the right is trusted, the
-   * resulting leftmost-of-trusted is the client.
+   * proxies are in front of Gazetta. Each appends the address it
+   * received the request from, so the client is the Nth entry from
+   * the right; entries further left came from the client.
    *
    * Defaults to 1 (single proxy in front of Gazetta — most common).
    */
@@ -68,31 +71,18 @@ export function extractSourceIp(ctx: SourceIpExtractionContext): string | null {
     case 'none':
     case 'tailscale':
       return ctx.peerIp ?? null
-    case 'cloudflare-access': {
-      const cfIp = headers.get('cf-connecting-ip')
-      if (cfIp) return cfIp
-      return ctx.peerIp ?? null
-    }
+    case 'cloudflare-access':
+      return headers.get('cf-connecting-ip') || null
     case 'forwarded-user':
     case 'azure-easy-auth':
     case 'aws-cognito': {
-      // X-Forwarded-For shape: "client, proxy1, proxy2".
-      // trustedProxyCount = N → take the (N+1)th from the RIGHT
-      // (1-indexed). For N=1 (one trusted proxy), client is the
-      // leftmost; for N=2, client is leftmost-of-leftmost-two.
-      const xff = headers.get('x-forwarded-for')
-      if (!xff) return ctx.peerIp ?? null
-      const entries = xff
+      const entries = (headers.get('x-forwarded-for') ?? '')
         .split(',')
         .map(s => s.trim())
         .filter(Boolean)
-      if (entries.length === 0) return ctx.peerIp ?? null
-      const trustedCount = ctx.trustedProxyCount ?? 1
-      // Client position from the right: N entries trusted; client
-      // is the (N+1)th-from-right, i.e., entries[entries.length - N - 1].
-      const clientIdx = entries.length - trustedCount - 1
-      if (clientIdx < 0) return ctx.peerIp ?? null
-      return entries[clientIdx]
+      // The Nth entry from the right was appended by the outermost
+      // trusted proxy; anything further left is client-supplied.
+      return entries[entries.length - (ctx.trustedProxyCount ?? 1)] ?? null
     }
     default:
       // Unknown trust mode (plugin-supplied future) — fall back to

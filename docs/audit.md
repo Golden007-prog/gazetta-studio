@@ -184,6 +184,7 @@ export default defineSite({
       strict: false,              // default — fail-open
       actorPseudonym: 'none',     // 'none' | 'sha256'
       recordSourceIp: 'none',     // 'none' | 'raw' | 'hashed' | 'truncated'
+      trustedProxyCount: 1,       // proxies in front of the admin that append to X-Forwarded-For
       recordUserAgent: 'none',    // 'none' | 'raw' | 'truncated'
       retention: {
         events: 10000,            // optional; max event count
@@ -221,14 +222,16 @@ When `recordSourceIp` is enabled, Gazetta extracts the client IP using the auth 
 
 | Trust mode          | Source                                                                          |
 | ------------------- | ------------------------------------------------------------------------------- |
-| `none`              | TCP peer (no proxy assumed)                                                     |
-| `forwarded-user`    | `X-Forwarded-For` with operator-configured `trustedProxyCount` (counted from rightmost) |
+| `none`              | The connection's address (no proxy assumed)                                     |
+| `forwarded-user`    | `X-Forwarded-For`: the `trustedProxyCount`th entry from the right               |
 | `cloudflare-access` | `Cf-Connecting-IP` (Cloudflare-signed)                                          |
 | `azure-easy-auth`   | `X-Forwarded-For`, `trustedProxyCount: 1` (Azure App Service appends one entry) |
 | `aws-cognito`       | `X-Forwarded-For`, `trustedProxyCount: 1` (ALB appends one entry)               |
-| `tailscale`         | TCP peer (Tailscale serves direct)                                              |
+| `tailscale`         | The connection's address (`127.0.0.1` behind Tailscale Serve)                   |
 
-When the configured header is missing (proxy misconfiguration), `sourceIp` is omitted from the event entirely — explicitly absent is more honest than `'[unparseable]'`.
+Each proxy appends the address it received the request from to `X-Forwarded-For`, so with `trustedProxyCount` proxies in front of the admin (default 1) the client is that many entries from the right; entries further left came from the client and are ignored.
+
+When the configured header is missing, or `X-Forwarded-For` has fewer entries than `trustedProxyCount` (proxy misconfiguration), `sourceIp` is omitted from the event entirely — explicitly absent is more honest than `'[unparseable]'`.
 
 ### Pseudonymization
 

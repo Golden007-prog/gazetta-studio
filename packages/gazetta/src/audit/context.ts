@@ -90,7 +90,7 @@ export interface AuditContextOptions {
   principal: Principal
   /** Per-request headers (lowercase keys). */
   headers: ReadonlyMap<string, string>
-  /** Per-request peer IP (when available). */
+  /** Address of the connection the request arrived on, when the server exposes it. */
   peerIp?: string
   /** Failure logger. */
   logFailure?: AuditFailureLogger

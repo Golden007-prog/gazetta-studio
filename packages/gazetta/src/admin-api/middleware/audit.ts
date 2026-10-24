@@ -26,6 +26,8 @@
  *   - DIP: takes pre-built providers + privacy modes; doesn't read
  *     site.config.ts directly.
  */
+import { getConnInfo } from '@hono/node-server/conninfo'
+import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import {
   type ActorPseudonymMode,
@@ -36,6 +38,7 @@ import {
   type UserAgentMode,
   createAuditContext,
 } from '../../audit/index.js'
+import { unmapIPv4 } from '../../auth/ip-match.js'
 import type { PrincipalEnv } from './principal.js'
 
 /**
@@ -68,10 +71,7 @@ export function auditMiddleware(opts: AuditMiddlewareOptions) {
     c.req.raw.headers.forEach((value, key) => {
       headers.set(key.toLowerCase(), value)
     })
-    const peerIp =
-      headers.get('cf-connecting-ip') ??
-      headers.get('x-real-ip') ??
-      extractFirstXffEntry(headers.get('x-forwarded-for'))
+    const peerIp = connectionAddress(c)
     const ctx = createAuditContext({
       providers: opts.providers,
       strict: opts.strict,
@@ -83,7 +83,7 @@ export function auditMiddleware(opts: AuditMiddlewareOptions) {
       recordUserAgent: opts.recordUserAgent,
       principal,
       headers,
-      peerIp: peerIp ?? undefined,
+      peerIp,
       logFailure: opts.logFailure,
     })
     c.set('audit', ctx)
@@ -91,8 +91,17 @@ export function auditMiddleware(opts: AuditMiddlewareOptions) {
   })
 }
 
-function extractFirstXffEntry(xff: string | null | undefined): string | null {
-  if (!xff) return null
-  const first = xff.split(',')[0]?.trim()
-  return first || null
+/**
+ * The connection's remote address, from `@hono/node-server`'s socket.
+ * Undefined when the request didn't come through the Node server
+ * (`app.request()` without an env in tests).
+ */
+function connectionAddress(c: Context): string | undefined {
+  let address: string | undefined
+  try {
+    address = getConnInfo(c).remote.address
+  } catch {
+    return undefined
+  }
+  return address ? unmapIPv4(address) : undefined
 }
