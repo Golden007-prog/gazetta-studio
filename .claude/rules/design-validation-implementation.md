@@ -15,7 +15,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
 | **1** | Validator infrastructure + save-delta | 4 days | None | ✓ |
 | **2** | Background scanner + admin UI surfaces | 4 days | Cut 1 | ✓ — `scanner.ts` + `SiteHealthDrawer.vue` + `validationScanner` / `validationIssues` stores; 3 background-only validators shipped (`schema-conformance`, `orphaned-locale-file`, `unused-fragment`) |
 | **3** | Render-for-analysis + quality validators (a11y, html-validate) + altRequired | 5 days | Cut 1, Cut 2 | ✓ — `validators/accessibility.ts`, `html-validity.ts`, `alt-required.ts`, `alt-required-walker.ts` shipped |
-| **4** | Publish gate + linkinator | 5 days | Cut 3 | ✓ — pre-publish audit step in `PublishPanel.vue` + `publish-audit.ts` + `validators/broken-links.ts` (linkinator) shipped. **Lighthouse validator deferred indefinitely** — see "What's deferred from this plan" |
+| **4** | Publish gate + broken-links | 5 days | Cut 3 | ✓ — pre-publish audit step in `PublishPanel.vue` + `publish-audit.ts` + `validators/broken-links.ts` (internal links only) shipped. **Lighthouse validator deferred indefinitely**; outbound link checking and #anchor targets deferred — see "What's deferred from this plan" |
 | **5** | `gazetta validate` CLI rewrite | 2 days | Cut 1 (more useful after Cut 3) | ✓ — `runValidate` rebuilt around scanner orchestrator; `parseValidateFlags` supports `--severity`, `--include-quality`, `--no-warn-as-error`, `--verbose`; 15 tests across `cli-validate-flags.test.ts` + `cli-validate.test.ts` |
 | **6** | Template-developer surfaces | 3 days | Cut 2 | ✓ — `template-impact.ts` shipped |
 
@@ -145,7 +145,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
 - Cache aggressively; invalidation only on dependency changes
 - Validators run in parallel against the same rendered output
 
-### Cut 4 — Publish gate + linkinator (5 days)
+### Cut 4 — Publish gate + broken-links (5 days)
 
 **What ships:**
 - Pre-publish audit step in publish dialog:
@@ -153,8 +153,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
   - Per issue: "Fix" / "Ignore once" / "Promote to error"
   - Block publish on remaining errors
 - Per-target audit config: `targets.production.publishAudit: { strict: boolean }`
-- One new validator (opt-in via flag):
-  - `broken-links` — linkinator against rendered output
+- One new validator, `broken-links`: checks the links in rendered output that point at the site's own pages and `/assets/` files (JSDOM). External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`.
 - Admin UI: pre-publish modal in `PublishPanel.vue`
 
 **Tests:**
@@ -162,7 +161,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
 - "Ignore once" suppresses for current publish; doesn't persist
 - Publish blocks on remaining errors
 
-**Risk:** low. linkinator is a lightweight dep; the heavy work (pre-publish framework) is the same machinery Cut 3 already exercises.
+**Risk:** low. The check adds no dependency (JSDOM already ships for Cut 3's accessibility validator); the heavy work (pre-publish framework) is the same machinery Cut 3 already exercises.
 
 **Why this is last:** these validators are valuable but not critical for daily editor UX. They earn their place at the operator's commitment moment.
 
@@ -269,6 +268,8 @@ the existing site-health drawer (no Cut 6 dependency).
 | Per-validator severity override (vs. coarse strict flag) | Operators ask for per-rule control |
 | Custom validators (site authors plug in their own) | Concrete operator use case for site-specific rules |
 | `css-validity` (stylelint) | Lower priority than a11y/HTML; ship in a follow-up |
+| Outbound link checking (linkinator) | Concrete demand |
+| #anchor targets (links to an `id` on a page) | Concrete demand; [#1272](https://github.com/gazetta-studio/gazetta-studio/issues/1272) if the docs site needs anchor checks |
 | `lighthouse` validator (performance + best-practices + Lighthouse-flavored a11y/SEO) | Concrete operator demand for "gate publish on perf budget" OR a measured regression on real Gazetta sites that other validators didn't catch. Until then: operators run Lighthouse in CI (`treosh/lighthouse-ci-action`) or via PageSpeed Insights. Cost of shipping speculatively: ~200MB of Chromium + Lighthouse deps, 5-15s per page at publish, maintenance burden tracking scoring methodology changes (e.g., FID→INP in 2024). Accessibility already covered by direct axe-core; SEO by `seo-plan.md` primitives. |
 | Performance budget gates (LCP, CLS) | Bundled with the `lighthouse` validator decision above. |
 | Cross-content validation (e.g., "every page has a meta description") | Authors ask |

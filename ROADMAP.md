@@ -367,7 +367,7 @@ Closes [#40](https://github.com/gazetta-studio/gazetta-studio/issues/40).
 - Cut 1: save-time integrity (`Validator` interface, save-delta orchestrator, 5 ref-existence validators, 409 wiring, `ValidationBanner.vue`)
 - Cut 2: background scanner + `SiteHealthDrawer.vue` + 3 background-only validators (`schema-conformance`, `orphaned-locale-file`, `unused-fragment`)
 - Cut 3: render-for-analysis + a11y (axe-core) + html-validity + `altRequired`
-- Cut 4: pre-publish audit step in `PublishPanel.vue` + `publish-audit.ts` + linkinator (`validators/broken-links.ts`)
+- Cut 4: pre-publish audit step in `PublishPanel.vue` + `publish-audit.ts` + internal-link check (`validators/broken-links.ts`)
 - Cut 5: `gazetta validate` CLI rewrite (15 tests)
 - Cut 6: template-developer surfaces (`template-impact.ts`)
 - Plus 5 soft-delete-related validators beyond the original scope

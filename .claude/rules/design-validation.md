@@ -154,7 +154,7 @@ export interface Issue {
 | `accessibility` (axe-core) | — | ✓ warn | ✓ warn (operator promotes) | ✓ warn |
 | `html-validity` (html-validate) | — | ✓ warn | ✓ warn | ✓ warn |
 | `css-validity` (stylelint) | — | ✓ info | ✓ warn | ✓ warn |
-| `broken-links` (linkinator) | — | — | ✓ warn (opt-in) | ✓ warn (opt-in) |
+| `broken-links` (internal links) | — | ✓ warn | ✓ warn | ✓ warn (`--include-quality`) |
 | `orphaned-locale-file` | — | ✓ warn | — | ✓ warn |
 | `unused-fragment` | — | ✓ info | — | ✓ info |
 
@@ -262,7 +262,11 @@ The architectural call: use real tools for the actual analysis. Each tool plugs 
 | Accessibility | `axe-core` | Run via `jsdom` in admin process; ~50-100ms per page. Battle-tested by every major a11y product. |
 | HTML validity | `html-validate` | Fast, configurable, widely used in CI. |
 | CSS lint | `stylelint` | Industry standard. |
-| Broken links | `linkinator` | Crawl rendered output for outbound link rot. |
+| Broken links | `jsdom` | Checks the links in rendered output that point at the site's own pages and `/assets/` files. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
+
+The broken-links check covers internal links only. Outbound link checking (`linkinator`) and #anchor targets are deferred (`design-validation-implementation.md`, "What's deferred from this plan").
+
+Decided: maintainer, 2026-10-24 (#<PR>)
 
 Lighthouse was originally specced for the "Performance / SEO score" slot but is deferred indefinitely (see `design-validation-implementation.md` deferred-items table). Reasoning: accessibility is covered better by direct axe-core; SEO by `seo-plan.md`'s primitives; the remaining performance + best-practices value doesn't justify the ~200MB Chromium + Lighthouse deps, the 5-15s per-page runtime, and the maintenance burden of tracking scoring methodology changes. Operators wanting publish-time perf budgets use CI-side Lighthouse. The pre-publish audit framework supports adding the validator later if concrete demand surfaces.
 
@@ -325,7 +329,7 @@ Validation is itself foundational dimension #9 of 13. This section answers how e
 
 - **Multi-instance check** (discipline) — save-delta runs on the instance receiving the save request; no cross-instance coordination. Background scanner (Cut 2) per-page cache is per-admin-instance (each instance scans + caches independently); the multi-instance pattern is "every instance reads source-of-truth from storage on demand, caches results in-process, no cross-instance cache sharing." Per-page content-hash cache key ensures different instances arrive at the same cached result without coordination. Suppression state (when shipped) lives in storage, not in-memory.
 
-- **Scale check** — save-delta is O(diff) per save; only checks refs introduced by THIS save, not the full site. Background scanner (Cut 2) caches per-page validation results by content hash; only re-validates when something material changed. Pre-publish-only validators (Cut 4 linkinator) are opt-in. The framework scales because phase-separation matches detection cost to author commitment level. Gates: Cut 2 must reuse the existing sidecar dependency tracking (`findDependentsFromSidecars`) so a fragment edit only invalidates pages that use that fragment.
+- **Scale check** — save-delta is O(diff) per save; only checks refs introduced by THIS save, not the full site. Background scanner (Cut 2) caches per-page validation results by content hash; only re-validates when something material changed. Cut 4's broken-links check fetches no URLs: it matches internal links against the loaded site's routes ([#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks a per-link cost that grows with site size). The framework scales because phase-separation matches detection cost to author commitment level. Gates: Cut 2 must reuse the existing sidecar dependency tracking (`findDependentsFromSidecars`) so a fragment edit only invalidates pages that use that fragment.
 
 - **Theme check** — validation runs against rendered output for quality validators (Cut 3 axe-core, html-validate). Render-for-analysis composes with the active theme: when themes ship per [`design-themes.md`](design-themes.md), render-for-analysis renders per-(content, locale, theme) tuple, and validators see theme-specific output. Cache key includes theme. v1 (single-theme world): no impact.
 
