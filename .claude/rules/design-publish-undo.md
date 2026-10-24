@@ -35,7 +35,7 @@ Undo and rollback on a publish destination put the previous **content** back and
 - Visitors of a publish destination get rendered output: static pages are pre-rendered HTML; ESI targets hold pre-rendered fragments the worker assembles.
 - The publish panel offers Undo per destination and shows "Undone on `<target>`" (`PublishPanel.vue:257`) although nothing visitors see changed.
 - The admin route copies source manifests to the target (`publishItems`) before recording history; the CLI path didn't until #1082 (merged 2026-10-21), so targets the CLI published to before then hold no manifests.
-- `sitemap.xml`, `robots.txt`, `_redirects` and the CDN purge are written separately by the CLI (`cli/index.ts`, around lines 870–990) and the admin route (`admin-api/routes/publish.ts`, around 514–597); `publishRun`'s purge step is reserved.
+- `sitemap.xml`, `robots.txt`, `_redirects` and the CDN purge are written separately by the CLI (`cli/index.ts`, around lines 866–1071 on 2026-10-23) and the admin route (`admin-api/routes/publish.ts`, around 599–724); `publishRun`'s purge step is reserved.
 - Since #1201 (2026-10-23), both also write `.gazetta/publish-generation` after the content and before the purge; the Cloudflare worker's cache key reads it (#1125).
 - No code removes a published item from a target.
 - Undo runs only in Node (admin, CLI), never in the worker, so templates are available.
