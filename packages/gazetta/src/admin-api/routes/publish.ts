@@ -18,6 +18,7 @@ import { createContentRoot } from '../../content-root.js'
 import { createHistoryProvider } from '../../history-provider.js'
 import { recordWrite, type WrittenItem } from '../../history-recorder.js'
 import { requireCapability } from '../middleware/capability.js'
+import { capabilityGrants, type Principal } from '../../auth/index.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import {
   buildHookContext,
@@ -768,14 +769,37 @@ export function publishRoutes(
   }
 
   // Publish routes gate on `publish:non-production` as the baseline.
-  // Production-target gating runs inside the handler when iterating
-  // requested targets (per design-auth-rbac.md "Failure mode": publish
-  // to a production target requires `publish:production`). Cut 9
-  // ships the route-level gate; per-target enforcement lands when
-  // the route is rewritten to consult the resolved target's
-  // environment field.
+  // A target whose environment is 'production' additionally requires
+  // `publish:production` on the principal (design-auth-rbac.md
+  // "Failure mode"). productionGateFailure checks every requested
+  // target right after the body is read and BEFORE any hook fires or
+  // anything is written: one refused target refuses the whole
+  // request, so a mixed staging + production publish never writes
+  // the staging half (#1191).
+  function productionGateFailure(
+    principal: Principal,
+    targetNames: ReadonlyArray<string | undefined>,
+  ): { code: 'FORBIDDEN'; missing: string[]; role: string; error: string } | null {
+    const writesProduction = targetNames.some(name => {
+      if (name === undefined) return false
+      const config = getTargetConfig(name)
+      return config !== undefined && getEnvironment(config) === 'production'
+    })
+    if (!writesProduction) return null
+    if (capabilityGrants(principal.capabilities, 'publish:production')) return null
+    return {
+      code: 'FORBIDDEN' as const,
+      missing: ['publish:production'],
+      role: principal.role,
+      error: `Role "${principal.role}" does not have capability "publish:production"`,
+    }
+  }
+
   app.post('/api/publish', requireCapability('publish:non-production'), async c => {
     const body = (await c.req.json()) as { items: string[]; targets: string[]; source?: string }
+
+    const productionForbidden = productionGateFailure(c.var.principal, body.targets)
+    if (productionForbidden) return c.json(productionForbidden, 403)
 
     // #1196: reject malformed or unknown items before anything reads
     // or writes a path built from them.
@@ -899,6 +923,9 @@ export function publishRoutes(
 
   app.post('/api/publish/stream', requireCapability('publish:non-production'), async c => {
     const body = (await c.req.json()) as { items: string[]; targets: string[]; source?: string }
+
+    const streamProductionForbidden = productionGateFailure(c.var.principal, body.targets)
+    if (streamProductionForbidden) return c.json(streamProductionForbidden, 403)
 
     // #1196: reject malformed or unknown items before anything reads
     // or writes a path built from them (synchronous 400, before the
@@ -1028,6 +1055,11 @@ export function publishRoutes(
     // to the resolver's default editable target (the author's current source)
     const body = (await c.req.json()) as { source: string; items?: string[]; destination?: string }
     if (!body.source) return c.json({ error: 'Missing "source" target name' }, 400)
+
+    // The destination defaults to the author's working source, which
+    // is not a target write; gate only a named destination (#1191).
+    const fetchProductionForbidden = productionGateFailure(c.var.principal, [body.destination])
+    if (fetchProductionForbidden) return c.json(fetchProductionForbidden, 403)
 
     const t = await getTargets()
     const targetStorage = t.get(body.source)
@@ -1221,4 +1253,4 @@ async function collectPublishedItemsForHistory(
     }
   }
   return out
-}
+          }
