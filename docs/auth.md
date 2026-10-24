@@ -201,7 +201,7 @@ Every `/api/*` route gates on a specific capability. The route → capability ma
 | `POST/PATCH /api/assets*` | `edit:assets` |
 | `DELETE /api/assets/:name` | `delete:assets` |
 | `POST /api/history/{undo,restore}` | `restore:history` |
-| `POST /api/publish*`, `/api/fetch` | `publish:non-production` (production-target enforcement is a follow-up) |
+| `POST /api/publish*`, `/api/fetch` | `publish:non-production`; publishing to, or fetching into, a target whose `environment` is `production` also needs `publish:production` |
 | `GET /api/system/cache/*` | `configure:site` |
 | `GET /api/health` | (no gate; intentionally public) |
 
