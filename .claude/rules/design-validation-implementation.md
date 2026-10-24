@@ -153,7 +153,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
   - Per issue: "Fix" / "Ignore once" / "Promote to error"
   - Block publish on remaining errors
 - Per-target audit config: `targets.production.publishAudit: { strict: boolean }`
-- One new validator, `broken-links`: checks the links in rendered output that point at the site's own pages and `/assets/` files (JSDOM). External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`.
+- One new validator, `broken-links`: checks the links in rendered output that point at the site's own pages (JSDOM), and accepts any `/assets/` path without checking that the file exists. External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`.
 - Admin UI: pre-publish modal in `PublishPanel.vue`
 
 **Tests:**
@@ -299,7 +299,7 @@ Wall-clock for solo dev. Real pace depends on what you hit.
 | Cut 1 — Save-delta + 5 validators | 4 days |
 | Cut 2 — Background scanner + UI | 4 days |
 | Cut 3 — Render-for-analysis + a11y + html + altRequired | 5 days |
-| Cut 4 — Publish gate + linkinator | 5 days |
+| Cut 4 — Publish gate + broken-links | 5 days |
 | Cut 5 — CLI rewrite | 2 days |
 | Cut 6 — Template-developer surfaces | 3 days |
 

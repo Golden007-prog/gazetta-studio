@@ -21,7 +21,7 @@ How the CMS surfaces correctness, integrity, and quality issues to authors and o
 
 **Out of scope:**
 - Real-time keystroke validation (already covered by @rjsf's Zod-driven form layer)
-- Reimplementing accessibility / HTML / CSS analysis (use real tools — axe-core, html-validate, stylelint, linkinator — under the abstraction)
+- Reimplementing accessibility / HTML / CSS analysis (use real tools — axe-core, html-validate, stylelint, and linkinator for outbound links — under the abstraction)
 - A "site SEO score" or content scoring (per [seo-plan.md](seo-plan.md): weakly correlated with rankings, encourages over-optimization)
 - Blocking save on accumulated pre-existing issues (hostile UX; the background scanner surfaces them visibly without blocking)
 - Server-side keystroke validation (the form layer is sufficient)
@@ -262,7 +262,7 @@ The architectural call: use real tools for the actual analysis. Each tool plugs 
 | Accessibility | `axe-core` | Run via `jsdom` in admin process; ~50-100ms per page. Battle-tested by every major a11y product. |
 | HTML validity | `html-validate` | Fast, configurable, widely used in CI. |
 | CSS lint | `stylelint` | Industry standard. |
-| Broken links | `jsdom` | Checks the links in rendered output that point at the site's own pages and `/assets/` files. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
+| Broken links | `jsdom` | Checks the links in rendered output that point at the site's own pages, and accepts any `/assets/` path without checking that the file exists. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
 
 The broken-links check covers internal links only. Outbound link checking (`linkinator`) and #anchor targets are deferred (`design-validation-implementation.md`, "What's deferred from this plan").
 
