@@ -140,13 +140,30 @@ export interface SaveHookCancelled {
 }
 
 /**
+ * Strict audit mode (`admin.audit.strict: true`) refused the save:
+ * recording the audit event failed before any storage write, so
+ * nothing changed (#1393). Only reachable when strict is on; the
+ * fail-open default never produces this variant.
+ */
+export interface SaveAuditFailed {
+  readonly ok: false
+  readonly code: 'AUDIT_FAILED'
+}
+
+/**
  * Typed union of expected save outcomes. Routes project each
- * variant to HTTP (200 / 409). Callers (CLI, plugin-routes, future
+ * variant to HTTP (200 / 409 / 500). Callers (CLI, plugin-routes, future
  * save-via-hook) `switch` exhaustively. Adding a new variant is a
  * compile error at every call site — intentional, per the locked
  * decision in Q1.
  */
-export type SaveResult = SaveOk | SaveStale | SaveEditLocked | SaveValidationFailed | SaveHookCancelled
+export type SaveResult =
+  | SaveOk
+  | SaveStale
+  | SaveEditLocked
+  | SaveValidationFailed
+  | SaveHookCancelled
+  | SaveAuditFailed
 
 /**
  * Audit recorder shape the pipeline calls. Matches the existing
@@ -158,6 +175,14 @@ export type SaveResult = SaveOk | SaveStale | SaveEditLocked | SaveValidationFai
  * branch on `result.failed > 0`; the pipeline doesn't.
  */
 export interface SaveAuditRecorder {
+  /**
+   * Strict-mode flag (`admin.audit.strict`). Optional so existing
+   * test recorders stay fail-open by default; `c.var.audit` always
+   * sets it. When true, the pipeline records the event BEFORE the
+   * storage write and refuses the write when recording fails
+   * (#1393).
+   */
+  readonly strict?: boolean
   record(event: {
     action: 'save'
     /**
@@ -167,11 +192,24 @@ export interface SaveAuditRecorder {
      * save-delta validators flag blocking issues. Pre-fix shape
      * conflated the two paths under 'validation-failed' — fixed
      * 2026-05 alongside cross-foundation gap #1 coverage.
+     * 'write-failed' fires only under strict mode when the storage
+     * write itself fails after the pre-write event was recorded.
      */
-    outcome: 'success' | 'validation-failed' | 'forbidden' | 'hook-cancelled'
+    outcome: 'success' | 'validation-failed' | 'forbidden' | 'hook-cancelled' | 'write-failed'
     scope: { kind: SaveManifestKind; name: string }
     metadata?: Record<string, unknown>
-  }): Promise<unknown>
+  }): Promise<SaveAuditRecordResult>
+}
+
+/**
+ * Minimal recorder result the pipeline branches on. Structurally
+ * satisfied by the audit module's `RecordResult` (which carries
+ * extra diagnostic fields); declared locally so the pipeline
+ * doesn't couple to the audit module's shape.
+ */
+export interface SaveAuditRecordResult {
+  /** Number of providers that failed to record. */
+  readonly failed: number
 }
 
 /**
@@ -425,6 +463,27 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
   // is recomputed once — cost is negligible vs the conditional.
   const serialized = JSON.stringify(finalManifest, null, 2) + '\n'
 
+  // Step 4.5 — strict audit pre-write record (#1393, design-audit.md
+  // "Strict mode opt-in"). With `strict: true` the operator requires
+  // "audit recording confirmed successful" before the write proceeds:
+  // record the event now, and a failed recording refuses the save
+  // before anything (history revision, manifest, sidecars, cache)
+  // changes. The post-write success record (step 10) is skipped when
+  // this ran. Runs after validation + hooks so a refused save never
+  // stacks an audit refusal on top of a validation or hook outcome.
+  const strictPreRecord = input.audit.strict === true
+  if (strictPreRecord) {
+    const preResult = await input.audit.record({
+      action: 'save',
+      outcome: 'success',
+      scope: { kind: input.kind, name: input.name },
+      metadata: input.locale ? { locale: input.locale } : undefined,
+    })
+    if (preResult.failed > 0) {
+      return { ok: false, code: 'AUDIT_FAILED' }
+    }
+  }
+
   // Step 5 — history. Record BEFORE the disk write per the
   // recordWrite first-call invariant (pages.ts:442-456). Baseline
   // scan reads current disk state (pre-save); recordWrite overlays
@@ -443,8 +502,22 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
     })
   }
 
-  // Step 6 — storage write.
-  await input.source.storage.writeFile(input.manifestPath, serialized)
+  // Step 6 — storage write. Under strict mode a failing write gets
+  // a second event: the pre-write record already claims the save, so
+  // the 'write-failed' event keeps the log honest (#1393).
+  try {
+    await input.source.storage.writeFile(input.manifestPath, serialized)
+  } catch (err) {
+    if (strictPreRecord) {
+      await input.audit.record({
+        action: 'save',
+        outcome: 'write-failed',
+        scope: { kind: input.kind, name: input.name },
+        metadata: input.locale ? { locale: input.locale } : undefined,
+      })
+    }
+    throw err
+  }
 
   // Step 7 — sidecars in parallel. Three Usage Sidecar relations
   // (per `sidecars.md`): asset-refs, fragment-deps, archive-aliases.
@@ -481,12 +554,15 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
   // Step 10 — audit success. Records actor + scope + locale (when
   // locale variant). Strict-mode operators check the result.failed
   // count; fail-open default ignores. Recorder never throws.
-  await input.audit.record({
-    action: 'save',
-    outcome: 'success',
-    scope: { kind: input.kind, name: input.name },
-    metadata: input.locale ? { locale: input.locale } : undefined,
-  })
+  // Skipped when strict mode already recorded at step 4.5 (#1393).
+  if (!strictPreRecord) {
+    await input.audit.record({
+      action: 'save',
+      outcome: 'success',
+      scope: { kind: input.kind, name: input.name },
+      metadata: input.locale ? { locale: input.locale } : undefined,
+    })
+  }
 
   // Step 11 — afterSave hooks. Observational; failures logged but
   // never propagated. Runs AFTER the audit record so the forensic
