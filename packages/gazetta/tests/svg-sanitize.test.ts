@@ -96,6 +96,44 @@ describe('sanitizeSvg — external references stripped', () => {
   })
 })
 
+describe('sanitizeSvg — external CSS references stripped', () => {
+  const svg = (body: string) => encode(`<svg xmlns="http://www.w3.org/2000/svg">${body}</svg>`)
+
+  it.each([
+    ['fill', '<rect fill="url(https://evil.example/b#g)" width="10"/>'],
+    ['filter, protocol-relative', '<rect filter="url(//evil.example/c#f)" width="10"/>'],
+    ['mask, quoted', `<rect mask="url('https://evil.example/m')" width="10"/>`],
+    ['style attribute', '<rect style="fill:url(https://evil.example/a)" width="10"/>'],
+    ['style attribute, CSS escape', '<rect style="fill:\\75rl(https://evil.example/a)" width="10"/>'],
+    ['style attribute, image-set', `<rect style="fill:image-set('https://evil.example/a' 1x)" width="10"/>`],
+  ])('drops the attribute when it references an external URL (%s)', (_label, body) => {
+    const out = decode(sanitizeSvg(svg(body)).bytes)
+    expect(out).not.toContain('evil.example')
+    expect(out).toContain('<rect')
+  })
+
+  it.each([
+    ['url()', '<style>rect{fill:url(https://evil.example/t.png)}</style><rect width="10"/>'],
+    ['@import', '<style>@import "https://evil.example/x.css";</style><rect width="10"/>'],
+    ['CSS escape', '<style>rect{fill:\\75rl(https://evil.example/t.png)}</style><rect width="10"/>'],
+  ])('drops a <style> element that references an external URL (%s)', (_label, body) => {
+    const out = decode(sanitizeSvg(svg(body)).bytes)
+    expect(out).not.toContain('evil.example')
+    expect(out).toContain('<rect')
+  })
+
+  it('keeps local url(#id) references in attributes and <style>', () => {
+    const out = decode(
+      sanitizeSvg(
+        svg('<style>.a{fill:url(#g)}</style><rect class="a" fill="url(#g)" style="stroke: url( \'#s\' )" width="10"/>'),
+      ).bytes,
+    )
+    expect(out).toContain('fill="url(#g)"')
+    expect(out).toContain(".a{fill:url(#g)}")
+    expect(out).toContain('url( \'#s\' )')
+  })
+})
+
 describe('sanitizeSvg — embedded base64 size limits', () => {
   it('warns when embedded base64 exceeds 100 KB', () => {
     // Generate a base64 string ≈ 200 KB decoded (≈ 267 KB chars).
