@@ -82,11 +82,11 @@ function headerMap(entries: Record<string, string>): ReadonlyMap<string, string>
 }
 
 describe('extractSourceIp (Cut 4) — trust-mode dispatch', () => {
-  it("'none' trust mode: returns peer IP", () => {
+  it("'none' trust mode: returns the connection's address", () => {
     expect(extractSourceIp({ trustMode: 'none', headers: headerMap({}), peerIp: '203.0.113.1' })).toBe('203.0.113.1')
   })
 
-  it("'tailscale' trust mode: returns peer IP (Tailscale serves direct)", () => {
+  it("'tailscale' trust mode: returns the connection's address", () => {
     expect(extractSourceIp({ trustMode: 'tailscale', headers: headerMap({}), peerIp: '100.64.0.1' })).toBe('100.64.0.1')
   })
 
@@ -100,32 +100,46 @@ describe('extractSourceIp (Cut 4) — trust-mode dispatch', () => {
     ).toBe('203.0.113.5')
   })
 
-  it("'cloudflare-access': falls back to peer IP when Cf-Connecting-IP absent", () => {
+  it("'cloudflare-access': leaves the field out when Cf-Connecting-IP is absent", () => {
     expect(
       extractSourceIp({
         trustMode: 'cloudflare-access',
         headers: headerMap({}),
         peerIp: '198.51.100.1',
       }),
-    ).toBe('198.51.100.1')
+    ).toBeNull()
   })
 
-  it("'forwarded-user' with trustedProxyCount=1: client is leftmost", () => {
+  // Each proxy appends the address it received the request from, so with
+  // N trusted proxies the client is the Nth X-Forwarded-For entry from the
+  // right; anything further left came from the client.
+  it("'forwarded-user' with trustedProxyCount=1: the entry the proxy appended", () => {
     expect(
       extractSourceIp({
         trustMode: 'forwarded-user',
-        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1, 10.0.0.1' }),
+        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1' }),
         peerIp: '10.0.0.1',
         trustedProxyCount: 1,
       }),
     ).toBe('203.0.113.1')
   })
 
-  it("'forwarded-user' with trustedProxyCount=2: client is leftmost-of-leftmost-two", () => {
+  it("'forwarded-user' ignores entries the client sent", () => {
     expect(
       extractSourceIp({
         trustMode: 'forwarded-user',
-        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1, 10.0.0.1, 10.0.0.2' }),
+        headers: headerMap({ 'X-Forwarded-For': '6.6.6.6, 203.0.113.1' }),
+        peerIp: '10.0.0.1',
+        trustedProxyCount: 1,
+      }),
+    ).toBe('203.0.113.1')
+  })
+
+  it("'forwarded-user' with trustedProxyCount=2: the second entry from the right", () => {
+    expect(
+      extractSourceIp({
+        trustMode: 'forwarded-user',
+        headers: headerMap({ 'X-Forwarded-For': '6.6.6.6, 203.0.113.1, 10.0.0.1' }),
         peerIp: '10.0.0.2',
         trustedProxyCount: 2,
       }),
@@ -136,20 +150,19 @@ describe('extractSourceIp (Cut 4) — trust-mode dispatch', () => {
     expect(
       extractSourceIp({
         trustMode: 'forwarded-user',
-        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1, 10.0.0.1' }),
+        headers: headerMap({ 'X-Forwarded-For': '6.6.6.6, 203.0.113.1' }),
         // No trustedProxyCount supplied — should default to 1
       }),
     ).toBe('203.0.113.1')
   })
 
-  it('returns null when X-Forwarded-For is absent and no peer IP', () => {
-    expect(extractSourceIp({ trustMode: 'forwarded-user', headers: headerMap({}) })).toBeNull()
+  it('leaves the field out when X-Forwarded-For is absent', () => {
+    expect(extractSourceIp({ trustMode: 'forwarded-user', headers: headerMap({}), peerIp: '10.0.0.1' })).toBeNull()
   })
 
-  it('returns peer IP when X-Forwarded-For has fewer entries than trustedProxyCount', () => {
-    // Edge case: single-entry XFF but operator says trustedProxyCount: 2
-    // — proxy-misconfig case. Falls back to peer IP rather than
-    // returning a wrong answer.
+  it('leaves the field out when X-Forwarded-For has fewer entries than trustedProxyCount', () => {
+    // Proxy misconfiguration: the operator says two proxies append, the
+    // header has one entry.
     expect(
       extractSourceIp({
         trustMode: 'forwarded-user',
@@ -157,14 +170,14 @@ describe('extractSourceIp (Cut 4) — trust-mode dispatch', () => {
         peerIp: '10.0.0.1',
         trustedProxyCount: 2,
       }),
-    ).toBe('10.0.0.1')
+    ).toBeNull()
   })
 
   it("'azure-easy-auth': uses X-Forwarded-For (default trustedProxyCount 1)", () => {
     expect(
       extractSourceIp({
         trustMode: 'azure-easy-auth',
-        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1, 10.0.0.1' }),
+        headers: headerMap({ 'X-Forwarded-For': '6.6.6.6, 203.0.113.1' }),
       }),
     ).toBe('203.0.113.1')
   })
@@ -173,7 +186,7 @@ describe('extractSourceIp (Cut 4) — trust-mode dispatch', () => {
     expect(
       extractSourceIp({
         trustMode: 'aws-cognito',
-        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1, 10.0.0.1' }),
+        headers: headerMap({ 'X-Forwarded-For': '203.0.113.1' }),
       }),
     ).toBe('203.0.113.1')
   })
