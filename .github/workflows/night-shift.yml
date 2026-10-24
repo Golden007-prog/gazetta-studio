@@ -213,9 +213,12 @@ jobs:
 
               run_bot "$bot" "${args[@]}"
               # A cut-planner run that took no action means no planner has
-              # one left tonight.
-              if [ "$bot" = cut-planner ] && ! gh run view "$id" --log 2>/dev/null | grep -q 'One action taken'; then
-                break
+              # one left tonight. The log is read in full before matching:
+              # piped into `grep -q`, gh can die of SIGPIPE when grep stops
+              # reading, and pipefail would then read a match as a miss.
+              if [ "$bot" = cut-planner ]; then
+                log=$(gh run view "$id" --log 2>/dev/null) || log=''
+                [[ "$log" == *'One action taken'* ]] || break
               fi
             done
           done
