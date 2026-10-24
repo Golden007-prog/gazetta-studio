@@ -35,8 +35,11 @@ class Unidentified extends Error {}
 
 async function getJson(fetchFn: typeof fetch, url: string, signal: AbortSignal): Promise<unknown> {
   // A fetch rejection (network down, timeout) propagates as-is; anything
-  // the server did answer but that isn't usable JSON is Unidentified.
+  // else the server answered that isn't usable JSON is Unidentified.
   const res = await fetchFn(url, { signal, headers: { Accept: 'application/json' } })
+  // A 5xx means the server (or the proxy in front of it) is down, like a
+  // timeout; it says nothing about who we are.
+  if (res.status >= 500) throw new Error(`${url}: ${res.status}`)
   if (!res.ok) throw new Unidentified(`${url}: ${res.status}`)
   try {
     return await res.json()

@@ -123,7 +123,8 @@ Two limits to know:
 - **Opening the admin offline** can't ask the server who you are, so it
   shows the unsaved edits of whoever last used the admin online in this
   browser. This applies only when the browser itself is offline: if it's
-  online but the server doesn't answer within 3 seconds, the admin shows
+  online but the server doesn't answer within 3 seconds or answers with a
+  server error, the admin shows
   no earlier unsaved edits and keeps them as they are. It keeps asking the
   server, and once it answers, edits you make meanwhile are kept under
   your name. Until then, reloading the page loses them; your earlier
