@@ -558,7 +558,7 @@ Existing features have a tracking issue plus **all** their cut sub-issues alread
 
    **Amended 2026-10-24: cut-planner runs in the night shift.** Feature-bot now runs every night (`design-feature-bot.md`), and bot PRs are reviewed daily, so `night-shift.yml` runs cut-planner up to four times (one per planner, each with Q5a's single action) right before feature-bot, stopping at the first run that takes no action. A cut merged during the day gets its successor implemented that night. The 03:00 UTC cron stays as a morning backup. The night shift reads the account's 5-hour and weekly usage before each run (`rate_limit_event` in stream-json), the signal this resolution said the CLI lacked.
 
-   Decided: maintainer, 2026-10-24 (#NNNN)
+   Decided: maintainer, 2026-10-24 (#1238)
 
    | Rejected | Why |
    |---|---|

@@ -355,7 +355,7 @@ Each bot is independent. Failures are isolated (per-bot try/catch + workflow `co
 
 Measured on the first Max 20x runs (2026-10-23/24): one feature-bot cut, retries included, used about 1.6% of the week and 7% of a 5-hour window; a busy fix-bot night used 3–5% of the week before the upgrade. At those rates a quiet day leaves room for about two cuts and a fix-bot run that night; after a heavy day of sessions, the pace stops the chain earlier.
 
-Decided: maintainer, 2026-10-24 (#NNNN). The 70% cap follows from the maintainer's two conditions that day: 20% of the week stays for other work, and the budget has to cover PR reviews and autonomous runs, external contributors included.
+Decided: maintainer, 2026-10-24 (#1238). The 70% cap follows from the maintainer's two conditions that day: 20% of the week stays for other work, and the budget has to cover PR reviews and autonomous runs, external contributors included.
 
 | Rejected | Why |
 |---|---|

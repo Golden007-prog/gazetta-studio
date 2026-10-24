@@ -547,7 +547,7 @@ Night shift (every night, right after cut-planner; night-shift.yml):
 
 Feature-bot runs every night from `night-shift.yml`, right after cut-planner. Bot PRs are reviewed daily, so a cut merged during the day gets its successor implemented that night. From 2026-10-11 to 2026-10-24 it ran on Friday nights only, before a Saturday review; before that, on a daily cron.
 
-Decided: maintainer, 2026-10-24 (#NNNN)
+Decided: maintainer, 2026-10-24 (#1238)
 
 | Rejected | Why |
 |---|---|
