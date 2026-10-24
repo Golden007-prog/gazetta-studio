@@ -19,7 +19,7 @@ import {
   type MetadataValue,
   useEditorMetadataStore,
 } from '../stores/editorMetadata.js'
-import { type ManifestFileKey, manifestFileKeyFromString } from '../utils/manifestFileKey.js'
+import { type ManifestFileKey, manifestFileKeyFromString, manifestFileKeyToString } from '../utils/manifestFileKey.js'
 import { useEditorPersistenceStore, type ManifestWrite } from '../stores/editorPersistence.js'
 import { useEditorContentStore, type EditingTarget } from '../stores/editorContent.js'
 import { useValidationIssuesStore } from '../stores/validationIssues.js'
@@ -119,6 +119,16 @@ export function useEditorActions() {
   /** Same shape, but for a stash entry's target.path. */
   function persistedKeyForStashEntry(targetPath: string): string | null {
     return persistedKeyForTargetPath(targetPath)
+  }
+
+  /**
+   * The version a content entry being written was made on, from its
+   * persisted entry (#1109). Undefined for a draft stored with no version:
+   * the write falls back to the etag store and saves over the current
+   * version, as before.
+   */
+  function persistedBaseEtag(key: string | null): string | undefined {
+    return key ? (usePersistedEditsStore().get(key)?.base?.etag ?? undefined) : undefined
   }
 
   /** The version the open editor's content is edited on: the manifest its save writes, with that manifest's etag. */
@@ -230,11 +240,18 @@ export function useEditorActions() {
     pendingForConflict: Record<string, unknown>,
     /** Which locale file to write; defaults to the locale active now. `null` = the default locale. */
     forLocale?: string | null,
+    /**
+     * The version the entry being written was made on (#1109): a restored
+     * draft's recorded version, or the version this session last loaded or
+     * wrote, pinned when the edit started. Falls back to the etag store,
+     * which holds only what this session loaded or wrote.
+     */
+    baseEtag?: string,
   ): Promise<void> {
     const locale = forLocale === undefined ? (useLocaleStore().effectiveLocale ?? undefined) : (forLocale ?? undefined)
     const path = manifestPath(kind, name, locale)
     const etags = useEditorEtagsStore()
-    const ifMatch = etags.get(path) ?? undefined
+    const ifMatch = baseEtag ?? etags.get(path) ?? undefined
     try {
       const updateFn = kind === 'page' ? api.updatePage : api.updateFragment
       const result = await updateFn(name, payload, { locale, ifMatch })
@@ -251,8 +268,12 @@ export function useEditorActions() {
           pending: pendingForConflict,
         })
         // Update etag baseline so the next manual save (after the
-        // author rebases) chains correctly.
+        // author rebases) chains correctly. Every pending entry for the
+        // manifest moves to the current version too: each write sends its
+        // own entry's version, so without this the next Save would 409
+        // again instead of going through as it does in an open tab (#1109).
         etags.set(path, err.currentEtag)
+        rebaseAllForManifest(kind, name, locale, err.currentEtag)
         throw err
       }
       // Network error path — try to reconcile via GET-and-compare.
@@ -318,8 +339,34 @@ export function useEditorActions() {
       currentEtag: fallbackEtag,
       pending: pendingForConflict,
     })
-    if (fallbackEtag) etags.set(path, fallbackEtag)
+    if (fallbackEtag) {
+      etags.set(path, fallbackEtag)
+      rebaseAllForManifest(kind, name, locale, fallbackEtag)
+    }
     throw new StaleSaveError(current as Record<string, unknown>, fallbackEtag)
+  }
+
+  /**
+   * A write on the manifest got a 409 STALE: this session's pending entries
+   * for it move to the current version, whatever version they were made on
+   * (#1109), so the next Save goes through as it does in an open tab. The
+   * keys come from the open editor and the stash - the entries the save
+   * writes. A draft never opened this session keeps its version (#1233
+   * review): moving it would let its later save silently overwrite the
+   * remote change this conflict surfaced.
+   */
+  function rebaseAllForManifest(kind: 'page' | 'fragment', name: string, locale: string | undefined, to: string) {
+    const fileKey: ManifestFileKey = locale ? { kind, name, locale } : { kind, name }
+    const keys: string[] = []
+    const currentKey = persistedKeyForCurrent()
+    if (currentKey) keys.push(currentKey)
+    for (const [path] of stash.entries) {
+      const k = persistedKeyForStashEntry(path)
+      if (k) keys.push(k)
+    }
+    usePersistedEditsStore().rebaseOpened(keys, manifestPath(kind, name, locale), to)
+    structural.rebaseAll(fileKey, to)
+    if (kind === 'page') metadata.rebaseAll({ ...fileKey, kind }, to)
   }
 
   /**
@@ -371,6 +418,18 @@ export function useEditorActions() {
   }
 
   function buildSaveFn(namePath: string): (content: Record<string, unknown>) => Promise<void> {
+    // Captured at build: a stash entry's save can run under a later
+    // selection, so the live store can't key the lookup (#1109).
+    const buildSelection = useSelectionStore().selection
+    const buildLocale = useLocaleStore().effectiveLocale ?? undefined
+    const persistKey = buildSelection
+      ? persistedEditKey(
+          buildSelection.type === 'page' ? 'page' : 'fragment',
+          buildSelection.name,
+          buildLocale,
+          namePath,
+        )
+      : null
     return async (newContent: Record<string, unknown>) => {
       const sel = useSelectionStore()
       const detail = sel.detail
@@ -411,7 +470,14 @@ export function useEditorActions() {
         if (pageDetail.metadata) pending.metadata = pageDetail.metadata
         if (pageDetail.route) pending.route = pageDetail.route
       }
-      await updateManifest(kind, sel.selection.name, { components: updatedComponents }, pending)
+      await updateManifest(
+        kind,
+        sel.selection.name,
+        { components: updatedComponents },
+        pending,
+        undefined,
+        persistedBaseEtag(persistKey),
+      )
     }
   }
 
@@ -434,6 +500,10 @@ export function useEditorActions() {
         const pageContent = (d.content as Record<string, unknown>) ?? {}
         const { schema, hasEditor, editorUrl, fieldsBaseUrl } = await fetchSchema(template, signal)
         const kind = selection.type === 'page' ? ('page' as const) : ('fragment' as const)
+        const locale = useLocaleStore().effectiveLocale ?? undefined
+        // Captured at build: the stash can outlive the selection it was
+        // made under, so the live store can't key the lookup (#1109).
+        const persistKey = persistedEditKey(kind, selection.name, locale, '_root')
         const saveFn = (c: Record<string, unknown>) => {
           // pending = the manifest the author tried to save — used
           // by the conflict diff view to show "yours."
@@ -447,7 +517,7 @@ export function useEditorActions() {
             if (pageDetail.metadata) pending.metadata = pageDetail.metadata
             if (pageDetail.route) pending.route = pageDetail.route
           }
-          return updateManifest(kind, selection.name, { content: c }, pending)
+          return updateManifest(kind, selection.name, { content: c }, pending, undefined, persistedBaseEtag(persistKey))
         }
         return {
           template,
@@ -486,6 +556,8 @@ export function useEditorActions() {
         const { data: frag, etag } = await api.getFragmentWithEtag(sel.fragmentName, { signal, locale })
         if (etag) useEditorEtagsStore().set(manifestPath('fragment', sel.fragmentName, locale), etag)
         if (!frag.template) return null
+        // Captured at build, as in the other target kinds (#1109).
+        const persistKey = persistedEditKey('fragment', sel.fragmentName, locale, '_root')
         const fragContent = (frag.content as Record<string, unknown>) ?? {}
         const { schema, hasEditor, editorUrl, fieldsBaseUrl } = await fetchSchema(frag.template, signal)
         return {
@@ -502,7 +574,14 @@ export function useEditorActions() {
               content: c,
               components: frag.components,
             }
-            return updateManifest('fragment', sel.fragmentName, { content: c }, pending)
+            return updateManifest(
+              'fragment',
+              sel.fragmentName,
+              { content: c },
+              pending,
+              undefined,
+              persistedBaseEtag(persistKey),
+            )
           },
         }
       }
@@ -594,8 +673,10 @@ export function useEditorActions() {
         usePersistedEditsStore().clear(persistedKey!)
         await ec.open(target)
       } else if (persisted) {
-        // Saved against the version the draft was made on, not the one just loaded.
-        if (persisted.base) useEditorEtagsStore().set(persisted.base.manifest, persisted.base.etag)
+        // The draft's recorded version stays on its entry, which its write
+        // sends as If-Match (#1109). The etag store keeps the version this
+        // session loaded, so an edit started after a revert bases on the
+        // content on screen instead of the restored draft's version.
         await ec.open(target, persisted.editedContent)
         // The entry stays in the persisted store until Save or Discard
         // (#1108): a restore overlays the content, it does not consume
@@ -688,21 +769,19 @@ export function useEditorActions() {
 
   // --- Page metadata ---
 
-  /** Restored structural and metadata drafts become pending once their page is open in that locale. */
+  /**
+   * Restored structural and metadata drafts become pending once their page
+   * is open in that locale. Their recorded versions stay on their entries
+   * (#1109); the etag store holds only what this session loaded or wrote.
+   */
   function activateDrafts() {
-    const etags = useEditorEtagsStore()
     const manifestKey = currentManifestKey()
     if (manifestKey) {
       const fileKey = inCurrentLocale(manifestKey)
-      const draft = structural.activate(fileKey)
-      // Saved against the version the draft was made on, not the one just loaded.
-      if (draft?.baseEtag) etags.set(manifestPath(fileKey.kind, fileKey.name, fileKey.locale), draft.baseEtag)
+      structural.activate(fileKey)
     }
     const key = currentMetadataKey()
-    if (key) {
-      const draft = metadata.activate(key)
-      if (draft?.baseEtag) etags.set(manifestPath('page', key.name, key.locale), draft.baseEtag)
-    }
+    if (key) metadata.activate(key)
   }
 
   /** The manifest's etag now: the version a structural or metadata edit is made on. */
@@ -909,10 +988,20 @@ export function useEditorActions() {
     return {
       label: keyString,
       write: async () => {
+        // Read the base when the write runs, not when the save started:
+        // an earlier write in this save may have rebased the entry (#1109).
+        const baseEtag = structural.entries.get(manifestFileKeyToString(key))?.baseEtag
         // pending shape carries the structural change; if a conflict
         // surfaces, the diff view shows the components count change.
         const pending: Record<string, unknown> = { components }
-        await updateManifest(key.kind, key.name, { components: components as never }, pending, key.locale ?? null)
+        await updateManifest(
+          key.kind,
+          key.name,
+          { components: components as never },
+          pending,
+          key.locale ?? null,
+          baseEtag,
+        )
       },
     }
   }
@@ -924,7 +1013,15 @@ export function useEditorActions() {
     return {
       label: keyString,
       write: () =>
-        updateManifest('page', key.name, { metadata: value }, metadataConflictPending(key, value), key.locale ?? null),
+        // Call-time base, as in buildStructuralWrite (#1109).
+        updateManifest(
+          'page',
+          key.name,
+          { metadata: value },
+          metadataConflictPending(key, value),
+          key.locale ?? null,
+          metadata.entries.get(manifestFileKeyToString(key))?.baseEtag,
+        ),
     }
   }
 

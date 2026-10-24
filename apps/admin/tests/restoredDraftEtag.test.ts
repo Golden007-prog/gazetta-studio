@@ -13,6 +13,8 @@ import { attachDraftPersistence, type DraftPersistenceHandle } from '../src/clie
 import { createMemoryDraftStore } from '../src/client/drafts/memory-draft-store.js'
 import type { DraftScope, DraftStore } from '../src/client/drafts/types.js'
 import { useSaveConflictsStore } from '../src/client/stores/saveConflicts.js'
+import { useEditorMetadataStore } from '../src/client/stores/editorMetadata.js'
+import { useEditorStructuralStore } from '../src/client/stores/editorStructural.js'
 import { useSelectionStore } from '../src/client/stores/selection.js'
 import { useSiteStore } from '../src/client/stores/site.js'
 
@@ -168,6 +170,191 @@ describe('a draft stored with no version recorded', () => {
     expect(api.updatePage).toHaveBeenLastCalledWith(
       'home',
       { content: { title: 'Mine' } },
+      expect.objectContaining({ ifMatch: 'theirs-1' }),
+    )
+  })
+})
+
+describe('a restored draft reverted and edited again (#1109)', () => {
+  it('saves without a false conflict: the new edit is made on the version on screen', async () => {
+    let actions = await openSession()
+    edits.content(actions)
+    await handle!.flush()
+    colleagueSaves()
+
+    actions = await openSession()
+    expect(actions.hasPendingEdits.value).toBe(true)
+    actions.revertComponent('_root')
+    actions.markDirty({ title: 'Again' })
+
+    expect(await actions.save()).toBe(true)
+    expect(useSaveConflictsStore().has(PATH)).toBe(false)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'theirs-1' }),
+    )
+  })
+
+  it('does the same for a restored structural draft', async () => {
+    let actions = await openSession()
+    edits.structural(actions)
+    await handle!.flush()
+    colleagueSaves()
+
+    actions = await openSession()
+    expect(actions.hasPendingEdits.value).toBe(true)
+    useEditorStructuralStore().discard({ kind: 'page', name: 'home' })
+    edits.structural(actions)
+
+    expect(await actions.save()).toBe(true)
+    expect(useSaveConflictsStore().has(PATH)).toBe(false)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'theirs-1' }),
+    )
+  })
+
+  it('does the same for a restored metadata draft', async () => {
+    let actions = await openSession()
+    edits.metadata(actions)
+    await handle!.flush()
+    colleagueSaves()
+
+    actions = await openSession()
+    expect(actions.hasPendingEdits.value).toBe(true)
+    useEditorMetadataStore().discard({ kind: 'page', name: 'home' })
+    edits.metadata(actions)
+
+    expect(await actions.save()).toBe(true)
+    expect(useSaveConflictsStore().has(PATH)).toBe(false)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'theirs-1' }),
+    )
+  })
+})
+
+describe('drafts made on different versions (#1109)', () => {
+  it('conflicts the write whose draft was made on the older version', async () => {
+    let actions = await openSession()
+    await actions.openComponent('hero', 'hero')
+    actions.markDirty({ title: 'Hero on v1' })
+    await handle!.flush()
+
+    colleagueSaves()
+
+    actions = await openSession()
+    await actions.openComponent('features', 'features')
+    actions.markDirty({ content: 'Features on theirs-1' })
+    await handle!.flush()
+
+    actions = await openSession()
+    await actions.openComponent('hero', 'hero')
+    await actions.openComponent('features', 'features')
+
+    // features (made on theirs-1) writes first and lands; hero (made on
+    // v1) must conflict instead of overwriting the colleague's save.
+    expect(await actions.save()).toBe(false)
+    expect(useSaveConflictsStore().has(PATH)).toBe(true)
+    expect(api.updatePage).toHaveBeenCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'theirs-1' }),
+    )
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'v1' }),
+    )
+    // Exactly one write landed (colleagueSaves advanced the counter).
+    expect(server.etag).toBe('ours-2')
+  })
+
+  it('keeps a restored structural draft’s version over later edits', async () => {
+    let actions = await openSession()
+    edits.structural(actions)
+    await handle!.flush()
+    colleagueSaves()
+
+    actions = await openSession()
+    edits.structural(actions)
+
+    expect(await actions.save()).toBe(false)
+    expect(useSaveConflictsStore().has(PATH)).toBe(true)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'v1' }),
+    )
+  })
+
+  it('keeps a restored metadata draft’s version over later edits', async () => {
+    let actions = await openSession()
+    edits.metadata(actions)
+    await handle!.flush()
+    colleagueSaves()
+
+    actions = await openSession()
+    edits.metadata(actions)
+
+    expect(await actions.save()).toBe(false)
+    expect(useSaveConflictsStore().has(PATH)).toBe(true)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'v1' }),
+    )
+  })
+})
+
+describe('an unopened draft on the conflicted manifest (#1233 review)', () => {
+  it('keeps the version it was made on, so opening it later still conflicts', async () => {
+    let actions = await openSession()
+    await actions.openComponent('hero', 'hero')
+    actions.markDirty({ title: 'Hero on v1' })
+    await handle!.flush()
+
+    colleagueSaves()
+
+    // The hero draft is persisted but never opened this session.
+    actions = await openSession()
+    actions.markDirty({ title: 'Root on theirs-1' })
+    colleagueSaves()
+
+    // The root write conflicts; the session's entries move so the next
+    // Save goes through, but the unopened hero draft must not move.
+    expect(await actions.save()).toBe(false)
+    expect(await actions.save()).toBe(true)
+
+    await actions.openComponent('hero', 'hero')
+    expect(await actions.save()).toBe(false)
+    expect(useSaveConflictsStore().has(PATH)).toBe(true)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
+      expect.objectContaining({ ifMatch: 'v1' }),
+    )
+  })
+})
+
+describe('a conflict on a restored draft (#1109)', () => {
+  it('lets the next Save go through, as in an open tab', async () => {
+    let actions = await openSession()
+    edits.content(actions)
+    await handle!.flush()
+    colleagueSaves()
+
+    actions = await openSession()
+    expect(await actions.save()).toBe(false)
+    expect(useSaveConflictsStore().has(PATH)).toBe(true)
+
+    expect(await actions.save()).toBe(true)
+    expect(api.updatePage).toHaveBeenLastCalledWith(
+      'home',
+      expect.anything(),
       expect.objectContaining({ ifMatch: 'theirs-1' }),
     )
   })

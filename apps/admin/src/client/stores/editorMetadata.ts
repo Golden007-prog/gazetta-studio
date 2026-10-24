@@ -83,11 +83,11 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
     else entries.set(k, { original, pending: next, ...(existing?.baseEtag ? { baseEtag: existing.baseEtag } : {}) })
   }
 
-  /** Record the version a pending entry is made on. */
+  /** Record the version a pending entry is made on: set when the edit starts, kept over later edits (#1109). */
   function setBaseEtag(key: MetadataKey, etag: string) {
     const k = manifestFileKeyToString(key)
     const existing = entries.get(k)
-    if (existing && existing.baseEtag !== etag) entries.set(k, { ...toRaw(existing), baseEtag: etag })
+    if (existing && !existing.baseEtag) entries.set(k, { ...toRaw(existing), baseEtag: etag })
   }
 
   /** A write made on `from` succeeded with `to`: entries made on `from` are now on `to`. */
@@ -97,6 +97,17 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
       const entry = map.get(k)
       if (entry?.baseEtag === from) map.set(k, { ...toRaw(entry), baseEtag: to })
     }
+  }
+
+  /**
+   * A write on the manifest conflicted: the active entry moves to `to`, so
+   * the next Save goes through (#1109). A restored draft not activated this
+   * session keeps its version, like an unopened content draft (#1233 review).
+   */
+  function rebaseAll(key: MetadataKey, to: string) {
+    const k = manifestFileKeyToString(key)
+    const entry = entries.get(k)
+    if (entry?.baseEtag) entries.set(k, { ...toRaw(entry), baseEtag: to })
   }
 
   function setField(key: MetadataKey, loaded: PageMetadata | null, field: MetadataTextField, value: string) {
@@ -230,6 +241,7 @@ export const useEditorMetadataStore = defineStore('editorMetadata', () => {
     markWritten,
     setBaseEtag,
     rebase,
+    rebaseAll,
     allEntries,
     pendingCount,
     hasPendingEdits,

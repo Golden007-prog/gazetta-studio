@@ -14,7 +14,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { api } from '../src/client/api/client.js'
+import { api, StaleSaveError } from '../src/client/api/client.js'
 import { useEditorActions } from '../src/client/composables/useEditorActions.js'
 import { useEditorContentStore } from '../src/client/stores/editorContent.js'
 import { attachDraftPersistence, type DraftPersistenceHandle } from '../src/client/drafts/persistence.js'
@@ -23,6 +23,8 @@ import type { DraftScope, DraftStore } from '../src/client/drafts/types.js'
 import { useSelectionStore } from '../src/client/stores/selection.js'
 import { useSiteStore } from '../src/client/stores/site.js'
 import { manifestPath, useEditorEtagsStore } from '../src/client/stores/editorEtags.js'
+import { useSaveConflictsStore } from '../src/client/stores/saveConflicts.js'
+import { persistedEditKey, usePersistedEditsStore } from '../src/client/stores/persistedEdits.js'
 
 const scope: DraftScope = { site: 'main', owner: 'none:unknown:admin', target: 'local' }
 const detail = {
@@ -330,9 +332,22 @@ describe('a nested fragment draft under a host fragment (#1108 review)', () => {
     await actions.openFragment('footer')
     expect(useEditorContentStore().content).toEqual({ title: 'Nested' })
 
-    // The host's etag stays the fresh one; the draft pins the nested
-    // fragment's base, so its save still conflict-checks.
+    // Restore no longer writes the draft's version into the etag store
+    // (#1109): the store keeps what this session loaded, and the draft's
+    // entry pins its base, which its save sends as If-Match.
     expect(useEditorEtagsStore().get(manifestPath('fragment', 'header', undefined))).toBe('h2')
-    expect(useEditorEtagsStore().get(manifestPath('fragment', 'footer', undefined))).toBe('f1')
+    expect(useEditorEtagsStore().get(manifestPath('fragment', 'footer', undefined))).toBe('f2')
+    expect(usePersistedEditsStore().get(persistedEditKey('fragment', 'footer', undefined, '_root'))?.base).toEqual({
+      manifest: manifestPath('fragment', 'footer', undefined),
+      etag: 'f1',
+    })
+
+    // The save conflict-checks against the version the draft was made on.
+    vi.spyOn(api, 'updateFragment').mockImplementation(async (_name, _payload, opts) => {
+      if (opts?.ifMatch && opts.ifMatch !== versions.footer) throw new StaleSaveError({}, versions.footer)
+      return { ok: true, etag: 'f3' } as never
+    })
+    expect(await actions.save()).toBe(false)
+    expect(useSaveConflictsStore().has(manifestPath('fragment', 'footer', undefined))).toBe(true)
   })
 })
