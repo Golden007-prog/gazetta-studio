@@ -181,13 +181,13 @@ const sorted = candidates.sort((a, b) => {
 })
 ```
 
-**No `priority:high` label in v1.** Default ordering is pure oldest-first; matches fix-bot's existing pattern exactly. YAGNI discipline — the override mechanism is deferred until concrete ordering pain surfaces.
+**No `priority:high` label in v1.** Default ordering is pure oldest-first, as fix-bot's was when Q4 was locked (see reason 4). YAGNI discipline — the override mechanism is deferred until concrete ordering pain surfaces.
 
 **If priority override pain surfaces later**: adding `priority:high` is an additive change (one label, one sort comparator update) that doesn't require re-architecting feature-bot.
 
 **Why** (revised against rule 22 "every kind of work has a durable artifact" + label-namespace discipline):
 
-1. **Zero new labels.** Reuses pure oldest-first which is fix-bot's existing default.
+1. **Zero new labels.** Reuses pure oldest-first, fix-bot's default when Q4 was locked.
 2. **YAGNI** — the override case is hypothetical; if a real "I need this cut shipped first" pressure arises, the maintainer can either (a) close older sibling cuts temporarily, or (b) just wait for the next cron (cuts ship at ~1/day cadence; "shipped tomorrow vs. shipped today" rarely justifies new infrastructure).
 3. **Starvation-free** — oldest-first means everything eventually ships.
 4. **Bot ecosystem consistency** — when Q4 was locked, it matched fix-bot's oldest-first sort. Since #1337, fix-bot takes issues labelled `priority` first; feature-bot stays oldest first, and a `priority` label on a cut has no effect. Q4 stands until feature-bot's own ordering causes a problem.
