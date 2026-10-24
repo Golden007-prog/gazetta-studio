@@ -16,7 +16,7 @@ import { defineSite, filesystemStorage } from 'gazetta'
 export default defineSite({
   name: 'main',
   targets: {
-    local: { storage: filesystemStorage(), environment: 'local' },
+    local: { storage: filesystemStorage(), environment: 'local', editable: true },
   },
   admin: {
     auth: {

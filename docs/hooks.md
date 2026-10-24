@@ -14,7 +14,7 @@ import { autoSlugify } from './admin/hooks/auto-slugify'
 
 export default defineSite({
   name: 'My Site',
-  targets: { local: { storage: filesystemStorage({ path: './targets/local' }) } },
+  targets: { local: { storage: filesystemStorage({ path: './targets/local' }), editable: true } },
   admin: {
     hooks: [autoSlugify()],
   },

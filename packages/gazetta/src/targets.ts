@@ -31,9 +31,20 @@ export class UnknownTargetError extends Error {
     this.name = 'UnknownTargetError'
   }
 }
+/**
+ * The config that gives a site its editing target. Storage is assumed public
+ * unless the target says otherwise, and a public target isn't editable
+ * (design-public-storage.md Q6), so a bare `filesystemStorage()` target
+ * doesn't edit: `editable: true` makes it private and editable.
+ */
+export const EDITING_TARGET_EXAMPLE = 'targets: {\n  local: { storage: filesystemStorage(), editable: true },\n}\n'
+
 export class NoEditableTargetError extends Error {
   constructor() {
-    super('No editable target is configured. At least one target in site.config.ts must be editable.')
+    super(
+      "No editable target is configured. Targets default to public storage, which isn't editable. " +
+        `Mark your editing target in site.config.ts:\n\n${EDITING_TARGET_EXAMPLE}`,
+    )
     this.name = 'NoEditableTargetError'
   }
 }

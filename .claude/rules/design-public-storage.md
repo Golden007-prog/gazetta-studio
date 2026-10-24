@@ -2,7 +2,7 @@
 
 Every target keeps Gazetta's own files in a `.gazetta/` folder next to the published site: history, the audit log, review state, dependency indices, live-check reports. When a host serves the target's storage directly, those files are downloadable by anyone. This design makes that impossible by default: a target whose storage visitors can reach keeps no sensitive state, Gazetta assumes cloud storage is reachable unless told otherwise, and a detected leak stops publishing to that target until it's fixed.
 
-**Status**: design pass complete (2026-10-21), grilled Q1–Q8. Cut 1 shipped in #1134 (#1071); #1158, the first half of cut 2, is in flight.
+**Status**: design pass complete (2026-10-21), grilled Q1–Q8. Cut 1 shipped in #1134 (#1071); #1158, the first half of cut 2, in #1229.
 
 **Companion docs:**
 - [#1070](https://github.com/gazetta-studio/gazetta-studio/issues/1070): the issue this design resolves, with the options considered before the pass
@@ -273,6 +273,14 @@ Decided: maintainer, 2026-10-23 (#1120).
 ## Migration
 
 No production users, so changes are hard cutovers (ADR-0005, ADR-0008 precedent). After cut 2, cloud targets without `publicStorage: false` stop keeping history and audit; the starter and gazetta.studio set it in the same PR. A target moved to public storage that still holds history or audit fails validation until `gazetta state remove` runs. After cut 9, run `gazetta publish <target> --force` once for each existing public target: the forced publish #1093's cuts ask for wrote no indices there while cut 4 kept them off, and an ordinary publish writes records only for the items it changes.
+
+A filesystem target that sets neither `editable: true` nor `publicStorage` is public too (Q6), so a site whose editing target is just `local: { storage: filesystemStorage() }` has no editable target after #1158: `gazetta dev`, `validate` and `publish` stop with an error that names the cause and the fix, `editable: true`. Q6 stays as locked: there are no production users, and `gazetta init`, the starter and gazetta.studio set the value.
+
+Decided: maintainer, 2026-10-24 (#1229)
+
+| Rejected | Why |
+|---|---|
+| A filesystem target whose `environment` is `local` (or unset) defaults to private and editable | Old configs keep working, but `environment` comes back into the rule, which Q6 deliberately kept out. |
 
 Decided: maintainer, 2026-10-23 (#1120).
 

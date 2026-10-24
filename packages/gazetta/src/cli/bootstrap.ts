@@ -9,7 +9,7 @@
 
 import { dirname, join } from 'node:path'
 import { gazettaConfigToManifest, loadGazettaConfig, loadSiteConfig, siteConfigToManifest } from '../config/loader.js'
-import { createTargetRegistry, createTargetRegistryView } from '../targets.js'
+import { createTargetRegistry, createTargetRegistryView, EDITING_TARGET_EXAMPLE } from '../targets.js'
 import type { GazettaManifest, SiteManifest, TargetConfig, StorageProvider } from '../types.js'
 import { createSourceContextFromRegistry, type SourceContext } from '../admin-api/source-context.js'
 import type { TargetRegistry } from '../targets.js'
@@ -70,6 +70,21 @@ function inferProjectRoot(projectSiteDir: string): string {
 }
 
 /**
+ * A target without `storage` would otherwise fail later, with a TypeError from
+ * whichever command first reads it (resolving public storage reads every
+ * target's storage kind).
+ */
+function assertTargetsHaveStorage(targetConfigs: Record<string, TargetConfig>, configPath: string): void {
+  for (const [name, config] of Object.entries(targetConfigs)) {
+    if (!config?.storage) {
+      throw new Error(
+        `Target "${name}" in ${configPath} has no \`storage\`. Every target needs one, such as \`storage: filesystemStorage()\`.`,
+      )
+    }
+  }
+}
+
+/**
  * Load site.config.ts, initialize all targets, and return a TargetRegistry view.
  * Throws if site.config.ts is missing or has no targets declared.
  */
@@ -81,9 +96,10 @@ export async function bootstrapFromSiteYaml(projectSiteDir: string): Promise<Boo
   if (Object.keys(targetConfigs).length === 0) {
     throw new Error(
       `No targets declared in ${join(projectSiteDir, 'site.config.ts')}. At least one target is required — ` +
-        `add a local target:\n\ntargets: {\n  local: { storage: filesystemStorage() },\n}\n`,
+        `add a local target:\n\n${EDITING_TARGET_EXAMPLE}`,
     )
   }
+  assertTargetsHaveStorage(targetConfigs, join(projectSiteDir, 'site.config.ts'))
 
   const providers = await createTargetRegistry(targetConfigs)
   const registry = createTargetRegistryView(providers, targetConfigs)
@@ -119,9 +135,10 @@ export async function buildSourceContext(opts: BuildSourceContextOptions): Promi
   if (Object.keys(targetConfigs).length === 0) {
     throw new Error(
       `No targets declared in ${join(opts.projectSiteDir, 'site.config.ts')}. At least one target is required — ` +
-        `add a local target:\n\ntargets: {\n  local: { storage: filesystemStorage() },\n}\n`,
+        `add a local target:\n\n${EDITING_TARGET_EXAMPLE}`,
     )
   }
+  assertTargetsHaveStorage(targetConfigs, join(opts.projectSiteDir, 'site.config.ts'))
 
   // Pick the editable target (explicit override or first editable in declaration order).
   const { isEditable } = await import('../types.js')
@@ -130,8 +147,8 @@ export async function buildSourceContext(opts: BuildSourceContextOptions): Promi
     .map(([n]) => n)
   if (editableNames.length === 0) {
     throw new Error(
-      `No editable target in ${join(opts.projectSiteDir, 'site.config.ts')}. Add one:\n\n` +
-        `targets: {\n  local: { storage: filesystemStorage() },\n}\n`,
+      `No editable target in ${join(opts.projectSiteDir, 'site.config.ts')}. ` +
+        `Targets default to public storage, which isn't editable. Mark your editing target:\n\n${EDITING_TARGET_EXAMPLE}`,
     )
   }
   const targetName = opts.targetName ?? editableNames[0]

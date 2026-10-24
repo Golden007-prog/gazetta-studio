@@ -38,7 +38,7 @@ import type { GazettaManifest, SiteManifest } from '../types.js'
  *   locales: { default: 'en', supported: ['en', 'fr'] },
  *   ai: { provider: anthropicProvider({ apiKey: process.env.ANTHROPIC_API_KEY! }) },
  *   targets: {
- *     local: { storage: filesystemStorage() },
+ *     local: { storage: filesystemStorage(), editable: true },
  *   },
  * })
  * ```

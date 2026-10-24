@@ -2,7 +2,7 @@
  * `public-storage-config` validator (design-public-storage.md Q6): config
  * that contradicts public storage is an error; a target assumed public
  * gets one info line. The starter, gazetta.studio and the target-matrix
- * fixture declare `publicStorage` and validate clean.
+ * fixture declare every target private and validate clean.
  */
 import { resolve } from 'node:path'
 import { createJiti } from 'jiti'
@@ -114,7 +114,7 @@ describe('public-storage-config', () => {
     'examples/starter/sites/main/site.config.ts',
     'sites/gazetta.studio/site.config.ts',
     'tests/fixtures/sites/target-matrix/sites/main/site.config.ts',
-  ])('%s sets publicStorage on every target and validates clean', { timeout: 60_000 }, async file => {
+  ])('%s marks every target private explicitly and validates clean', { timeout: 60_000 }, async file => {
     vi.stubEnv('R2_ACCESS_KEY_ID', 'k')
     vi.stubEnv('R2_SECRET_ACCESS_KEY', 's')
     const jiti = createJiti(import.meta.url, {
@@ -124,8 +124,9 @@ describe('public-storage-config', () => {
     const config = (await jiti.import(resolve(repoRoot, file), { default: true })) as {
       targets: Record<string, TargetConfig>
     }
+    // gazetta.studio's production keeps its history only while this holds.
     for (const [name, target] of Object.entries(config.targets)) {
-      expect(typeof target.publicStorage, name).toBe('boolean')
+      expect(target.publicStorage, name).toBe(false)
     }
     expect(await run(config.targets)).toEqual([])
   })

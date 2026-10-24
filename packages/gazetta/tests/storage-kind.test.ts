@@ -39,8 +39,10 @@ describe('storage kind', () => {
           ? s3Storage({ endpoint: 'http://localhost:9000', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' })
           : azureBlobStorage({ connectionString: 'UseDevelopmentStorage=true', container: 'c' })
     expect(storage.kind).toBe(kind)
-    // Proves the mocks are wired: a method call does load the SDK module.
+    // An import started by reading `kind` would load the mock only after it settles.
+    await vi.dynamicImportSettled()
     expect(sdkLoads).not.toHaveBeenCalled()
+    // Proves the mocks are wired: a method call does load the SDK module.
     await (storage as unknown as { init(): Promise<void> }).init()
     expect(sdkLoads).toHaveBeenCalledTimes(1)
   })

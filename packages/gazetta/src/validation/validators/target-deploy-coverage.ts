@@ -26,16 +26,13 @@
  * `gazetta serve` self-hosted shapes that don't need a platform
  * deploy adapter at all.
  *
- * # Why environment instead of storage-type discriminator
+ * # Why environment, not storage kind
  *
- * `StorageProvider` has no public discriminator field — providers are
- * closure-returned objects matching the same interface. Detecting
- * "is this filesystem?" would require either an instanceof check
- * against an internal class (couples the validator to provider
- * implementation) or a duck-type test (brittle, false-negative on
- * filesystem-shaped custom providers). Using `environment: 'local'`
- * leans on an existing, operator-visible discriminator with clear
- * semantics.
+ * Whether a platform deploy is expected depends on the target's role,
+ * not its storage: a filesystem target can be a production site that
+ * `gazetta serve` runs in a container, which is the case this info is
+ * for. `environment: 'local'` is the operator-visible marker of a dev
+ * target.
  *
  * # SOLID
  *

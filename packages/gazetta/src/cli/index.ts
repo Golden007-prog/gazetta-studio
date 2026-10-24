@@ -1933,9 +1933,6 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
         const env = getEnvironment(cfg)
         const type = getType(cfg)
         const ed = isEditable(cfg) ? 'editable ' : 'read-only'
-        // Path X — the storage provider is opaque (operator constructed it via
-        // factory at config-eval). Display target name + axes; the provider
-        // identity is not introspectable from the StorageProvider interface.
         console.log(
           `  ${c.dim('┃')}     ${c.dim('•')} ${name.padEnd(14)} ${c.dim(env.padEnd(11))} ${c.dim(ed)} ${c.dim(type.padEnd(8))}`,
         )

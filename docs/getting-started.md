@@ -374,6 +374,10 @@ import { cloudflareWorkersDeploy, defineSite, filesystemStorage, r2Storage } fro
 export default defineSite({
   name: 'My Site',
   targets: {
+    local: {
+      storage: filesystemStorage(),
+      editable: true,                      // the target you edit; its storage stays private
+    },
     staging: {
       storage: filesystemStorage({ path: './dist/staging' }),
     },
@@ -413,7 +417,7 @@ The optional `environment` field declares a target's intent — `local`, `stagin
 - Show a `prod` / `staging` badge next to the target name in the publish dialog
 - Require an explicit confirmation step before publishing to a `production` target
 
-Defaults: `filesystem` storage → `local`, everything else → `production`. Override in site.config.ts when those defaults don't match your setup (e.g. a shared filesystem mount used as production, or a cloud target reserved for staging).
+A target without `environment` counts as `local`, so set it on your staging and production targets.
 
 ## Customize admin appearance
 

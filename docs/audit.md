@@ -84,7 +84,7 @@ Visitors never need these files. Whether they *can* get them depends on how the 
 These read only pages, fragments, `sitemap.xml` and `robots.txt` from storage, so a request for `/.gazetta/…` gets a 404:
 
 - The Cloudflare worker (`cloudflareWorkersDeploy()`, see [`cloudflare.md`](cloudflare.md)), as long as the R2 bucket itself is private. If you turn on public access for the bucket (an `r2.dev` URL or a custom domain connected to the bucket), every object in it is served directly, without the worker, `.gazetta/` included.
-- `gazetta serve` on an ESI target (`type: 'dynamic'`)
+- `gazetta serve`, on any target type
 - A filesystem target that only `gazetta serve` or `gazetta dev` reads and that is never uploaded anywhere
 
 ### Not safe: the storage is the public site
@@ -94,7 +94,6 @@ If the web server or host serves the storage folder or bucket directly, `.gazett
 - An S3 or Azure Blob static website points at the target's bucket or container
 - The target's R2 bucket has public access turned on, even when a worker also serves the site. Public access exposes the whole bucket, not a path, and is off by default. To block `/.gazetta/` you need a custom domain on the bucket with a WAF rule and the `r2.dev` URL turned off ([Cloudflare: public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/)).
 - A filesystem target's folder (such as `./dist/production`) is uploaded as-is to a static host, or served by nginx, Caddy or Apache
-- **`gazetta serve` on a static target (`type: 'static'`)**: it currently returns any file in storage, `.gazetta/` included. Fix tracked in [#1071](https://github.com/gazetta-studio/gazetta-studio/issues/1071); until it lands, put it behind a proxy rule like the one below.
 
 ### Telling Gazetta whether storage is public: `publicStorage`
 
@@ -122,6 +121,12 @@ What follows from the setting:
 - A target assumed public (no `publicStorage` set) gets one info line in `gazetta validate` and when the admin starts: "storage assumed public, so history and audit aren't kept. Set `publicStorage: false` if visitors can't reach it."
 
 `gazetta init`, the starter and gazetta.studio set `publicStorage` on every target. Upcoming releases stop writing history and audit to public targets ([design](../.claude/rules/design-public-storage.md)).
+
+**Upgrading an older site:** a filesystem target that sets neither `editable: true` nor `publicStorage` counts as public, and a public target isn't editable. A site whose editing target is just `local: { storage: filesystemStorage() }` therefore has no editable target: `gazetta dev`, `validate` and `publish` stop with an error that says so. Mark the target you edit:
+
+```ts
+local: { storage: filesystemStorage(), editable: true },
+```
 
 ### What to do if your storage is public
 

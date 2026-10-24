@@ -198,6 +198,7 @@ import { filesystemStorage, r2Storage, cloudflareAdapter } from 'gazetta'
 targets: {
   local: {
     storage: filesystemStorage(),
+    editable: true,
     // sharp default
   },
 
