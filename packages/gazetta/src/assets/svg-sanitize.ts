@@ -18,6 +18,10 @@
  *     - <animate> with timed events
  *     - external `href` / `xlink:href` on <use>, <image>, <a>, <script>
  *       (any URL — privacy + XSS defense)
+ *     - CSS that loads from the network: external url(), @import,
+ *       image-set() or CSS escapes, in presentation attributes and
+ *       `style` (the attribute is dropped) or in <style> (the element is
+ *       dropped)
  *
  *   Keep:
  *     - <svg> root + path/shape/text/group elements
@@ -130,10 +134,15 @@ export function sanitizeSvg(input: Uint8Array): SvgSanitizeResult {
   const removedElements = new Set<string>()
   const removedAttributes = new Set<string>()
   DOMPurify.removeAllHooks()
-  DOMPurify.addHook('uponSanitizeElement', (_node, data) => {
+  DOMPurify.addHook('uponSanitizeElement', (node, data) => {
     if (HOOK_NOISE.has(data.tagName)) return
     if (!data.allowedTags[data.tagName]) {
       removedElements.add(data.tagName)
+      return
+    }
+    if (data.tagName === 'style' && hasExternalCssReference(node.textContent ?? '')) {
+      node.parentNode?.removeChild(node)
+      removedElements.add('style')
     }
   })
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
@@ -147,6 +156,13 @@ export function sanitizeSvg(input: Uint8Array): SvgSanitizeResult {
       }
     }
     if (HOOK_NOISE.has(ownerTag)) return
+    // Presentation attributes (fill, filter, mask, …) and `style` are
+    // parsed as CSS, so url() in them loads like an href would.
+    if (data.attrValue && hasExternalCssReference(data.attrValue)) {
+      data.keepAttr = false
+      removedAttributes.add(`${ownerTag}.${data.attrName}`)
+      return
+    }
     if (!data.allowedAttributes[data.attrName]) {
       removedAttributes.add(`${ownerTag}.${data.attrName}`)
     }
@@ -203,6 +219,23 @@ export function sanitizeSvg(input: Uint8Array): SvgSanitizeResult {
     bytes: new TextEncoder().encode(cleaned),
     warnings,
   }
+}
+
+const CSS_URL = /url\(\s*(['"]?)\s*([^'")]*)\1\s*\)/gi
+const LOCAL_CSS_URL = /^(?:#|data:image\/(?:png|jpeg|gif|webp);base64,)/i
+
+/**
+ * True when CSS text could load something from the network: a url()
+ * that isn't `#id` or inline image data, `@import`, or `image-set()`
+ * (which takes bare strings). Any backslash counts too, since a CSS
+ * escape (`\75 rl(`) can spell url( past the pattern above.
+ */
+function hasExternalCssReference(css: string): boolean {
+  if (css.includes('\\') || /@import|image-set\s*\(/i.test(css)) return true
+  for (const m of css.matchAll(CSS_URL)) {
+    if (!LOCAL_CSS_URL.test(m[2]!.trim())) return true
+  }
+  return false
 }
 
 /** Canonical IANA MIME for SVG. Re-exported so the preprocessor can match against it. */

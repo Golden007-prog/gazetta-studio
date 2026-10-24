@@ -24,8 +24,8 @@ the top bar and the library refreshes.
 Drag-and-drop into the upload zone or click to pick files. Image
 uploads (JPEG, PNG, SVG) get responsive variants generated in the
 background; SVGs are sanitized before storage (script tags, event
-handlers, external `href`s, oversized embedded base64 are all stripped
-or rejected).
+handlers, external `href`s, CSS that loads from another site, and
+oversized embedded base64 are all stripped or rejected).
 
 Each upload becomes one **history revision** — `Cmd+Z`-equivalent
 undo via the history panel. Bulk drops produce one revision per file
