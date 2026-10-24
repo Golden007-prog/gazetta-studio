@@ -79,6 +79,18 @@ describe('POST /api/pages/:name/archive', () => {
     expect(await storage.exists('.gazetta/alias-targets/home/pages.landing')).toBe(true)
   })
 
+  it('returns 400 for an aliasOf with markup or whitespace, leaving the page live', async () => {
+    for (const aliasOf of ['x--><b>bold</b><!--', 'x\n/*  /elsewhere  200!\n/y']) {
+      const res = await app.request('/api/pages/landing/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aliasOf }),
+      })
+      expect(res.status).toBe(400)
+    }
+    expect((await readJson('pages/landing/page.json')).archived).toBeUndefined()
+  })
+
   it('archives without aliasOf (pure soft-delete) — no sidecar written', async () => {
     const res = await app.request('/api/pages/landing/archive', { method: 'POST' })
     expect(res.status).toBe(200)
@@ -283,6 +295,35 @@ describe('PATCH /api/{kind}/:name/alias (Cut 12 — set / drop alias)', () => {
       body: JSON.stringify({ aliasOf: null }),
     })
     expect(res.status).toBe(404)
+  })
+
+  it.each([
+    ['markup', 'x--><b>bold</b><!--'],
+    ['a newline', 'x\n/*  /elsewhere  200!\n/y'],
+    ['a space', 'two words'],
+  ])('returns 400 for an alias with %s, leaving the manifest unchanged', async (_what, aliasOf) => {
+    await app.request('/api/pages/landing/archive', { method: 'POST' })
+    const res = await app.request('/api/pages/landing/alias', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aliasOf }),
+    })
+    expect(res.status).toBe(400)
+    expect((await readJson('pages/landing/page.json')).aliasOf).toBeUndefined()
+  })
+
+  it('returns 400 for a fragment alias with markup', async () => {
+    await app.request('/api/fragments/header/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    const res = await app.request('/api/fragments/header/alias', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aliasOf: 'x--><b>bold</b><!--' }),
+    })
+    expect(res.status).toBe(400)
   })
 
   it('returns 400 on missing aliasOf field', async () => {

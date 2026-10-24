@@ -13,7 +13,12 @@
  * branch.
  */
 import { describe, it, expect } from 'vitest'
-import { archiveMarker, parseArchiveMarker, type ArchiveMarker } from '../src/runtime/archive-marker.js'
+import {
+  aliasTargetIssue,
+  archiveMarker,
+  parseArchiveMarker,
+  type ArchiveMarker,
+} from '../src/runtime/archive-marker.js'
 
 describe('archiveMarker (emit)', () => {
   it('emits the alias marker with trailing newline', () => {
@@ -55,6 +60,13 @@ describe('archiveMarker (emit)', () => {
     expect(() => archiveMarker({ kind: 'alias', target: 'page#top' })).toThrow(/relative/)
     expect(() => archiveMarker({ kind: 'alias', target: '../page' })).toThrow(/path segments/)
     expect(() => archiveMarker({ kind: 'alias', target: 'docs//page' })).toThrow(/path segments/)
+  })
+
+  it('rejects < and > in the target, which could end the marker comment', () => {
+    expect(aliasTargetIssue('x--><b>bold</b><!--')).toBe('markup')
+    expect(() => archiveMarker({ kind: 'alias', target: 'x--><b>bold</b><!--' })).toThrow(/< or >/)
+    expect(() => archiveMarker({ kind: 'alias', target: 'a<b' })).toThrow(/< or >/)
+    expect(() => archiveMarker({ kind: 'alias', target: 'a>b' })).toThrow(/< or >/)
   })
 
   it('keeps the emitted marker within the 200-byte inspection window', () => {

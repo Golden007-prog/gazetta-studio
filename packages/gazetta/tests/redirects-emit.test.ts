@@ -38,6 +38,15 @@ describe('emitCloudflareRedirects', () => {
     expect(out).toBe(['/alpha  /  410', '/beta  /welcome  301', '/zeta  /welcome  301', ''].join('\n'))
   })
 
+  it('leaves out a row whose route contains whitespace, which would split it', () => {
+    const out = emitCloudflareRedirects([
+      { from: '/old', to: '/x\n/*  /elsewhere  200!\n/y' },
+      { from: '/two words', to: '/welcome' },
+      aliasArchive,
+    ])
+    expect(out).toBe('/landing  /welcome  301\n')
+  })
+
   it('returns empty string for zero archives', () => {
     expect(emitCloudflareRedirects([])).toBe('')
   })
