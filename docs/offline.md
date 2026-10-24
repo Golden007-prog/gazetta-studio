@@ -122,7 +122,10 @@ Two limits to know:
 
 - **Opening the admin offline** can't ask the server who you are, so it
   shows the unsaved edits of whoever last used the admin online in this
-  browser.
+  browser. This applies only when the browser itself is offline: if it's
+  online but the server doesn't answer within 3 seconds, the admin shows
+  no unsaved edits and keeps them as they are. Reload once the server
+  answers.
 - **If the admin can't tell who you are** (your sign-in expired and the
   proxy answers with its login page), it shows no unsaved edits and
   keeps them as they are. Sign in again and reload.

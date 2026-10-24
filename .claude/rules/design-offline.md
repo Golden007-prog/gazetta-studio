@@ -145,7 +145,8 @@ Pending edits — unsaved drafts and structural edits — are the author's only 
 1. **`GET /api/me`** → `{ id, role, trustMode }`. Schema-typed under `admin-api/schemas/` (MCP discipline). No capability gate — every request has a principal (`id: 'unknown'` in `none` mode). Timeout 3 s.
 2. **Classify the answer:**
    - JSON matching the schema → **known owner**.
-   - Network error or timeout → **offline**: use the owner record (step 4) — the last online user's drafts load. Inherent to offline; documented in `docs/offline.md`.
+   - Network error or timeout, **and the browser reports it is offline** (`navigator.onLine` is false) → **offline**: use the owner record (step 4) — the last online user's drafts load. Inherent to offline; documented in `docs/offline.md`.
+   - Network error or timeout while the browser reports it is online → **unknown owner** (below): a slow or failing server isn't proof of offline, and on a shared profile the next user would see the last user's drafts. Decided: maintainer, 2026-10-24 (#PR).
    - Anything else (non-OK status, a login page from the auth proxy, unparseable body) → **unknown owner**: load no drafts and keep them stored. The user re-authenticates and reloads.
 3. **Known owner differs from the record** → in one transaction, delete every record of this site whose owner differs. They are deleted, not kept for later: on a shared profile anything left in IndexedDB is readable by the next user through devtools.
 4. **Owner record** — `{site} → owner` of the last online boot, kept in the draft store.
@@ -173,6 +174,8 @@ A tab still open from user A after B signs in keeps writing records owned by A. 
 | Weaken the RBAC invariant | It is a locked decision, and the leak is real. |
 | Clear on logout | No logout signal exists; upstream auth signs out outside Gazetta. |
 | Keep other owners' drafts for their return | Readable by the next user through devtools; storage grows with no cleanup point. |
+| Count every network error or timeout as offline (this lock's first version) | A slow or failing server while the browser is online loaded the last user's drafts for whoever opened the admin |
+| Keep it, with a longer timeout | Narrows the window, but a server that's down while the browser is online still loads the last user's drafts |
 | Treat any failed `/api/me` as offline | An expired proxy session would load the previous user's drafts. |
 
 **Not covered:** a tab already open when the signed-in user changes still holds the previous user's edits *in memory* and would save them as the new user. That is not a persistence problem; it needs the tab to notice the principal change (revisit with the collaboration presence work).
