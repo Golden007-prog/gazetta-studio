@@ -221,8 +221,8 @@ Follows from Q1–Q4 and Q14. Rule 23: the reader does one thing per step and se
 | 2 | Start the dev server | `npx gazetta dev`; open localhost:3000, then localhost:3000/admin. Leave it running |
 | 3 | Publish to staging | In the admin: Publish → staging → Publish. The first publish copies the whole site |
 | 4 | Look at staging as a visitor | Second terminal: `npx gazetta serve staging --port 3001`; open localhost:3001 |
-| 5 | Add an image (Q14) | On the hero, pick an image (upload one in the picker) and Save; localhost:3000 shows it |
-| 6 | Edit the home page | Open Home, select the hero, change its title, Save. localhost:3000 shows it; localhost:3001 doesn't: staging changes only when you publish |
+| 5 | Edit the home page | Open Home, select the hero, change its title, Save. localhost:3000 shows it; localhost:3001 doesn't: staging changes only when you publish |
+| 6 | Add an image (Q14) | On the same hero, pick an image (upload one in the picker) and Save; localhost:3000 shows it, localhost:3001 doesn't |
 | 7 | Publish the change | Publish → staging again; reload localhost:3001: the new title and the image |
 | 8 | Undo the publish | Click Undo in the publish result; reload localhost:3001 and the old title is back. The edit is still in the admin: undo changed staging, not `local` |
 | — | What you did | A target holds the whole site; Publish copies content between targets; each target keeps its own history |
