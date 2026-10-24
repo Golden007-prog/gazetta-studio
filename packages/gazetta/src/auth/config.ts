@@ -193,16 +193,23 @@ const awsCognitoAuthSchema = z
   })
   .strict()
 
+/** Message shared by the schema and the provider. */
+export const TAILSCALE_ROLE_MAPPING_UNSUPPORTED =
+  "roleMapping isn't supported with trust: 'tailscale', because Tailscale Serve sends no group information. Set defaultRole for the role every tailnet user gets, and use tailnet ACLs for who can reach the admin."
+
 /**
  * `tailscale` trust mode — Tailscale Funnel / serve. Trust comes
  * from the tailnet itself (only authenticated members can reach
- * the listener). No provider-specific config.
+ * the listener). Every tailnet user gets `defaultRole` (default
+ * `editor`); `roleMapping` is refused.
  */
 const tailscaleAuthSchema = z
   .object({
     trust: z.literal('tailscale'),
     roles: z.record(z.string(), roleSchema).optional(),
-    roleMapping: roleMappingSchema.optional(),
+    /** Role every tailnet user gets: a built-in role or one from `roles`. Default `editor`. */
+    defaultRole: z.string().optional(),
+    roleMapping: z.never({ error: TAILSCALE_ROLE_MAPPING_UNSUPPORTED }).optional(),
     strict: z.boolean().optional(),
   })
   .strict()

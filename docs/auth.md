@@ -128,6 +128,12 @@ admin: { auth: { trust: 'tailscale' } }
 
 The header `Tailscale-User-Login` (e.g., `alice@example.ts.net`) carries the identity. Gazetta accepts it only on a connection from the same machine (`127.0.0.1` or `::1`), which is how Serve connects; identity headers on any other connection get `401`. Run the admin where Serve runs, and start it with `--host 127.0.0.1` so it's reachable only through Serve, as Tailscale recommends.
 
+Every tailnet user who reaches the admin gets the same role: `defaultRole`, a built-in role or one declared in `roles` (default `editor`). Serve sends no group information, so `roleMapping` isn't supported in this mode and is refused at startup. Use tailnet ACLs to decide who can reach the admin.
+
+```ts
+admin: { auth: { trust: 'tailscale', defaultRole: 'viewer' } }
+```
+
 ## Roles and capabilities
 
 Roles are predefined capability sets. Each authenticated user gets exactly one role.

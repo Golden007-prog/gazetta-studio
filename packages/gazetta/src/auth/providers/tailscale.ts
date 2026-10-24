@@ -16,59 +16,53 @@
  *   - `Tailscale-User-Login` (required) — username@tailnet.ts.net
  *   - `Tailscale-User-Profile-Pic` (optional) — profile picture URL
  *   - `Tailscale-User-Name` (optional) — display name
- *   - `Tailscale-User-Groups` (optional) — operator-supplied,
- *     comma-separated group list (see role mapping below)
  *
  * The username is in the form `alice@example.ts.net`. We use the
  * full string as `id`; the email part (`alice`) is a per-tailnet
  * identifier — operators with multiple tailnets need the full form
  * to disambiguate.
  *
- * # Group source for role mapping
+ * # Roles
  *
- * Tailscale has no native group concept it forwards as a header, so
- * `roleMapping` for this trust mode reads groups from a custom
- * `Tailscale-User-Groups` header the operator populates (e.g. via a
- * `tailscale serve` config or a fronting proxy that maps tailnet
- * ACL tags to a comma-separated list). When no `roleMapping` is
- * configured the header is ignored and every authenticated tailnet
- * user gets `defaultRole`.
+ * Serve sends no group information, so there is nothing for
+ * `roleMapping` to map: it's refused, and every tailnet user gets
+ * `defaultRole`. Who can reach the admin at all is the tailnet's
+ * ACLs' job.
  *
  * # SOLID lenses
  *
  *   - SRP: header read plus the loopback check; no token to verify.
  *   - LSP: same `AuthIdentityProvider` shape.
  */
-import type { Principal, RoleMapping } from '../types.js'
+import type { Principal } from '../types.js'
 import type { AuthIdentityProvider, AuthRequest } from '../provider.js'
 import { expandRole } from '../capabilities.js'
-import { resolveRole } from '../role-resolver.js'
-import { AuthenticationError } from '../errors.js'
+import { TAILSCALE_ROLE_MAPPING_UNSUPPORTED } from '../config.js'
+import { AuthConfigurationError, AuthenticationError } from '../errors.js'
 import { isLoopbackAddress } from '../ip-match.js'
 
 export interface TailscaleConfig {
-  /**
-   * Role assigned when no `roleMapping` is configured. When
-   * `roleMapping` IS set, the resolved group → role mapping (and its
-   * own `defaultRole`) takes over and this field is unused.
-   */
+  /** Role every tailnet user gets: a built-in role or one of `customRoles`. Default `editor`. */
   defaultRole?: string
   /**
-   * Group → role mapping from `site.config.ts admin.auth`. Groups
-   * come from the operator-supplied `Tailscale-User-Groups` header
-   * (comma-separated) since Tailscale exposes no group claim itself.
-   */
-  roleMapping?: RoleMapping
-  /**
    * Custom role declarations from `site.config.ts admin.auth.roles`,
-   * flattened to `name → capabilities`. Consulted by the role
-   * resolver when `roleMapping` points at a non-built-in role.
+   * flattened to `name → capabilities`, so `defaultRole` can name one.
    */
   customRoles?: Readonly<Record<string, ReadonlyArray<string>>>
 }
 
 export function createTailscaleAuthProvider(config: TailscaleConfig = {}): AuthIdentityProvider {
-  const defaultRole = config.defaultRole ?? 'editor'
+  // Callers that bypass the schema (programmatic config) get the same refusal.
+  if ('roleMapping' in config && (config as { roleMapping?: unknown }).roleMapping !== undefined) {
+    throw new AuthConfigurationError(TAILSCALE_ROLE_MAPPING_UNSUPPORTED)
+  }
+  const role = config.defaultRole ?? 'editor'
+  const capabilities = expandRole(role, config.customRoles)
+  if (!capabilities) {
+    throw new AuthConfigurationError(
+      `admin.auth.defaultRole "${role}" isn't a built-in role (admin, editor, viewer) or one declared in admin.auth.roles`,
+    )
+  }
   return {
     trustMode: 'tailscale',
     async extractPrincipal(req: AuthRequest): Promise<Principal | null> {
@@ -91,30 +85,6 @@ export function createTailscaleAuthProvider(config: TailscaleConfig = {}): AuthI
       // We treat the whole string as id; operators wanting a
       // shorter display name can use the tailscale-user-name header
       // if present.
-      let role: string
-      let capabilities: ReadonlyArray<string>
-      if (config.roleMapping) {
-        const groups = (req.headers.get('tailscale-user-groups') ?? '')
-          .split(',')
-          .map(g => g.trim())
-          .filter(Boolean)
-        const resolved = resolveRole({
-          groups,
-          mapping: config.roleMapping,
-          customRoles: config.customRoles,
-        })
-        if (!resolved) {
-          throw new AuthenticationError(
-            `tailscale principal "${login}" matched no role in roleMapping and no defaultRole is configured`,
-          )
-        }
-        role = resolved.name
-        capabilities = resolved.capabilities
-      } else {
-        role = defaultRole
-        capabilities = expandRole(defaultRole) ?? []
-      }
-
       return {
         id: login,
         // Tailscale's email-shaped login is functionally the user's

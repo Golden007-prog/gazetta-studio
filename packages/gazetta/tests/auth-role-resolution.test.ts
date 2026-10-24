@@ -23,7 +23,6 @@ import {
   createAwsCognitoAuthProvider,
   createAzureEasyAuthProvider,
   createForwardedUserAuthProvider,
-  createTailscaleAuthProvider,
 } from '../src/auth/index.js'
 import type { AuthRequest } from '../src/auth/provider.js'
 
@@ -246,53 +245,6 @@ describe('aws-cognito role resolution (#414)', () => {
   })
 })
 
-// --- tailscale: groups from operator-supplied Tailscale-User-Groups -
-
-describe('tailscale role resolution (#414)', () => {
-  it('resolves role from the operator-supplied Tailscale-User-Groups header', async () => {
-    const provider = createTailscaleAuthProvider({
-      roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' }, defaultRole: 'viewer' },
-    })
-    const principal = await provider.extractPrincipal(
-      reqOf(
-        { 'tailscale-user-login': 'alice@example.ts.net', 'tailscale-user-groups': 'ts-admins,ts-other' },
-        LOCAL_SERVE,
-      ),
-    )
-    expect(principal!.role).toBe('admin')
-    expect(principal!.capabilities).toContain('*')
-  })
-
-  it('falls back to mapping.defaultRole when no group matches', async () => {
-    const provider = createTailscaleAuthProvider({
-      roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' }, defaultRole: 'viewer' },
-    })
-    const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'bob@example.ts.net', 'tailscale-user-groups': 'unmapped' }, LOCAL_SERVE),
-    )
-    expect(principal!.role).toBe('viewer')
-  })
-
-  it('denies (throws) when no group matches and mapping has no defaultRole', async () => {
-    const provider = createTailscaleAuthProvider({
-      roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' } },
-    })
-    await expect(
-      provider.extractPrincipal(
-        reqOf({ 'tailscale-user-login': 'bob@example.ts.net', 'tailscale-user-groups': 'unmapped' }, LOCAL_SERVE),
-      ),
-    ).rejects.toBeInstanceOf(AuthenticationError)
-  })
-
-  it('without roleMapping, falls back to constructor defaultRole (back-compat)', async () => {
-    const provider = createTailscaleAuthProvider({ defaultRole: 'viewer' })
-    const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'carol@example.ts.net', 'tailscale-user-groups': 'ignored' }, LOCAL_SERVE),
-    )
-    expect(principal!.role).toBe('viewer')
-  })
-})
-
 // --- factory threads roleMapping + flattened roles ------------------
 //
 // aws-cognito's factory arm is the same passthrough shape but needs a
@@ -336,14 +288,11 @@ describe('factory threads roleMapping into the providers (#414)', () => {
     expect(principal!.role).toBe('admin')
   })
 
-  it('tailscale: buildAuthProvider passes roleMapping', async () => {
-    const provider = buildAuthProvider({
-      trust: 'tailscale',
-      roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' }, defaultRole: 'viewer' },
-    })
+  it('tailscale: buildAuthProvider passes defaultRole', async () => {
+    const provider = buildAuthProvider({ trust: 'tailscale', defaultRole: 'viewer' })
     const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'alice@example.ts.net', 'tailscale-user-groups': 'ts-admins' }, LOCAL_SERVE),
+      reqOf({ 'tailscale-user-login': 'alice@example.ts.net' }, LOCAL_SERVE),
     )
-    expect(principal!.role).toBe('admin')
+    expect(principal!.role).toBe('viewer')
   })
 })
