@@ -17,6 +17,7 @@ import {
   createAzureEasyAuthProvider,
   createAwsCognitoAuthProvider,
   createTailscaleAuthProvider,
+  resolveAuthProviderFromManifest,
 } from '../src/auth/index.js'
 import type { AuthRequest } from '../src/auth/provider.js'
 
@@ -269,12 +270,65 @@ describe('AuthConfigSchema — tailscale (Cut 5)', () => {
     expect(AuthConfigSchema.safeParse({ trust: 'tailscale' }).success).toBe(true)
   })
 
-  it('accepts trust: tailscale with roleMapping', () => {
+  it('rejects trust: tailscale with roleMapping, pointing to defaultRole', () => {
     const r = AuthConfigSchema.safeParse({
       trust: 'tailscale',
-      roleMapping: { claim: 'tailscale-user-login', map: {} },
+      roleMapping: { claim: 'tailscale-user-groups', map: { admins: 'admin' } },
     })
-    expect(r.success).toBe(true)
+    expect(r.success).toBe(false)
+    expect(r.error?.issues.map(i => i.message).join(' ')).toMatch(/defaultRole/)
+  })
+
+  it('accepts trust: tailscale with defaultRole', () => {
+    expect(AuthConfigSchema.safeParse({ trust: 'tailscale', defaultRole: 'viewer' }).success).toBe(true)
+  })
+
+  it('refuses roleMapping at boot with an error that points to defaultRole', () => {
+    expect(() =>
+      resolveAuthProviderFromManifest({ trust: 'tailscale', roleMapping: { claim: 'tailscale-user-groups', map: {} } }),
+    ).toThrow(/defaultRole/)
+  })
+})
+
+describe('tailscale mode roles: defaultRole only', () => {
+  const fromServe = (headers: Record<string, string>): AuthRequest => ({
+    ...makeReq(headers),
+    peerAddress: '127.0.0.1',
+  })
+
+  it('gives every tailnet user the configured defaultRole', async () => {
+    const provider = resolveAuthProviderFromManifest({ trust: 'tailscale', defaultRole: 'viewer' })
+    const principal = await provider.extractPrincipal(fromServe({ 'Tailscale-User-Login': 'alice@example.ts.net' }))
+    expect(principal).toMatchObject({ role: 'viewer', capabilities: expect.not.arrayContaining(['*']) })
+  })
+
+  it('accepts a custom role as defaultRole', async () => {
+    const provider = resolveAuthProviderFromManifest({
+      trust: 'tailscale',
+      roles: { reviewer: { capabilities: ['read:pages'] } },
+      defaultRole: 'reviewer',
+    })
+    const principal = await provider.extractPrincipal(fromServe({ 'Tailscale-User-Login': 'alice@example.ts.net' }))
+    expect(principal).toMatchObject({ role: 'reviewer', capabilities: ['read:pages'] })
+  })
+
+  it('refuses an unknown defaultRole at construction', () => {
+    expect(() => createTailscaleAuthProvider({ defaultRole: 'nobody' })).toThrow(AuthConfigurationError)
+  })
+
+  it('throws AuthConfigurationError when constructed with roleMapping', () => {
+    const config = { roleMapping: { claim: 'tailscale-user-groups', map: { admins: 'admin' } } }
+    expect(() => createTailscaleAuthProvider(config as Parameters<typeof createTailscaleAuthProvider>[0])).toThrow(
+      AuthConfigurationError,
+    )
+  })
+
+  it('ignores a Tailscale-User-Groups header on the request', async () => {
+    const provider = createTailscaleAuthProvider({ defaultRole: 'viewer' })
+    const principal = await provider.extractPrincipal(
+      fromServe({ 'Tailscale-User-Login': 'alice@example.ts.net', 'Tailscale-User-Groups': 'admins' }),
+    )
+    expect(principal!.role).toBe('viewer')
   })
 })
 
