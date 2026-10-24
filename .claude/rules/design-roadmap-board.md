@@ -2,7 +2,7 @@
 
 A public GitHub Project that shows [`ROADMAP.md`](../../ROADMAP.md) as a board: a column per bucket (Now, Next, Later, Deferred), a tab each for Now, Next and Later, sliced by area, and a tab for open issues the roadmap doesn't mention. A script generates it from the file; nobody edits it by hand.
 
-**Status**: design pass complete (2026-10-23), grilled Q1–Q15. Cuts 1 and 2 in #1198, Q14 and Q15 in #PR; cut 3 is #1222.
+**Status**: design pass complete (2026-10-23), grilled Q1–Q15. Cuts 1 and 2 in #1198, Q14 and Q15 in #1226; cut 3 is #1222.
 
 **Companion docs:**
 - [`ROADMAP.md`](../../ROADMAP.md): the source; its Process section will link the board (cut 3)
@@ -229,7 +229,7 @@ Decided: maintainer, 2026-10-23 (#1197)
 
 Now, Next and Later keep a column per section, and each is sliced by Area, set by hand with its columns: picking an area shows only that area's cards. There is no By area tab.
 
-Decided: maintainer, 2026-10-23 (#PR)
+Decided: maintainer, 2026-10-23 (#1226)
 
 | Rejected | Why |
 |---|---|
@@ -241,7 +241,7 @@ Decided: maintainer, 2026-10-23 (#PR)
 
 The Roadmap and All views filter out Done (`-status:Done`), and the bucket tabs show only their own bucket, so a closed issue leaves every view as soon as GitHub's built-in rule sets Done. Each run prints the closed issues ROADMAP.md still lists, so the merging session moves them to the Shipped appendix; the next sync then removes their cards, like any closed issue the file doesn't list (Q3).
 
-Decided: maintainer, 2026-10-23 (#PR)
+Decided: maintainer, 2026-10-23 (#1226)
 
 | Rejected | Why |
 |---|---|
