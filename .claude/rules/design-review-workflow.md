@@ -175,7 +175,7 @@ Each archetype gets a copy-paste-ready `site.config.ts` snippet + role mapping +
 - Review queue (`/api/reviews`) returns all pending items the user can READ (per coarse-grained discovery filter from `design-auth-rbac.md`)
 - UI client-side filters to "actionable for you" by default; toggle for "all pending I can read"
 - Approver visibility of OWN submissions: yes (need to see them to approve when self-approval allowed)
-- The route is `GET /api/reviews?action=pending-review` (the one below; cut 17). Each item carries `canApprove`: the user has `review:approve`, and the item isn't their own submission when `allowSelfApproval` is `false`. The admin's "actionable for you" default filters on it. Read access stays the boundary, so the route returns nothing the user couldn't already read.
+- The route is `GET /api/reviews?action=pending-review` (the one below; cut 17). Each item carries `canApprove`: the user has `review:approve`, hasn't already approved the item (the state machine refuses a second vote as `already-voted`), and the item isn't their own submission when `allowSelfApproval` is `false`. An item you've approved stays in "all pending I can read", where the banner says "You approved. Waiting for N more." The admin's "actionable for you" default filters on it. Read access stays the boundary, so the route returns nothing the user couldn't already read.
 
   Decided: maintainer, 2026-10-24 (#1407)
 

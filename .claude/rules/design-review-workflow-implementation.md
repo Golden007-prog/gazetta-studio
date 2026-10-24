@@ -261,7 +261,7 @@ Sequenced data-shape-first (state machine + storage + capabilities), then admin-
 
 **Tests:**
 - Reviewer with `review:approve` sees the queue
-- Non-reviewer doesn't see the page (403)
+- A reader without `review:approve` gets the pending items they can read, with `canApprove: false` (no 403; `design-review-workflow.md`, "Visibility filtering")
 - Pagination works at the operating envelope (e.g., 100 items)
 
 **Risk:** medium. New surface; pagination must hold per `design-scale.md`.
