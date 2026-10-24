@@ -205,7 +205,7 @@ Decided with the maintainer on 2026-10-24, after research on how other CMSes pub
 - **Which version, from Stage 1:** the release commit's docs at `/docs/<slug>`, and `main` at `/docs/unreleased/<slug>` with `noindex`.
 - **Search:** none for now (sidebar, "On this page", the browser's find). Pagefind, built at publish and served from R2, once the docs pass about 40 pages, people report they can't find things, or Stage 2 starts. That step needs a workflow edit from the maintainer.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1292)
 
 Two details follow from generated pages. The admin refuses saves to them, naming the doc to edit instead ([#1289](https://github.com/gazetta-studio/gazetta-studio/issues/1289)). A removed or renamed doc becomes an archived page that redirects or answers 410, because publish can't yet remove a page from a target ([#1290](https://github.com/gazetta-studio/gazetta-studio/issues/1290)).
 
@@ -238,7 +238,7 @@ Decided with the maintainer on 2026-10-24, after research on how published studi
 - Steps: a one-week shakedown, four weeks with Markdown and `/llms.txt` served but linked from nowhere, then four weeks linked from the pages, the footer, the README and AGENTS.md.
 - The rule, fixed before counting: over the eight counted weeks, at least 10 organic Markdown responses on at least 5 days from at least 2 agent families moves the Deferred Markdown row to a design pass (every page of every site in scope if at least 5 Markdown requests reach non-docs pages, otherwise an opt-in); 2 or fewer keeps it Deferred; anything between gets one eight-week extension, then the same rule. `/llms.txt` fetches are reported separately, against that row's own trigger.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1292)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
