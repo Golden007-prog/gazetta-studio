@@ -377,10 +377,14 @@ Where the shipped publish audit differs from this design, read from code on 2026
 
 Decided: maintainer, 2026-10-24 (#1295)
 
+| Rejected | Why |
+|---|---|
+| Rewrite the design to describe the shipped dialog | Several differences are bugs (#1328, #1302, #1329); a design written around them would lock the gaps in |
+
 | Design | Shipped code | Status |
 |---|---|---|
 | The pre-publish modal offers Fix, Ignore once and Promote to error per issue | Ignore once only, for warnings | Open |
-| The modal shows the audit's issues before publishing | When the dialog's audit finds no errors, it publishes without showing its warnings; they show in Site health. When it finds an error on any destination, it shows every destination's issues, and each warning must be ignored before publishing. The server gate blocks only on errors; `publishAudit.strict` turns a destination's warnings into errors | Kept for now (below) |
+| The modal shows the audit's issues before publishing | When the dialog's audit finds no errors, it publishes without showing its warnings; they show in Site health, which can miss a link broken by deleting the page it points at ([#1303](https://github.com/gazetta-studio/gazetta-studio/issues/1303)). When it finds an error on any destination, it shows every destination's issues, and each warning must be ignored before publishing. The server gate blocks only on errors; `publishAudit.strict` turns a destination's warnings into errors | Kept for now (below) |
 | The admin runs the audit on every Publish | After the confirmation a production destination asks for, the dialog's audit doesn't run; only the server's gate does, so only its errors show | Bug: [#1328](https://github.com/gazetta-studio/gazetta-studio/issues/1328). Decided: maintainer, 2026-10-24 (#1295) |
 | The matrix's validators run at pre-publish | Only accessibility, html-validity and broken-links handle the pre-publish stage, and all three only warn. The other twelve that declare it return nothing there, so nothing blocks a publish to a destination without `publishAudit.strict` | Bug: [#1302](https://github.com/gazetta-studio/gazetta-studio/issues/1302) |
 | Pre-publish checks the items being published | Translations (`pages/<name>:<locale>`) are dropped, and pages are rendered in the default language only | Bug: [#1329](https://github.com/gazetta-studio/gazetta-studio/issues/1329) |
@@ -392,6 +396,12 @@ Warning-only audits publishing without showing their warnings is kept for now, w
 |---|---|
 | Show warning-only results in the dialog before publishing | One more click on every publish whose audit finds warnings |
 | Run `broken-links` at publish only on strict targets | It would change where the check runs (the stage matrix), and #1294's fix brings its cost to about 3 ms a page |
+
+The production confirmation skipping the dialog's audit is a bug (#1328). Decided: maintainer, 2026-10-24 (#1295)
+
+| Rejected | Why |
+|---|---|
+| Keep it, and document that production publishes rely on the server's gate alone | The code's own comment says the audit runs after the confirmation |
 
 ## Migration
 
