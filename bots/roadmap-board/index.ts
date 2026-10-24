@@ -30,7 +30,6 @@ import {
   findProject,
   type GraphQL,
   missingViews,
-  newSections,
   type OptionSpec,
   type ProjectState,
   readIssues,
@@ -215,13 +214,6 @@ function report(
     console.log(`Not issues (pull requests or missing): ${plan.notIssues.map(n => `#${n}`).join(', ')}`)
   if (plan.untouched.length > 0) console.log(`Left alone: ${plan.untouched.join(', ')}`)
   if (!state.section) console.log(`Creates the Section field with ${wanted.section.length} options.`)
-  else {
-    const created = newSections(state, wanted.section)
-    if (created.length > 0)
-      console.log(
-        `New Section options: ${created.map(s => `${s.name} (${s.description})`).join(', ')}. Hide or show them in the Now, Next and Later tabs, as the project's README says.`,
-      )
-  }
   for (const d of plan.collidingDrafts)
     console.log(`Drafts with the same title, only the first gets a card: "${d.title}" in ${d.places.join(', ')}`)
   // Fields and views first, then the cards, then the description.

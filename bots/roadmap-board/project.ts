@@ -6,8 +6,8 @@
  * Everything goes through an injected GraphQL function, so the sync runs
  * with whatever token GH_TOKEN holds: the maintainer's `gh` login today, a
  * GitHub App's later (design-roadmap-board.md Q5). The API can create views
- * and set their layout, filter and visible fields, but not their columns or
- * grouping; those are set once by hand (the project's README lists them).
+ * and set their layout, filter and visible fields, but not their grouping or
+ * sort; those are set once by hand (the project's README lists them).
  */
 import { WRITE_CAP } from './pace.js'
 import {
@@ -68,12 +68,9 @@ export const BUCKET_COLORS: Readonly<Record<Exclude<Status, 'Done'>, Color>> = {
 }
 
 export const VIEWS: ReadonlyArray<{ name: string; layout: 'BOARD_LAYOUT' | 'TABLE_LAYOUT'; filter: string }> = [
-  // Done is hidden in every view (design-roadmap-board.md Q15); the bucket tabs filter by bucket anyway.
-  { name: 'Roadmap', layout: 'BOARD_LAYOUT', filter: 'has:section -status:Done' },
-  { name: 'Now', layout: 'BOARD_LAYOUT', filter: 'status:Now' },
-  { name: 'Next', layout: 'BOARD_LAYOUT', filter: 'status:Next' },
-  { name: 'Later', layout: 'BOARD_LAYOUT', filter: 'status:Later' },
-  { name: 'All', layout: 'TABLE_LAYOUT', filter: 'has:section -status:Done' },
+  // Tables grouped by area (design-roadmap-board.md Q14); only All shows Done (Q15).
+  { name: 'Roadmap', layout: 'TABLE_LAYOUT', filter: 'has:section -status:Done -status:Deferred' },
+  { name: 'All', layout: 'TABLE_LAYOUT', filter: 'has:section' },
   { name: 'Not in ROADMAP.md', layout: 'TABLE_LAYOUT', filter: 'no:section is:open' },
 ]
 
@@ -114,25 +111,21 @@ export function readme(repo: string): string {
 
 ## Views
 
-- **Roadmap**: a column per bucket (Now, Next, Later, Deferred). Closed issues don't show.
-- **Now**, **Next**, **Later**: one bucket, with a column per section; slice by Area to see one area.
-- **All**: every open item on the roadmap, grouped by section.
+- **Roadmap**: Now, Next and Later, grouped by area, sorted by bucket and then by section. Deferred items and closed issues don't show.
+- **All**: everything the file lists, grouped by area and sorted the same way: Deferred items, and closed issues not yet moved to the Shipped appendix (Done, last in each area).
 - **Not in ROADMAP.md**: open issues the file doesn't mention.
 
-Cards without an issue are drafts: items the file lists without one.
+Items without an issue are drafts: entries the file lists without one. They have no area.
 
 ## One-time setup
 
-The API can't set a view's columns, grouping or slice, or the auto-add rule, so they're set by hand once:
+The API can't set a view's grouping or sort, or the auto-add rule, so they're set by hand once:
 
-- Roadmap: column by Status.
-- Now, Next and Later: column by Section, and in the column menu hide the other buckets' sections, so each tab shows only its own. Slice by Area.
-- All: group by Section.
+- Roadmap and All: group by Area; sort by Status, then Section.
 - Workflows, "Auto-add to project": repository \`${repo}\`, filter \`is:issue is:open\`.
 
 ## After a sync
 
-- The sync prints each Section option it creates (a new \`###\` heading in ROADMAP.md). In the Now, Next and Later tabs, keep each tab to its own bucket's sections: hide the new option in the other two tabs, or show it in its own.
 - A run stops before ${WRITE_CAP} writes, under GitHub's 500 an hour, and prints when to rerun. The description names the last sync that finished.
 `
 }
@@ -318,11 +311,6 @@ export function fieldsToWrite(
     .map(([field, name, options]) => ({ field, name, options }))
 }
 
-/** Section options a sync would create: the wanted ones the field doesn't have yet (Q12). */
-export function newSections(state: ProjectState, wanted: readonly OptionSpec[]): OptionSpec[] {
-  return wanted.filter(w => !state.section?.options.some(o => o.name === w.name))
-}
-
 /** Make Status, Section and Area hold exactly these options, keeping existing ids. */
 export async function ensureFields(gql: GraphQL, state: ProjectState, wanted: WantedOptions): Promise<void> {
   if (!state.status) throw new Error('The project has no Status field')
@@ -356,7 +344,7 @@ export async function ensureViews(gql: GraphQL, state: ProjectState): Promise<st
   const created: string[] = []
   const visibleFieldIds = VISIBLE_FIELDS.map(n => state.fieldIds.get(n)).filter((id): id is string => !!id)
   const missing = missingViews(state)
-  // A new project comes with one empty table view; it becomes the first board view.
+  // A new project comes with one empty table view; it becomes the first view.
   const spare = missing.length === VIEWS.length && state.views.length === 1 ? state.views[0] : null
   for (const view of missing) {
     let viewId = spare && view === VIEWS[0] ? spare.id : null

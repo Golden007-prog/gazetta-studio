@@ -16,7 +16,6 @@ import {
   fieldsToWrite,
   mergeOptions,
   missingViews,
-  newSections,
   type ProjectState,
   readme,
   STATUS_OPTIONS,
@@ -26,15 +25,15 @@ import {
 } from '../project.js'
 
 describe('the views (Q14, Q15)', () => {
-  it('has no By area tab: Area is a slice of the bucket tabs', () => {
-    expect(VIEWS.map(v => v.name)).toEqual(['Roadmap', 'Now', 'Next', 'Later', 'All', 'Not in ROADMAP.md'])
+  it('has the plan, everything the file lists and the issues it misses, as tables: no bucket or area tabs (Q14)', () => {
+    expect(VIEWS.map(v => v.name)).toEqual(['Roadmap', 'All', 'Not in ROADMAP.md'])
+    expect(VIEWS.every(v => v.layout === 'TABLE_LAYOUT')).toBe(true)
   })
 
-  it('hides Done in the views that would show closed issues', () => {
+  it('keeps Deferred and Done out of Roadmap, and shows both in All (Q14, Q15)', () => {
     const filter = (name: string) => VIEWS.find(v => v.name === name)?.filter
-    expect(filter('Roadmap')).toBe('has:section -status:Done')
-    expect(filter('All')).toBe('has:section -status:Done')
-    expect(filter('Now')).toBe('status:Now')
+    expect(filter('Roadmap')).toBe('has:section -status:Done -status:Deferred')
+    expect(filter('All')).toBe('has:section')
   })
 })
 
@@ -83,17 +82,14 @@ describe('project text', () => {
   it('links ROADMAP.md and lists the one-time setup in the README', () => {
     const text = readme('gazetta-studio/gazetta-studio')
     expect(text).toContain('https://github.com/gazetta-studio/gazetta-studio/blob/main/ROADMAP.md')
-    expect(text).toContain('column by Section')
-    expect(text).toContain("hide the other buckets' sections")
-    expect(text).toContain('Slice by Area')
+    expect(text).toContain('Roadmap and All: group by Area; sort by Status, then Section.')
+    expect(text).not.toMatch(/Slice by|hide the other buckets|column by/)
     expect(text).not.toMatch(/by area:|By area/)
     expect(text).toContain('filter `is:issue is:open`')
   })
 
-  it('says in the README what to do with new sections and with a run that stops at the cap', () => {
+  it('says in the README what happens when a run stops at the cap', () => {
     const text = readme('gazetta-studio/gazetta-studio')
-    expect(text).toContain('prints each Section option it creates')
-    expect(text).toContain('hide the new option in the other two tabs, or show it in its own')
     expect(text).toContain('A run stops before 450 writes')
   })
 })
@@ -252,7 +248,7 @@ describe('applyPlan: stops between cards at the cap (Q13)', () => {
   })
 })
 
-describe('what a sync sets up (Q12, Q13)', () => {
+describe('what a sync sets up (Q13)', () => {
   const wanted = {
     status: STATUS_OPTIONS,
     section: [
@@ -261,10 +257,6 @@ describe('what a sync sets up (Q12, Q13)', () => {
     ],
     area: [],
   }
-
-  it('lists the Section options a sync creates', () => {
-    expect(newSections(state, wanted.section).map(s => s.name)).toEqual(['Onboarding'])
-  })
 
   it('writes each field whose options change, once, and skips a field nothing needs', () => {
     expect(fieldsToWrite(state, wanted).map(f => f.name)).toEqual(['Status', 'Section'])
@@ -282,7 +274,7 @@ describe('what a sync sets up (Q12, Q13)', () => {
       ...state,
       views: [
         { id: 'V1', name: 'Roadmap' },
-        { id: 'V2', name: 'Now' },
+        { id: 'V2', name: 'All' },
       ],
     }
     expect(missingViews(some).map(v => v.name)).toEqual(VIEWS.slice(2).map(v => v.name))

@@ -1,8 +1,8 @@
 # Roadmap board
 
-A public GitHub Project that shows [`ROADMAP.md`](../../ROADMAP.md) as a board: a column per bucket (Now, Next, Later, Deferred), a tab each for Now, Next and Later, sliced by area, and a tab for open issues the roadmap doesn't mention. A script generates it from the file; nobody edits it by hand.
+A public GitHub Project that shows [`ROADMAP.md`](../../ROADMAP.md) as a board of three tables: the plan (Now, Next and Later) and everything the file lists, each grouped by area, and the open issues the roadmap doesn't mention. A script generates it from the file; nobody edits it by hand.
 
-**Status**: design pass complete (2026-10-23), grilled Q1–Q15. Cuts 1 and 2 in #1198, Q14 and Q15 in #1226; cut 3 is #1222.
+**Status**: design pass complete (2026-10-23), grilled Q1–Q15; Q14 and Q15 revised and Q12 superseded on 2026-10-24 (#PR). Cuts 1 and 2 in #1198, Q14 and Q15 in #1226 and #PR; cut 3 is #1222.
 
 **Companion docs:**
 - [`ROADMAP.md`](../../ROADMAP.md): the source; its Process section will link the board (cut 3)
@@ -16,7 +16,7 @@ A public GitHub Project that shows [`ROADMAP.md`](../../ROADMAP.md) as a board: 
 - One public project in the gazetta-studio org, linked to the repository
 - A sync script that reads ROADMAP.md and adds, updates and removes the project's cards; dry run by default
 - Fields: Status (the bucket), Section (the `###` heading), Area (the `area:` label)
-- Views: Roadmap, Now, Next, Later, All, Not in ROADMAP.md
+- Views: Roadmap, All, Not in ROADMAP.md
 - A draft card for each item the file lists without an issue
 - Review-decisions and review-prs run the sync after merging a ROADMAP change
 
@@ -41,9 +41,9 @@ Checked 2026-10-23 in the GitHub docs and the GraphQL API:
 - A board's available columns are its column field's options, and a view chooses which of them to display. The docs don't say a board hides empty columns.
 - GitHub's secondary rate limits allow 80 content-generating requests a minute and 500 an hour, counting the GraphQL API, and its docs ask for a pause of at least 1 second between mutative requests ([REST](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api), [GraphQL](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api)). They don't say whether project writes are content-generating, or how a request carrying several mutations counts. A GitHub CLI maintainer reports that the content limit counts each creation, not each request, isn't shown in response headers, and answers "was submitted too quickly" ([cli/cli#4801](https://github.com/cli/cli/issues/4801), 2022).
 
-- A view can also be sliced by a field, set by hand like its columns and grouping; you can't slice by title, reviewers or linked pull requests ([board layout](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/customizing-the-board-layout)). The API's view configuration sets only visible fields, and `deleteProjectV2View` deletes a view.
+- A table can be grouped by a field and sorted by a field, with an optional secondary sort ([table layout](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/customizing-the-table-layout), checked 2026-10-24). The API reads a view's grouping and sort (`groupByFields`, `verticalGroupByFields`, `sortByFields`), but its view configuration sets only visible fields; `deleteProjectV2View` deletes a view.
 
-Not checked yet (cut 3 checks them on the first run): the column field a new board view starts with; whether a bucket tab keeps the columns hidden in it (Q12); what a new Section option does in a tab whose columns were chosen; and how a bucket tab's Area slice shows drafts, which have no Area.
+Not checked yet (cut 3 checks it when setting the sort): the docs don't say whether a single-select field sorts by its options' order or alphabetically, which decides whether Status sorts Now, Next, Later.
 
 ## Locked decisions
 
@@ -64,7 +64,7 @@ Decided: maintainer, 2026-10-23 (#1197)
 
 ### Q2 — One public project with several views; no milestones
 
-The per-bucket views are tabs in one project, each sliced by Area (Q14). Moving an issue between buckets changes its Status and Section, not its card.
+The views are tabs in one project: the plan and everything the file lists, as tables grouped by area (Q14), and the open issues the file doesn't mention. Moving an issue between buckets changes its Status and Section, not its card.
 
 Decided: maintainer, 2026-10-23 (#1197)
 
@@ -149,9 +149,9 @@ Decided: maintainer, 2026-10-23 (#1197)
 
 | Rejected | Why |
 |---|---|
-| A "several" value | An Area slice entry that isn't an area, and the cards leave both areas' entries |
+| A "several" value | A group in the Roadmap and All tables that isn't an area, and the items leave both areas' groups |
 | A multi-select Area field | GitHub's docs don't say a view can group by one |
-| No Area field, one tab per area label | Five tabs instead of an Area slice in each bucket tab; a new area label needs a new tab |
+| No Area field, one tab per area label | Five tabs instead of a group per area in one table; a new area label needs a new tab |
 
 ### Q8 — A dry run by default, and a stop when more than 10 cards would leave the roadmap
 
@@ -201,16 +201,9 @@ Decided: maintainer, 2026-10-23 (#1197)
 | A separate "On roadmap" field | One more field to sync and show |
 | Status as the marker (`has:status`) | GitHub's built-in rule gives every closing issue the Status Done, including ones the file never listed, so they'd show in the roadmap tabs until the next sync. Only the sync sets Section |
 
-### Q12 — Each bucket tab shows only its own sections, hidden by hand once
+### Q12 — Each bucket tab shows only its own sections (superseded)
 
-Section holds the headings of every bucket that have a card, 19 at dcfcdb8 (Next's "MCP server build" names its issue only in prose), and a board's columns are its column field's options. So in each of the Now, Next and Later tabs, the other buckets' sections are hidden once, by hand, with the rest of the setup. Cut 3 checks that each tab keeps them hidden, and what a new `###` heading does: it may show up in every tab, so it's hidden in the other two, or in none, so it's shown in its own. Each run prints the Section options it creates, so the merging session takes that step; the README records which case holds, and ROADMAP sections change rarely. If a tab doesn't keep its hidden columns, this comes back to the maintainer.
-
-Decided: maintainer, 2026-10-23 (#1197)
-
-| Rejected | Why |
-|---|---|
-| A Section field per bucket (Now, Next and Later sections) | Three more fields to sync and show, and a card that moves bucket changes two fields, to save a few clicks once |
-| Now, Next and Later as tables grouped by Section | They lose the board Q2 chose, and GitHub's docs don't say whether a table hides empty groups |
+Superseded by Q14 on 2026-10-24 (#PR): there are no bucket tabs, so no columns to hide, and a new section needs no step. The decision and its alternatives are in #1197.
 
 ### Q13 — The sync paces and caps its writes
 
@@ -225,57 +218,58 @@ Decided: maintainer, 2026-10-23 (#1197)
 | Write as fast as possible, and rerun if GitHub stops the first sync | About 580 writes back to back: the first sync may stop at the hourly limit with cards added but no fields, until a rerun an hour later |
 | Retry for up to an hour on a rate-limit error | A session sits blocked, and the writes still ignore GitHub's 1-second guidance |
 
-### Q14 — The bucket tabs are sliced by Area; no By area tab
+### Q14 — Tables grouped by area, sorted by bucket and section
 
-Now, Next and Later keep a column per section, and each is sliced by Area, set by hand with its columns: picking an area shows only that area's cards. There is no By area tab.
+The Roadmap and All views are tables grouped by Area and sorted by Status, then Section: each area lists Now's items first, then Next's and Later's, and within a bucket each initiative's items together, in the file's order. Roadmap shows Now, Next and Later; All shows everything the file lists, Deferred and Done included (Q15). There are no bucket tabs and no By area tab. The grouping and sort are set by hand.
 
-Decided: maintainer, 2026-10-23 (#1226)
+Decided: maintainer, 2026-10-24 (#PR)
 
 | Rejected | Why |
 |---|---|
-| Lanes by Area under the section columns | Most sections hold one area, so most cells stay empty (after run 1 on 2026-10-23: Now 7 of 15 filled, Next 12 of 35, Later 9 of 25), and each card already shows its Area |
-| Columns by Area, lanes by Section | The same five columns in every tab, but it works only if GitHub shows just the lanes that have cards, which its docs don't say |
-| A By area tab (columns by Status, a lane per area) | Not needed: each bucket tab is sliced by Area |
+| Bucket tabs with a column per section, sliced by Area (#1226) | Three tabs to read the plan, and each needed the other buckets' sections hidden by hand (Q12) |
+| One board: a column per bucket, a lane per area | Five lanes by three columns make narrow cards, and the section shows only inside each card |
+| A table grouped by Status, with Area as a column | Answers "what's next" first and "whose" second |
+| Rows in the order they were added | Matches the file's order only until new items arrive: they go to the bottom, and an item that changes bucket keeps its place |
+| Sorted by Section only | The same order for open items, but in All the closed issues stay mixed in with their initiative's open ones |
+| Deferred on the Roadmap table | Its 33 drafts have no Area, so they'd be the biggest group, about 29% of the view |
 
-### Q15 — No view shows Done; the sync lists closed issues the file still lists
+### Q15 — Roadmap hides Done; All shows it until the file moves it to Shipped
 
-The Roadmap and All views filter out Done (`-status:Done`), and the bucket tabs show only their own bucket, so a closed issue leaves every view as soon as GitHub's built-in rule sets Done. Each run prints the closed issues ROADMAP.md still lists, so the merging session moves them to the Shipped appendix; the next sync then removes their cards, like any closed issue the file doesn't list (Q3).
+The Roadmap view filters out Done (`-status:Done`), so a closed issue leaves the plan as soon as GitHub's built-in rule sets Done. All shows the closed issues ROADMAP.md still lists, sorted last in each area (Q14): they're the cleanup the merging session has to do, moving them to the Shipped appendix; the next sync then removes their cards, like any closed issue the file doesn't list (Q3). Each run also prints them.
 
-Decided: maintainer, 2026-10-23 (#1226)
+Decided: maintainer, 2026-10-23 (#1226); All shows Done: maintainer, 2026-10-24 (#PR)
 
 | Rejected | Why |
 |---|---|
 | A Done column on the Roadmap view | Not needed on a roadmap |
+| Hide Done in All too (#1226) | The cleanup would show only in the sync's output, which the merging session sees |
 | Remove closed issues from the board even when ROADMAP.md lists them | Readers see the same; Q3 changes, and Q8's 10-card stop would have to leave these removals out |
 
 ## The board
 
 ### Fields
 
-Follows from Q2, Q3, Q5, Q7, Q11 and Q15.
+Follows from Q2, Q3, Q5, Q7, Q11, Q14 and Q15.
 
 | Field | Values | Set by |
 |---|---|---|
-| Status (built in) | Now, Next, Later, Deferred, Done | The sync: the item's bucket, or Done when its issue is closed, as completed or not planned. GitHub's built-in rule also sets Done when an issue closes. No view shows Done (Q15) |
-| Section | The `###` heading the item is under; "Deferred" for Deferred items (Q11). Its options follow the file's order, which orders a bucket tab's columns | The sync. Only items the file lists have one, so Section marks what's on the roadmap |
+| Status (built in) | Now, Next, Later, Deferred, Done | The sync: the item's bucket, or Done when its issue is closed, as completed or not planned. GitHub's built-in rule also sets Done when an issue closes. Its options' order sorts the rows (Q14); only All shows Done (Q15) |
+| Section | The `###` heading the item is under; "Deferred" for Deferred items (Q11). Its options follow the file's order, which sorts the items within a bucket (Q14) | The sync. Only items the file lists have one, so Section marks what's on the roadmap |
 | Area | The issue's `area:` label: cms, renderer, cli, storage, templates; Q7 for an issue with two | The sync |
 
 Status keeps GitHub's Done option and its id, so the built-in rule keeps working; Todo and In Progress are replaced by the four buckets.
 
 ### Views
 
-Follows from Q2, Q3, Q5, Q11, Q12, Q14 and Q15.
+Follows from Q2, Q3, Q5, Q11, Q14 and Q15.
 
 | View | Layout | Filter | Set by hand once |
 |---|---|---|---|
-| Roadmap | Board | `has:section -status:Done` | Columns: Status |
-| Now | Board | `status:Now` | Columns: Section; show only Now's sections (Q12); slice by Area (Q14) |
-| Next | Board | `status:Next` | Columns: Section; show only Next's sections (Q12); slice by Area (Q14) |
-| Later | Board | `status:Later` | Columns: Section; show only Later's sections (Q12); slice by Area (Q14) |
-| All | Table | `has:section -status:Done` | Grouped by Section |
+| Roadmap | Table | `has:section -status:Done -status:Deferred` | Group by Area; sort by Status, then Section |
+| All | Table | `has:section` | Group by Area; sort by Status, then Section |
 | Not in ROADMAP.md | Table | `no:section is:open` | — |
 
-The sync creates missing views with their layout, filter and visible fields. Their columns, the columns each bucket tab shows, the Area slice and grouping are set once in GitHub's view menu, since the API can't; the project's README lists the steps. Drafts have no Area; cut 3 checks how the Area slice shows them.
+The sync creates missing views with their layout, filter and visible fields. Their grouping and sort are set once in GitHub's view menu, since the API can't; the project's README lists the steps. Drafts have no Area, so they're grouped with any other item without one.
 
 ### Project text
 
@@ -286,7 +280,7 @@ Follows from Q9.
 
 ## The sync
 
-Follows from Q1, Q3, Q4, Q7, Q8, Q12, Q13 and Q15.
+Follows from Q1, Q3, Q4, Q7, Q8, Q13 and Q15.
 
 1. Read ROADMAP.md. `## Now`, `## Next`, `## Later` and `## Deferred` start a bucket; any other `##` heading ends it, and the second top-level heading (`# Appendix: Shipped status`) ends the plan. `###` headings set the Section.
 2. Collect issue references: links to an issue, whatever their text, and bare `#N`. A link counts as its issue's number, so a range of links (`[#515](…)–[#520](…)`) expands like `#A–#B` (spans of up to 30). `Decided:` and `Follows from` lines are skipped. Each reference is a list item, table row or prose mention, and Q4 picks its place.
@@ -294,7 +288,7 @@ Follows from Q1, Q3, Q4, Q7, Q8, Q12, Q13 and Q15.
 4. Look the numbers up and keep issues; pull requests are dropped. List the repository's open issues too: those the file doesn't mention go on the board with no Status or Section, since auto-add only adds issues created or updated after it's turned on.
 5. Read the project: fields, items and their values.
 6. Plan: add missing items, set fields that differ, and remove issue items that are neither on the roadmap nor open. Drafts are matched to the file one-to-one by title (Q3), and one whose body changed is updated in place; drafts the file no longer has, and extra copies, are deleted. Items that aren't issues of this repository or drafts (a pull request added by hand) are left alone and reported.
-7. Every run prints the plan, the issues mentioned in more than one place, the issues with two area labels, the Section options it would create (Q12), drafts whose titles collide (Q3) and the closed issues the file still lists (Q15). Without `--apply` it stops there. With it, it writes the changes, paced and capped as Q13 says, updates the description and prints what changed; a run that reaches the cap says when to rerun. Q8's stop applies before anything is written.
+7. Every run prints the plan, the issues mentioned in more than one place, the issues with two area labels, drafts whose titles collide (Q3) and the closed issues the file still lists (Q15). Without `--apply` it stops there. With it, it writes the changes, paced and capped as Q13 says, updates the description and prints what changed; a run that reaches the cap says when to rerun. Q8's stop applies before anything is written.
 
 Two runs at once converge on issues: adding an issue that's already on the board returns its item, and the later run sets the fields again. They can both add a new draft; the next run deletes the extra copy.
 
@@ -304,17 +298,17 @@ Dev-process tooling with no product surface. Scale: about 155 items, far below G
 
 ## UX check
 
-The board is quiet when the file and the issues agree: no badges or notes of its own, and no closed issues (Q15). A reader picks an area with a bucket tab's slice, not another tab (Q14). Names are the file's words. The description says when the board was last synced, and the README sends readers to ROADMAP.md for the reasons.
+The board is quiet when the file and the issues agree: no badges or notes of its own, and no closed issues in the plan (Q15). Each table answers where first, with a group per area, then when, with rows sorted by bucket and each initiative's items together (Q14). Names are the file's words. The description says when the board was last synced, and the README sends readers to ROADMAP.md for the reasons.
 
 ## Cut sequence
 
-Follows from Q5, Q6, Q10, Q12 and Q13.
+Follows from Q5, Q6, Q10, Q13 and Q14.
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | `bots/roadmap-board/`: parser, planner and sync with dry run and `--apply`, writes paced and capped (Q13); creates the project's fields and views when missing | — | unit + manual run | Medium |
 | 2 | The sync steps in review-decisions and review-prs, the matching update to `design-decision-review.md`, and a `bots/README.md` row | 1 | (docs) | Low |
-| 3 | Make the project public (it exists, private and empty, as the org's project 1) and link it to the repository; run the first sync from `main`, in two runs an hour apart (Q13); set each view's columns and grouping, each bucket tab's hidden columns (Q12) and Area slice (Q14), and the auto-add rule by hand; check the column field a new board view starts with, that each bucket tab keeps its hidden columns, what a new Section option does in a tab whose columns were chosen (for example with a temporary option), recording which case holds in the README the sync writes, and how the Area slice shows drafts; link the board from ROADMAP.md's Process section (Q10) | 1, 2 | (manual) | Low |
+| 3 | Make the project public (it exists as the org's project 1, linked to the repository on 2026-10-23); run the first sync from `main`, in two runs an hour apart (Q13); set the Roadmap and All views' grouping and sort (Q14) and the auto-add rule by hand, checking that Status sorts Now, Next, Later; link the board from ROADMAP.md's Process section (Q10) | 1, 2 | (manual) | Low |
 
 ## Migration
 

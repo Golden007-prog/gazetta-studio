@@ -291,7 +291,7 @@ When merging:
 - **Rebase-merge only** per rule 16 (`gh pr merge <N> --rebase --delete-branch`)
 - Solo maintainer with branch protection requiring 1 review: add `--admin` after explicit user confirmation (for a PR `review-decisions` approved, its approval is that confirmation)
 - After merge, `git checkout main && git pull --rebase origin main`
-- If the merged PR's diff includes `ROADMAP.md`, sync the roadmap board: `GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots -- --apply` ([`design-roadmap-board.md`](../../rules/design-roadmap-board.md) Q5). If it stops because more than 10 cards would leave the roadmap, show the maintainer the plan it printed and ask before rerunning with `--allow-removals` (Q8). If it stops at the write cap, rerun it at the time it prints (Q13). If it prints new Section options, hide or show them in the Now, Next and Later tabs as the project's README says (Q12).
+- If the merged PR's diff includes `ROADMAP.md`, sync the roadmap board: `GH_TOKEN=$(gh auth token) npm run roadmap-board -w @gazetta/bots -- --apply` ([`design-roadmap-board.md`](../../rules/design-roadmap-board.md) Q5). If it stops because more than 10 cards would leave the roadmap, show the maintainer the plan it printed and ask before rerunning with `--allow-removals` (Q8). If it stops at the write cap, rerun it at the time it prints (Q13).
 
 Bot-authored PRs (fix-bot, feature-bot) open as **draft** by design. Before merging:
 - Verify the bot-PR checks above pass (Mode-vs-diff, runtime-exercise output, no `tmp-*` leakage)
