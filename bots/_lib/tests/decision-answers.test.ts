@@ -260,6 +260,22 @@ describe('lookupAnswer — messages typed while a turn runs (#1239)', () => {
     expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
   })
 
+  it('rejects one whose typing record is backdated into an earlier turn', () => {
+    // Pretends to answer a3's question: a typing record and a message dated
+    // inside that turn, both written after later entries.
+    const BACKDATED = '2026-10-22T10:00:30.000Z'
+    const transcript = [
+      ...session(),
+      ...lines(
+        assistantText('a5', 'u3', '2026-10-22T10:03:00.000Z', 'Anything else?'),
+        enqueue(BACKDATED),
+        queued('q2', 'a5', BACKDATED, 'agree', { kind: 'human' }),
+        removeQueued('2026-10-22T10:03:10.000Z', 'cmd-q2', 'agree'),
+      ),
+    ]
+    expect(lookupAnswer(indexLines(transcript), BACKDATED).status).toBe('broken-link')
+  })
+
   it('rejects one with no queue entry recording its delivery', () => {
     const transcript = [...session(), ...midTurn({ kind: 'human' }, { delivered: false })]
     expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
