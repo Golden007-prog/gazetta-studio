@@ -90,7 +90,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 | 0 | **Docs on the site** | Built from the repo's `docs/` instead of the hand-copied page | Fleet | — |
 | 0 | **Door for coding agents** | An experiment on gazetta.studio only: its docs pages in Markdown when an agent asks for Markdown (`Accept: text/markdown`), an `llms.txt`, links to both, a link to AGENTS.md; requests to them logged by user agent | Fleet | — |
 | 0 | **up-for-grabs.net** | A PR adding a YAML entry pointing at the label | Fleet | ✓ |
-| 0 | goodfirstissue.dev | Listing requirements | Fleet checks first | ✗ |
+| 0 | goodfirstissue.dev | At least 3 open beginner-labelled issues, at least 10 contributors, a CONTRIBUTING.md; submitted through a Google Form. Waits for 10 contributors (6 accounts today) | Fleet submits once met | ✓ |
 | 0 | **PR limits, ready but off** | GitHub's open-PR cap with a bypass list; on only if PRs outpace the fleet | You decide when | ✓ |
 | 1 | **npm** | A release from `main` when the maintainer decides, after the Stage 1 gate; the repo's README.md copied into the package at publish ([#1280](https://github.com/gazetta-studio/gazetta-studio/issues/1280)); version and "preview" in the install line; `gazetta init` depends on `^` its own version ([#1281](https://github.com/gazetta-studio/gazetta-studio/issues/1281)) | You decide and approve; fleet does the rest | ✓ (npm updates the README only on publish) |
 | 1 | **Site: Use it** | Becomes the main button; a tutorial ending in a publish and an undo, run in CI | Fleet | — |
@@ -99,24 +99,26 @@ Decided: maintainer, 2026-10-24 (#1266)
 | 1 | **Release notes page** | A GitHub Release per version, drafted from merged PRs, breaking changes first; the site's page and the npm README link to it | Fleet; you edit | — |
 | 1 | **Honest comparison** | 2–3 named alternatives, facts re-checked monthly by a bot | Fleet; you approve the wording | ✓ |
 | 1 | **Codespaces / StackBlitz button** | StackBlitz only if a one-hour test passes (`sharp`, Node 22) | Fleet | Partly |
-| 1 | **Console.dev** | Submit; requires "beta" or "preview" visible on the site | You submit | ✓ |
-| 1 | Lists: awesome-lists, the jamstack.org CMS list, Hono and Cloudflare community lists | Inclusion rules | Fleet checks, then opens PRs | ✗ |
+| 1 | **Console.dev** | Email hello@console.dev (no form) within a week or two of the release; requires "beta" or "preview" visible on the site | You submit | ✓ |
+| 1 | Lists: awesome-cloudflare-selfhosted ("Blogs, CMS and docs"), awesome-cloudflare (zhuima), awesome-jamstack (CMS) | Their own contribution rules (own projects allowed if stated; awesome-cloudflare-selfhosted asks that it's "complete enough to use") | Fleet prepares; you OK each PR | ✓ |
+| 1 | awesome-selfhosted | First release more than 4 months old, working install docs, maintained; **its rules forbid AI agents from opening the issue or PR or writing the entry** | You write and submit it | ✓ |
 | 2 | **Show HN** | Link the repo; in the maintainer's own words | **You** | ✓ |
 | 2 | **Launch essay** | "Why a CMS should store nothing", posted separately | **You** | ✓ |
 | 2 | **"How Gazetta is built"** | Page plus the essay on one maintainer and a bot fleet | You write, fleet builds the page | — |
-| 2 | Newsletters: JavaScript Weekly, Node Weekly, Bytes | How to submit | Fleet checks | ✗ |
-| 2 | Reddit (r/webdev, r/javascript, r/selfhosted, r/CloudFlare) | Self-promotion rules per subreddit | You check by hand | ✗ |
+| 2 | Newsletters: JavaScript Weekly, Node Weekly | Email editor@cooperpress.com (the submit form's link is broken) | You send it | ✓ |
+| 2 | Reddit: r/webdev (Showoff Saturday only, "project, not product", no LLM-written posts), r/javascript (the Showoff thread, or a link post with source), r/CloudFlare (no rules listed; ask the mods) | Read from archived copies only, since Reddit blocks automated reading | You check by hand | Partly |
 | 2 | Lobsters | Accounts are invite-only | Only if invited | ✓ |
 | 2 | dev.to / Hashnode | Copy of the essay pointing back to the original on gazetta.studio | Fleet | — |
 | 2 | The maintainer's own social accounts | The maintainer's voice | You | — |
 | when #49 ships | **Official MCP Registry** | Publish the MCP server | Fleet | ✓ |
 | 3 | Showcase | A list others add to by PR | Fleet | — |
 | 3 | GitHub Sponsors | A link once there's an audience | You | — |
-| 3 | Hacktoberfest (October) | Current rules; only if the fleet can take the volume | Fleet checks | ✗ |
+| 3 | r/selfhosted | "Promoted apps must be production ready and have docs"; projects under 3 months old go in a megathread (archived copy) | You check by hand | Partly |
 | 3 | Cloudflare and Hono ecosystem | Templates and showcases, guest posts, talks, podcasts | You choose | ✗ |
 | 3 | Monthly devlog | Only if the maintainer enjoys writing | You | — |
 | 4 | Docs per major version, stability policy, migration guides | — | Fleet | ✓ |
 | never | Waitlist, mass comparison pages, benchmark claims, paid ads | — | — | — |
+| none | Bytes (sponsorship only, which is paid); Hacktoberfest 2026 ("Pull requests and merge requests will no longer count"; re-check in October 2027); awesome-cms (needs more than 50 stars); jamstack.org's CMS list and awesome-headless-cms (Gazetta isn't headless); awesome-hono (inactive since 2023) | — | — | ✓ |
 
 Decided: maintainer, 2026-10-24 (#1266)
 
@@ -343,7 +345,7 @@ Fourteen sites: Payload, Sanity, Strapi, Storyblok, Directus, TinaCMS, Decap, Ke
 ## Open items
 
 - **How the October contributors found Gazetta, and whether any of them uses it for a site.** Ask them; the pinned Discussion is the Stage 0 way to ask everyone.
-- **Channel rules not yet checked:** goodfirstissue.dev, the newsletters, Reddit (blocks automated reading), awesome-lists, the jamstack.org CMS list, Hacktoberfest 2026. Each is checked before its channel opens.
+- **Channel rules checked on 2026-10-24** (rows above). Reddit's are read from archived copies only, since Reddit blocks automated reading; re-check them by hand before posting.
 - **The StackBlitz test** (Node version, `sharp`, `gazetta dev` on port 3000).
 - **Stage 1 also waits on publish undo.** The tutorial ends with an undo, but undo on a publish destination doesn't yet change what visitors see; that's what publish undo fixes ([#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092), in Now).
 
