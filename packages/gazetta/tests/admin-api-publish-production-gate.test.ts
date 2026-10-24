@@ -36,7 +36,7 @@ const ADMIN_HEADERS = {
   'X-Forwarded-Groups': 'admins',
 }
 
-function buildApp(): {
+function buildApp(opts: { defaultEditableProduction?: boolean } = {}): {
   app: Hono
   stagingStorage: MemoryStorage
   productionStorage: MemoryStorage
@@ -52,9 +52,24 @@ function buildApp(): {
     }),
     'fragments/header/fragment.json': JSON.stringify({ template: 'header-layout', content: {} }),
   })
+  stagingStorage.seed({
+    'pages/home/page.json': JSON.stringify({
+      template: 'page-default',
+      metadata: { title: 'Home (staging)' },
+      components: [],
+    }),
+  })
 
   const targetConfigs = {
-    local: { storage: sourceStorage, type: 'esi' as const, environment: 'local' as const, editable: true },
+    // With `editable: false` here, the registry's defaultEditable() is the
+    // editable production target below (hotfix pattern): an omitted fetch
+    // destination resolves to production.
+    local: {
+      storage: sourceStorage,
+      type: 'esi' as const,
+      environment: 'local' as const,
+      editable: !opts.defaultEditableProduction,
+    },
     staging: { storage: stagingStorage, type: 'static' as const, environment: 'staging' as const },
     production: {
       storage: productionStorage,
@@ -175,6 +190,21 @@ describe('publish production gate (#1191)', { timeout: 30000 }, () => {
 
     expect(res.status).toBe(403)
     expect((await res.json()).missing).toEqual(['publish:production'])
+  })
+
+  it('gates the resolved default destination when no destination is named', async () => {
+    // Review on #1253: with the local target not editable, the default
+    // editable target IS the editable production one, and an omitted
+    // `destination` used to skip the gate (it only saw the named value).
+    ;({ app, stagingStorage, productionStorage } = buildApp({ defaultEditableProduction: true }))
+    const res = await post(app, '/api/fetch', EDITOR_HEADERS, {
+      source: 'staging',
+      items: ['pages/home'],
+    })
+
+    expect(res.status).toBe(403)
+    expect((await res.json()).missing).toEqual(['publish:production'])
+    expect(await productionStorage.exists('pages/home/page.json')).toBe(false)
   })
 
   it('keeps the read-only audit route on its baseline gate', async () => {
