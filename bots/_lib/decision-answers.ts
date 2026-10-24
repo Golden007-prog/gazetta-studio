@@ -10,8 +10,10 @@
  *
  * Only the maintainer's own input counts: a typed reply (`origin.kind` is
  * "human") or a picker answer whose `sourceToolAssistantUUID` points at a
- * real AskUserQuestion call. Notices, agent reports, injected and
- * compacted entries, pasted text and tool output don't.
+ * real AskUserQuestion call. A message typed while a turn runs is a typed
+ * reply too: a `queued_command` attachment whose origin is "human", backed
+ * by the queue entries that record its typing and delivery. Notices, agent
+ * reports, injected and compacted entries, pasted text and tool output don't.
  *
  * A transcript is tamper-evident, not tamper-proof: a shell command can
  * edit it. An answer whose links don't resolve, that was written out of
@@ -80,6 +82,10 @@ interface Node {
   originKind?: string
   isMeta: boolean
   isCompactSummary: boolean
+  /** A message typed while a turn ran (a `queued_command` attachment). */
+  queued: boolean
+  /** The queued message's command, which its delivery entry names. */
+  queueCommand?: string
   texts: string[]
   toolUseIds: Set<string>
   asks: Map<string, AskedQuestion[]>
@@ -101,10 +107,22 @@ export interface TranscriptIndex {
   toolCalls: ToolCall[]
   /** How many entries carry a result for each tool call id. */
   resultCounts: Map<string, number>
+  /** When a queued message was typed, and how many entries came before that record. */
+  enqueues: { timestamp: string; after: number }[]
+  /** Commands of queued messages that were delivered. */
+  delivered: Set<string>
 }
 
 export function emptyIndex(): TranscriptIndex {
-  return { nodes: new Map(), byTimestamp: new Map(), order: [], toolCalls: [], resultCounts: new Map() }
+  return {
+    nodes: new Map(),
+    byTimestamp: new Map(),
+    order: [],
+    toolCalls: [],
+    resultCounts: new Map(),
+    enqueues: [],
+    delivered: new Set(),
+  }
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -142,6 +160,13 @@ function toAnswers(raw: unknown): Record<string, string> | undefined {
   return answers
 }
 
+/** Claude Code records a queued message's typing (`enqueue`) and its delivery (`remove`). */
+function addQueueOperation(index: TranscriptIndex, entry: Record<string, unknown>): void {
+  if (typeof entry.timestamp !== 'string') return
+  if (entry.operation === 'enqueue') index.enqueues.push({ timestamp: entry.timestamp, after: index.order.length })
+  if (entry.operation === 'remove' && typeof entry.commandUuid === 'string') index.delivered.add(entry.commandUuid)
+}
+
 /** Add one transcript line. Unparsable lines, and repeats of an id already seen, are ignored. */
 export function addLine(index: TranscriptIndex, line: string): void {
   let entry: unknown
@@ -150,18 +175,27 @@ export function addLine(index: TranscriptIndex, line: string): void {
   } catch {
     return
   }
+  if (isRecord(entry) && entry.type === 'queue-operation') return addQueueOperation(index, entry)
   if (!isRecord(entry) || typeof entry.uuid !== 'string' || index.nodes.has(entry.uuid)) return
 
   const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : ''
+  // A message typed while a turn runs carries its origin and text on the attachment.
+  const queued =
+    entry.type === 'attachment' && isRecord(entry.attachment) && entry.attachment.type === 'queued_command'
+      ? entry.attachment
+      : undefined
+  const origin = queued ? queued.origin : entry.origin
   const node: Node = {
     uuid: entry.uuid,
     parentUuid: typeof entry.parentUuid === 'string' ? entry.parentUuid : null,
     type: typeof entry.type === 'string' ? entry.type : '',
     timestamp,
     pos: index.order.length,
-    originKind: isRecord(entry.origin) && typeof entry.origin.kind === 'string' ? entry.origin.kind : undefined,
+    originKind: isRecord(origin) && typeof origin.kind === 'string' ? origin.kind : undefined,
     isMeta: entry.isMeta === true,
     isCompactSummary: entry.isCompactSummary === true,
+    queued: queued !== undefined,
+    queueCommand: typeof queued?.source_uuid === 'string' ? queued.source_uuid : undefined,
     texts: [],
     toolUseIds: new Set(),
     asks: new Map(),
@@ -170,7 +204,7 @@ export function addLine(index: TranscriptIndex, line: string): void {
     answers: toAnswers(entry.toolUseResult),
   }
 
-  const content = isRecord(entry.message) ? entry.message.content : undefined
+  const content = queued ? queued.prompt : isRecord(entry.message) ? entry.message.content : undefined
   if (typeof content === 'string') node.texts.push(content)
   if (Array.isArray(content)) {
     for (const block of content) {
@@ -211,11 +245,11 @@ function hasEarlierParent(index: TranscriptIndex, node: Node): boolean {
   return parent !== undefined && parent.pos < node.pos
 }
 
-/** Entries are written in time order, so an answer added later can't carry an earlier time. */
-function isInTimeOrder(index: TranscriptIndex, node: Node): boolean {
-  for (let pos = node.pos - 1; pos >= 0; pos--) {
-    const previous = index.order[pos].timestamp
-    if (previous) return previous <= node.timestamp
+/** Entries are written in time order, so one written at `pos` can't carry an earlier time than the entry before it. */
+function isInTimeOrder(index: TranscriptIndex, pos: number, timestamp: string): boolean {
+  for (let p = pos - 1; p >= 0; p--) {
+    const previous = index.order[p].timestamp
+    if (previous) return previous <= timestamp
   }
   return true
 }
@@ -223,7 +257,31 @@ function isInTimeOrder(index: TranscriptIndex, node: Node): boolean {
 /** The checks Q9 puts on the entry itself, whatever kind of answer it is. */
 function entryProblem(index: TranscriptIndex, node: Node): string | undefined {
   if (!hasEarlierParent(index, node)) return 'its parent entry is missing'
-  if (!isInTimeOrder(index, node)) return 'it is timestamped earlier than the entry before it'
+  if (!isInTimeOrder(index, node.pos, node.timestamp)) return 'it is timestamped earlier than the entry before it'
+  return undefined
+}
+
+/** The queue entry and the message take their times from separate clock reads, seen 0–2 ms apart. */
+const QUEUE_CLOCK_SLACK_MS = 1000
+
+/**
+ * A message typed while a turn runs is written when it's delivered, after the
+ * entries from the time in between, so its own time can't follow the entry
+ * before it. Its time order is checked instead at the queue entry written
+ * when it was typed, and its delivery at the one naming its command. A
+ * message appended later has no earlier queue entry.
+ */
+function queuedProblem(index: TranscriptIndex, node: Node): string | undefined {
+  if (!hasEarlierParent(index, node)) return 'its parent entry is missing'
+  const typedAt = Date.parse(node.timestamp)
+  const typing = index.enqueues.find(
+    e => e.after <= node.pos && Math.abs(Date.parse(e.timestamp) - typedAt) <= QUEUE_CLOCK_SLACK_MS,
+  )
+  if (!typing) return 'no earlier queue entry records it being typed'
+  if (!isInTimeOrder(index, typing.after, typing.timestamp)) {
+    return 'the queue entry for its typing is timestamped earlier than the entry before it'
+  }
+  if (!node.queueCommand || !index.delivered.has(node.queueCommand)) return 'no queue entry records its delivery'
   return undefined
 }
 
@@ -235,7 +293,7 @@ function isPickerAnswer(index: TranscriptIndex, node: Node): boolean {
 
 function isTypedReply(node: Node): boolean {
   return (
-    node.type === 'user' &&
+    (node.type === 'user' || node.queued) &&
     node.originKind === 'human' &&
     !node.isMeta &&
     !node.isCompactSummary &&
@@ -260,7 +318,9 @@ function turnTexts(index: TranscriptIndex, reply: Node): string[] {
 
 function classify(index: TranscriptIndex, node: Node): AnswerLookup {
   const at = node.timestamp
-  if (node.type !== 'user') return { at, status: 'not-your-input', reason: `a ${node.type || 'untyped'} entry` }
+  if (node.type !== 'user' && !node.queued) {
+    return { at, status: 'not-your-input', reason: `a ${node.type || 'untyped'} entry` }
+  }
 
   if (node.toolResultId) {
     const source = node.sourceToolAssistantUUID ? index.nodes.get(node.sourceToolAssistantUUID) : undefined
@@ -287,7 +347,7 @@ function classify(index: TranscriptIndex, node: Node): AnswerLookup {
     return { at, status: 'not-your-input', reason: `origin is ${node.originKind ?? 'missing'}, not human` }
   }
   if (node.texts.length === 0) return { at, status: 'not-your-input', reason: 'no text' }
-  const problem = entryProblem(index, node)
+  const problem = node.queued ? queuedProblem(index, node) : entryProblem(index, node)
   if (problem) return { at, status: 'broken-link', reason: problem }
 
   const text = node.texts.join('\n')
@@ -315,7 +375,7 @@ export function lookupAnswer(index: TranscriptIndex, at: string): AnswerLookup {
 export function listInputs(index: TranscriptIndex, since = ''): InputSummary[] {
   const inputs: InputSummary[] = []
   for (const node of index.order) {
-    if (node.type !== 'user' || node.timestamp < since) continue
+    if ((node.type !== 'user' && !node.queued) || node.timestamp < since) continue
     const result = classify(index, node)
     if (result.status !== 'ok' || !result.kind) continue
     const preview =
