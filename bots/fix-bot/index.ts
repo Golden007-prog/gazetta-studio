@@ -72,6 +72,7 @@ import {
   printTranscriptPath,
   printWarning,
 } from '../_lib/ui.js'
+import { orderCandidates } from './candidate-order.js'
 import { diagnoseFailure, formatFailureComment } from './failure-diagnostic.js'
 import { openSkipListPR } from './open-skip-list-pr.js'
 import { pastPROutcome } from './past-pr.js'
@@ -167,7 +168,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const candidates = [...allCandidates].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const candidates = orderCandidates(allCandidates)
 
   printCandidateList({
     noun: 'bug',
