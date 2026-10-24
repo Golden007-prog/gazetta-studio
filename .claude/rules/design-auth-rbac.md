@@ -11,7 +11,7 @@ paths:
 
 Foundational dimension #4 of 13. Authentication identity model (Gazetta consumes upstream identity, never does auth itself) + role-based access control + capability-based authorization gates.
 
-**Status**: design pass complete (2026-05); implementation shipped 2026-05 ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194); operator guide [`docs/auth.md`](../../docs/auth.md)), except the per-target `publish:production` check at the publish endpoint ([#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191)).
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194); operator guide [`docs/auth.md`](../../docs/auth.md)); the per-target `publish:production` check on publish and fetch since [#1253](https://github.com/gazetta-studio/gazetta-studio/pull/1253) ([#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191)).
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Auth/RBAC check** every new feature design must answer
@@ -225,7 +225,7 @@ How auth/RBAC composes with each of the other 12 foundational dimensions plus th
 ### Audit (#5)
 - `Principal` is the load-bearing input to audit log. Every recorded event carries `actor: Principal`.
 - Audit-log read access is its own capability (`read:audit-log`) — viewers don't see audit by default.
-- Auth events themselves (login, role resolution failure, capability denial) are recorded via the audit log per `design-audit.md`. The auth-identity layer publishes; audit consumes.
+- Capability denials are recorded in the audit log per `design-audit.md`. Login and role-resolution failures, which the identity layer rejects before a route is matched, aren't recorded; they're left for later (`design-audit.md` Future directions).
 
 ### Review (#6)
 - Review-state transitions consume capabilities (`review:submit`, `review:approve`, `publish:request`, `publish:approve`).
