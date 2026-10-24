@@ -38,6 +38,7 @@ const ADMIN_HEADERS = {
 
 function buildApp(opts: { defaultEditableProduction?: boolean } = {}): {
   app: Hono
+  sourceStorage: MemoryStorage
   stagingStorage: MemoryStorage
   productionStorage: MemoryStorage
 } {
@@ -106,7 +107,7 @@ function buildApp(opts: { defaultEditableProduction?: boolean } = {}): {
     targetConfigs,
     disableCacheStatsLogger: true,
   })
-  return { app, stagingStorage, productionStorage }
+  return { app, sourceStorage, stagingStorage, productionStorage }
 }
 
 function post(app: Hono, path: string, headers: Record<string, string>, body: unknown) {
@@ -119,11 +120,31 @@ function post(app: Hono, path: string, headers: Record<string, string>, body: un
 
 describe('publish production gate (#1191)', { timeout: 30000 }, () => {
   let app: Hono
+  let sourceStorage: MemoryStorage
   let stagingStorage: MemoryStorage
   let productionStorage: MemoryStorage
   beforeEach(() => {
-    ;({ app, stagingStorage, productionStorage } = buildApp())
+    ;({ app, sourceStorage, stagingStorage, productionStorage } = buildApp())
   })
+
+  async function readAuditEvents(): Promise<Array<Record<string, unknown>>> {
+    // HistoryAuditProvider (zero-config default) appends one JSONL
+    // event per record under the SOURCE storage's .gazetta/audit/.
+    const entries = await sourceStorage.readDir('.gazetta/audit').catch(() => [])
+    const names = entries.filter(e => !e.isDirectory && e.name.endsWith('.jsonl')).map(e => e.name)
+    const events: Array<Record<string, unknown>> = []
+    for (const name of names) {
+      const content = await sourceStorage.readFile(`.gazetta/audit/${name}`)
+      for (const line of content.split('\n')) {
+        if (line.trim()) events.push(JSON.parse(line))
+      }
+    }
+    return events
+  }
+
+  function forbiddenPublishEvents(events: Array<Record<string, unknown>>) {
+    return events.filter(e => e.action === 'publish' && e.outcome === 'forbidden')
+  }
 
   it('refuses an editor publishing to a production target, and the target stays empty', async () => {
     const res = await post(app, '/api/publish', EDITOR_HEADERS, {
@@ -205,6 +226,40 @@ describe('publish production gate (#1191)', { timeout: 30000 }, () => {
     expect(res.status).toBe(403)
     expect((await res.json()).missing).toEqual(['publish:production'])
     expect(await productionStorage.exists('pages/home/page.json')).toBe(false)
+  })
+
+  it('records a forbidden event for a denied production publish (#1192)', async () => {
+    const res = await post(app, '/api/publish', EDITOR_HEADERS, {
+      items: ['pages/home'],
+      targets: ['production'],
+    })
+
+    expect(res.status).toBe(403)
+    const denied = forbiddenPublishEvents(await readAuditEvents())
+    expect(denied).toHaveLength(1)
+    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual([
+      'publish:production',
+    ])
+  })
+
+  it('records a forbidden event for a denied production stream publish (#1192)', async () => {
+    const res = await post(app, '/api/publish/stream', EDITOR_HEADERS, {
+      items: ['pages/home'],
+      targets: ['production'],
+    })
+
+    expect(res.status).toBe(403)
+    expect(forbiddenPublishEvents(await readAuditEvents())).toHaveLength(1)
+  })
+
+  it('records a forbidden event for a denied production fetch (#1192)', async () => {
+    const res = await post(app, '/api/fetch', EDITOR_HEADERS, {
+      source: 'staging',
+      destination: 'production',
+    })
+
+    expect(res.status).toBe(403)
+    expect(forbiddenPublishEvents(await readAuditEvents())).toHaveLength(1)
   })
 
   it('keeps the read-only audit route on its baseline gate', async () => {
