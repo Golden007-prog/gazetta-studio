@@ -10,7 +10,7 @@ paths:
 
 Foundational dimension #5 of 13. Pluggable audit-event recording with multiple provider implementations (history-extended at v1; external sinks reserved). Composes with auth/RBAC's `Principal` for actor identity and with the real-time event-source discipline (audit log = source of real-time events for presence + live publish status).
 
-**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). Denied write requests (the capability middleware's 401 and 403, and the production publish gate's 403) are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). The 401s returned before a route is matched aren't recorded: the `GAZETTA_TOKEN` guard's, and the principal middleware's when the identity provider rejects a request (invalid credentials, an untrusted proxy, no matching role); they're left for later (Future directions). External audit sinks are demand-driven.
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). Denied write requests (the capability middleware's 401 and 403, and the production publish gate's 403) are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). The 401s returned before a route is matched aren't recorded: the `GAZETTA_TOKEN` guard's, and the principal middleware's when the identity provider rejects a request (invalid credentials, an untrusted proxy, no matching role); recording them is [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262). External audit sinks are demand-driven.
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Audit check** every new feature design must answer
@@ -263,7 +263,8 @@ Every write **attempt** — success and write-class rejection:
 - Save/publish/delete handler success path → `success`
 - Save/publish handler validation rejection (409) → `validation-failed`
 - Capability middleware 403 path → `forbidden` (with `metadata.missingCapabilities`)
-- Capability middleware 401 path (a request with no principal) → `unauthenticated`. The 401s returned before a route is matched aren't recorded; they're left for later (Future directions).
+- Production publish gate 403 (publish, publish stream, fetch) → `forbidden` (with `metadata.missingCapabilities`)
+- Capability middleware 401 path (a request with no principal) → `unauthenticated`. The 401s returned before a route is matched aren't recorded yet ([#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
 
 **Anti-pattern avoided**: a global "audit interceptor" that wraps every handler and infers outcome from HTTP status. That couples audit to HTTP shape (forbids non-HTTP audit sources later, like CLI commands). Each site explicitly records its own outcome.
 
@@ -564,7 +565,7 @@ How audit log composes with each of the other 12 foundational dimensions plus th
 ### Auth + RBAC (#4)
 - `actor` field is the load-bearing input from auth/RBAC. Snapshot of the principal at decision time (per Q2 lock).
 - `read:audit-log` capability gates the audit drawer entirely. Without it, the drawer is absent — no link, no events, no configuration disclosure.
-- Capability denials are recorded by the capability middleware: `forbidden`, or `unauthenticated` for a request with no principal. Login and role-resolution failures, which the identity layer rejects before a route is matched, aren't recorded; they're left for later (Future directions).
+- Denied write requests are recorded: `forbidden` by the capability middleware or the production publish gate, `unauthenticated` by the capability middleware for a request with no principal. Login and role-resolution failures, which the identity layer rejects before a route is matched, aren't recorded yet ([#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
 - Audit-log read access is its own capability (`read:audit-log`) — viewers don't see audit by default.
 
 ### Review (#6)
@@ -609,7 +610,6 @@ Sites without `admin.audit` config use `HistoryAuditProvider` automatically. Exi
 ## Future directions
 
 - **Per-API-call recording** (reads + login attempts + failed authorization). Compliance-tier; deferred until SOC 2 / HIPAA demand.
-- **The 401s returned before a route is matched**: the `GAZETTA_TOKEN` guard's, and the principal middleware's when the identity provider rejects a request (invalid credentials, an untrusted proxy, no matching role). Recording one needs an action for a request no route has matched. Decided: maintainer, 2026-10-24 (#1259).
 - **External sink providers** (CloudWatch, Azure Monitor, etc.). Demand-driven; in-tree on first 3 operator requests for the same provider.
 - **Index sidecar** at hard-limit scale.
 - **Audit log query CLI** (`gazetta audit query --actor=X --since=Y`). Lands with validation Cut 5 CLI rewrite.

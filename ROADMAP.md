@@ -47,7 +47,7 @@ The back end ([#515](https://github.com/gazetta-studio/gazetta-studio/issues/515
 
 ### Bug backlog
 
-User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
+User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor, and [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262), which waits for a design answer:
 
 - [#1068](https://github.com/gazetta-studio/gazetta-studio/issues/1068) closing the tab during a publish stops it
 - [#1108](https://github.com/gazetta-studio/gazetta-studio/issues/1108), [#1109](https://github.com/gazetta-studio/gazetta-studio/issues/1109) restored drafts: lost fragment edits, false conflicts
@@ -65,6 +65,7 @@ User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-st
 - [#1184](https://github.com/gazetta-studio/gazetta-studio/issues/1184) `gazetta dev` on a busy port prints a Node stack trace
 - [#1193](https://github.com/gazetta-studio/gazetta-studio/issues/1193) the offline docs say offline saves are sent later, and "Send now" only checks the connection
 - [#1196](https://github.com/gazetta-studio/gazetta-studio/issues/1196) publish and fetch copy folders from outside the site when an item name contains `..`
+- [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262) requests refused before a route is matched (401) aren't recorded in the audit log. Decided: maintainer, 2026-10-24 (#1259).
 
 Decided: maintainer, 2026-10-23 (#1179)
 
@@ -309,7 +310,7 @@ All 19 `design-{feature}-implementation.md` docs shipped: ai, audit, auth-rbac, 
 | RBAC ([#194](https://github.com/gazetta-studio/gazetta-studio/issues/194)) | ✓ shipped 2026-05-13 (capabilities, built-in and custom roles, route gates; [`docs/auth.md`](docs/auth.md)); the per-target `publish:production` check since [#1253](https://github.com/gazetta-studio/gazetta-studio/pull/1253) ([#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191)) |
 | Component IDs | ✓ shipped (`component-ids.ts`; called from page + fragment save handlers) |
 | AdminCache abstraction | ✓ shipped (interface + `MemoryCache` + per-site + 6 test files) |
-| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). Denied write requests are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)), except the 401s returned before a route is matched, which are left for later. External sinks are demand-driven; CSV export, role and config-change events, a target filter, and date and item filters in the drawer are in `design-audit.md`'s future directions |
+| Audit log ([#200](https://github.com/gazetta-studio/gazetta-studio/issues/200), v1 scope) | ✓ shipped (recorder + middleware + `HistoryAuditProvider`, audit drawer, retention; [`docs/audit.md`](docs/audit.md)). Denied write requests are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)), except the 401s returned before a route is matched ([#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)). External sinks are demand-driven; CSV export, role and config-change events, a target filter, and date and item filters in the drawer are in `design-audit.md`'s future directions |
 | Hooks lifecycle | ✓ shipped (factory contributions via `admin.hooks` per ADR-0009; 10 test files) |
 | Deploy adapter contract (#203) | ✓ shipped 2026-05-14 ([`design-deploy.md`](.claude/rules/design-deploy.md) + [ADR-0010](docs/adr/0010-deploy-publish-independence.md) + [`docs/deploy.md`](docs/deploy.md); `cloudflareWorkersDeploy()` + 2 validators + `target.worker` deleted; verified end-to-end against `sites/gazetta.studio` — real CF deploy, live worker on https://gazetta.studio) |
 | NotificationProvider (in-admin) | ☐ pending — see Next |
