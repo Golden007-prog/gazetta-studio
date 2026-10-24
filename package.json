@@ -23,7 +23,7 @@
     "test": "npm run test --workspaces --if-present",
     "smoke": "bash scripts/smoke-publish.sh",
     "format": "biome format --write .",
-    "format:check": "biome format .",
+    "format:check": "node scripts/check-biome-version.mjs && biome format .",
     "lint:actions": "bash scripts/actionlint.sh",
     "lint:actions:security": "bash scripts/zizmor.sh",
     "knip": "knip --reporter compact",
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "2.5.15",
     "@playwright/test": "^1.64.1",
     "@storybook/addon-a11y": "^10.6.2",
     "@storybook/addon-themes": "^10.6.2",
