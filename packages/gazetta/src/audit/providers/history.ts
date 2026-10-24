@@ -52,6 +52,7 @@
 import type { StorageProvider } from '../../types.js'
 import type { AuditEvent, AuditQuery } from '../types.js'
 import type { AuditProvider } from '../provider.js'
+import { enqueueStorageTask } from '../append-queue.js'
 
 export interface HistoryAuditProviderOptions {
   /** Storage provider for the target. Audit events live under `.gazetta/audit/`. */
@@ -67,36 +68,6 @@ export interface HistoryAuditProviderOptions {
 
 const AUDIT_DIR = '.gazetta/audit'
 
-/**
- * In-process append queues, keyed by (storage, events file). Appends are
- * read-modify-write (cloud StorageProvider has no append), so overlapping
- * record() calls in one process race and lose events (#1257). Keying at
- * module level, not per provider object, because each createAdminApp
- * builds its own provider and two providers in one process can write the
- * same `events-{instance}.jsonl`.
- *
- * A failed write must not block later events: each task chains on the
- * previous one with the failure swallowed. The caller still gets its own
- * rejection, which `recordToAll` handles.
- */
-const appendQueues = new WeakMap<StorageProvider, Map<string, Promise<void>>>()
-
-function enqueueAppend(storage: StorageProvider, path: string, task: () => Promise<void>): Promise<void> {
-  let byPath = appendQueues.get(storage)
-  if (!byPath) {
-    byPath = new Map()
-    appendQueues.set(storage, byPath)
-  }
-  const prev = byPath.get(path) ?? Promise.resolve()
-  const run = prev.catch(() => {}).then(task)
-  byPath.set(path, run)
-  const cleanup = () => {
-    if (byPath.get(path) === run) byPath.delete(path)
-  }
-  run.then(cleanup, cleanup)
-  return run
-}
-
 export function createHistoryAuditProvider(opts: HistoryAuditProviderOptions): AuditProvider {
   const { storage, instance } = opts
   const eventsPath = `${AUDIT_DIR}/events-${instance}.jsonl`
@@ -107,10 +78,11 @@ export function createHistoryAuditProvider(opts: HistoryAuditProviderOptions): A
     // doesn't expose append — every write is whole-object replace.
     // The per-instance file scoping makes RMW safe across processes
     // (no other instance writes to this file); within one process the
-    // append queue serializes overlapping writes (#1257). The cost is
+    // shared append queue serializes overlapping writes (#1257) and
+    // serializes them against retention-pruner rewrites (#1414). The cost is
     // one extra read per event. Acceptable for v1 latency budget
     // (50-200ms).
-    return enqueueAppend(storage, eventsPath, async () => {
+    return enqueueStorageTask(storage, eventsPath, async () => {
       let existing = ''
       try {
         existing = await storage.readFile(eventsPath)
