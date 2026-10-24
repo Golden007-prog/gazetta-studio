@@ -103,6 +103,8 @@ describe('sanitizeSvg — external CSS references stripped', () => {
     ['fill', '<rect fill="url(https://evil.example/b#g)" width="10"/>'],
     ['filter, protocol-relative', '<rect filter="url(//evil.example/c#f)" width="10"/>'],
     ['mask, quoted', `<rect mask="url('https://evil.example/m')" width="10"/>`],
+    ['quoted URL containing )', `<rect fill="url('https://evil.example/a)b')" width="10"/>`],
+    ['unclosed url(', '<rect fill="url(  https://evil.example/u" width="10"/>'],
     ['style attribute', '<rect style="fill:url(https://evil.example/a)" width="10"/>'],
     ['style attribute, CSS escape', '<rect style="fill:\\75rl(https://evil.example/a)" width="10"/>'],
     ['style attribute, image-set', `<rect style="fill:image-set('https://evil.example/a' 1x)" width="10"/>`],

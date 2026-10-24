@@ -221,7 +221,10 @@ export function sanitizeSvg(input: Uint8Array): SvgSanitizeResult {
   }
 }
 
-const CSS_URL = /url\(\s*(['"]?)\s*([^'")]*)\1\s*\)/gi
+// Matches only the opening of each url(, up to where its target begins;
+// the target is judged by its prefix, so a quoted URL containing `)` or
+// an unclosed url( can't slip past, and nothing can backtrack.
+const CSS_URL_OPENING = /url\(\s*['"]?\s*/gi
 const LOCAL_CSS_URL = /^(?:#|data:image\/(?:png|jpeg|gif|webp);base64,)/i
 
 /**
@@ -232,8 +235,8 @@ const LOCAL_CSS_URL = /^(?:#|data:image\/(?:png|jpeg|gif|webp);base64,)/i
  */
 function hasExternalCssReference(css: string): boolean {
   if (css.includes('\\') || /@import|image-set\s*\(/i.test(css)) return true
-  for (const m of css.matchAll(CSS_URL)) {
-    if (!LOCAL_CSS_URL.test(m[2]!.trim())) return true
+  for (const m of css.matchAll(CSS_URL_OPENING)) {
+    if (!LOCAL_CSS_URL.test(css.slice(m.index + m[0].length))) return true
   }
   return false
 }
