@@ -54,7 +54,7 @@ An issue is ready for anyone to pick up when it has:
 2. **What happens, reproducibly.** The file and line, or a command or request and what it returns.
 3. **What should happen**, citing the doc that says so: a design doc (`.claude/rules/design-*.md`), `docs/`, or the decision recorded on the issue.
 4. **A recommended fix**, or a Decided section when the maintainer has chosen between options.
-5. **Acceptance criteria that name what to check:** a route and its response, a command and its output, or a test that fails on today's `main`.
+5. **Acceptance criteria that name what to check:** a route and its response, a command and its output, or a test that fails on today's `main`. When the check has a natural home, name it too: the test file or the CI job.
 
 If an issue you want to work on is missing one of these, ask on it. Maintainers and the bots write issues to this list.
 
