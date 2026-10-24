@@ -348,11 +348,20 @@ export default defineSite({
 | Trust mode | Correct source for client IP |
 |---|---|
 | `none` | TCP peer (no proxy assumed) |
-| `forwarded-user` | `X-Forwarded-For` with operator-configured `trustedProxyCount` (count back from rightmost; everything to the right is trusted, leftmost is client) |
+| `forwarded-user` | `X-Forwarded-For` with operator-configured `trustedProxyCount`: the client is that many entries from the right |
 | `cloudflare-access` | `Cf-Connecting-IP` (Cloudflare-specific, signed/trusted) |
 | `azure-easy-auth` | `X-Forwarded-For` (Azure App Service appends one entry; `trustedProxyCount=1`) |
 | `aws-cognito` | `X-Forwarded-For` (ALB appends one entry; `trustedProxyCount=1`) |
 | `tailscale` | TCP peer (Tailscale serves direct; no proxy chain) |
+
+`trustedProxyCount` counts from the right: each trusted proxy appends the address it received the request from, so with N proxies the client is the Nth entry, and entries further left came from the client (Azure App Service and ALB append one, so 1).
+
+Decided: maintainer, 2026-10-24 (#1291)
+
+| Rejected | Why |
+|---|---|
+| The (N+1)th entry, assuming the proxies' own addresses are listed too | One-proxy setups would have to set `trustedProxyCount: 0`, and the Azure and ALB rows above would change |
+| Fix only `none` and `tailscale` now | Leaves the count off by one: a one-proxy setup records a client-sent entry when there is one |
 
 Future plugin-supplied trust modes declare their own `getClientIp(req): string | null` per the auth-identity provider contract.
 
