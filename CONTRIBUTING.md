@@ -62,7 +62,8 @@ different decision, ask on the issue first.
 
 ### Before you push
 
-- Run `npm run format`. CI's format check fails on unformatted code.
+- Run `npm run format`. CI's format check fails on unformatted code. It uses the
+  repo's pinned Biome version, so run it through npm, not a global Biome install.
 - Run the tests for what you changed (`cd packages/gazetta && npx vitest run tests/<file>`),
   then `npm test`.
 - After changing types, run `npm run build`: `tsc --noEmit` misses some errors.
