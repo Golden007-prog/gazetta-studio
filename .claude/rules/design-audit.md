@@ -263,13 +263,31 @@ Every write **attempt** — success and write-class rejection:
 
 A `sign-in` event is recorded for write methods (POST, PUT, PATCH, DELETE) on `/api/*` only, with the request's method and path in `metadata`: no route has been matched, so there's no other action to record, and no table of routes to keep in sync. A refused draft-preview render (`POST /preview/*`) is a read, so it isn't recorded, like other reads. `sign-in` joins the closed action list additively, like `create-redirect`. Decided: maintainer, 2026-10-24 (#1263).
 
+Two POST routes under `/api/*` write nothing (`POST /api/publish/audit`, an audit query, and `POST /api/assets/:name/suggest-alt`, which returns an alt-text suggestion); refused requests to them are recorded too, since before a route is matched the method is the only signal. Decided: maintainer, 2026-10-24 (#1263).
+
+| Rejected | Why |
+|---|---|
+| Exclude those two routes | Needs a list of routes kept in sync with the code, which the `sign-in` decision turned down |
+
+Each instance records the first 20 refused write requests an hour in full, then one row with the count of the rest (for example "412 more refused write requests"), and the stored path is cut to 200 characters, so people without credentials can't grow the log. Decided: maintainer, 2026-10-24 (#1263).
+
+| Rejected | Why |
+|---|---|
+| Record every one | Anyone who can reach `/api/*` without credentials controls how many: nothing rate-limits requests, retention is off by default, and each event rewrites the instance's whole events file. A scan would show as thousands of identical rows |
+
+A `sign-in` row says which check refused the request: the token, the credentials, an untrusted proxy, or no matching role. A no-role row's actor is the verified user, pseudonymized like other actors when `actorPseudonym` is set; the other three record actor `unknown`, since their identity isn't verified. An operator can tell a user missing from `roleMapping` from someone probing. Decided: maintainer, 2026-10-24 (#1263).
+
+| Rejected | Why |
+|---|---|
+| Method and path only, actor `unknown` | Every row would read alike, and why a request was refused isn't recorded anywhere on the server: its request log has only the method, path and status |
+
 **Recording sites** (the layer that produced the outcome records its own event):
 - Save/publish/delete handler success path → `success`
 - Save/publish handler validation rejection (409) → `validation-failed`
 - Capability middleware 403 path → `forbidden` (with `metadata.missingCapabilities`)
 - Production publish gate 403 (publish, publish stream, fetch) → `forbidden` (with `metadata.missingCapabilities`)
 - Capability middleware 401 path (a request with no principal) → `unauthenticated`
-- `GAZETTA_TOKEN` guard 401, and principal middleware 401 when the identity provider rejects the request, for write methods on `/api/*` → `sign-in` / `unauthenticated` (with the method and path in `metadata`; not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262))
+- `GAZETTA_TOKEN` guard 401, and principal middleware 401 when the identity provider rejects the request, for write methods on `/api/*` → `sign-in` / `unauthenticated` (with the method, the path cut to 200 characters, and which check refused it in `metadata`; the first 20 an hour per instance, then a row with the count; not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262))
 
 **Anti-pattern avoided**: a global "audit interceptor" that wraps every handler and infers outcome from HTTP status. That couples audit to HTTP shape (forbids non-HTTP audit sources later, like CLI commands). Each site explicitly records its own outcome.
 
@@ -555,6 +573,7 @@ How audit log composes with each of the other 12 foundational dimensions plus th
 - At envelope (~25K events/year per `design-scale.md`): full-scan grep ~50ms filesystem, ~500ms cloud storage — well under 5-second admin SLA.
 - At 100K events: query latency p95 approaches 2 seconds — index sidecar trigger fires.
 - At hard limit (250K+): index sidecars required for SLA.
+- `sign-in` rows come from requests without credentials, so outsiders control how many are attempted; the cap keeps them to 21 an hour per instance (the first 20, then a count), about 184,000 a year under constant probing: past the 100K mark, under the 250K hard limit. Retention, when set, bounds them further.
 - Audit recording cost: 50-200ms per event (sync fail-open, parallel fan-out). Acceptable on save (invisible to authors); ~1-2% overhead on publish (already 1-30s).
 - External-sink providers add their own latency to the slowest-provider envelope.
 
