@@ -72,7 +72,7 @@ import {
   printTranscriptPath,
   printWarning,
 } from '../_lib/ui.js'
-import { orderCandidates } from './candidate-order.js'
+import { orderCandidates, PRIORITY_LABEL } from './candidate-order.js'
 import { diagnoseFailure, formatFailureComment } from './failure-diagnostic.js'
 import { openSkipListPR } from './open-skip-list-pr.js'
 import { pastPROutcome } from './past-pr.js'
@@ -144,6 +144,7 @@ async function main(): Promise<void> {
       'Open issues with `bug` AND `ready-for-agent`',
       'AND no `ready-for-human` / `wontfix` / `needs-info`',
       'AND no `fix-bot-attempted` label, OR reopened since (idempotency)',
+      'Order: `priority` label first, then oldest',
     ],
     outputs: ['EITHER draft PR (commit 1: failing test, commit 2: fix)', 'OR stuck-comment + `ready-for-human` label'],
   })
@@ -172,7 +173,12 @@ async function main(): Promise<void> {
 
   printCandidateList({
     noun: 'bug',
-    candidates: candidates.map(c => ({ ref: `#${c.number}`, label: c.title })),
+    order: '`priority` first, then oldest',
+    candidates: candidates.map(c => ({
+      ref: `#${c.number}`,
+      label: c.title,
+      meta: c.labels.includes(PRIORITY_LABEL) ? '[priority]' : undefined,
+    })),
   })
 
   if (DRY_RUN) {

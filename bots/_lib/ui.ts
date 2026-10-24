@@ -128,10 +128,12 @@ export function printCandidateList(opts: {
   /** Singular noun: "candidate", "issue", "flake". */
   noun: string
   candidates: Array<{ ref: string; label: string; meta?: string }>
+  /** How the list is ordered, shown in the heading. Default: "oldest first". */
+  order?: string
 }): void {
   if (opts.candidates.length === 0) return
   const plural = opts.candidates.length === 1 ? opts.noun : `${opts.noun}s`
-  console.log(c.dim(`\n📋 ${opts.candidates.length} ${plural} (oldest first):`))
+  console.log(c.dim(`\n📋 ${opts.candidates.length} ${plural} (${opts.order ?? 'oldest first'}):`))
   for (const candidate of opts.candidates) {
     const meta = candidate.meta ? c.dim(` ${candidate.meta}`) : ''
     console.log(`   ${c.dim(candidate.ref)} ${candidate.label}${meta}`)
