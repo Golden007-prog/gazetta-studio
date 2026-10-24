@@ -46,6 +46,9 @@ The `area:` labels say which part of the code an issue is in. Issues without
 `ready-for-agent` aren't ready yet: they still need a decision or more information.
 Ask on the issue if anything is unclear.
 
+New here? Tell us how you found Gazetta, and whether you use it, in
+[How did you find Gazetta?](https://github.com/gazetta-studio/gazetta-studio/discussions/1277).
+
 ## Making the change
 
 1. Fork the repository and create a branch, for example `fix/issue-123`.

@@ -143,6 +143,8 @@ npm run build            # build all packages
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to pick an issue, run the tests and open a PR.
 
+How did you find Gazetta, and are you using it for anything? Tell us in [this discussion](https://github.com/gazetta-studio/gazetta-studio/discussions/1277).
+
 ## License
 
 MIT
