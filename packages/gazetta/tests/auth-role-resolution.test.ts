@@ -161,6 +161,7 @@ describe('azure-easy-auth role resolution (#414)', () => {
 // --- aws-cognito: groups from the JWT claim named by roleMapping ----
 
 describe('aws-cognito role resolution (#414)', () => {
+  const ALB_ARN = 'arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/gazetta/50dc6c495c0c9188'
   async function setup() {
     const { publicKey, privateKey } = await generateKeyPair('RS256')
     const jwksFactory: () => JWTVerifyGetKey = () => async () => publicKey
@@ -169,7 +170,7 @@ describe('aws-cognito role resolution (#414)', () => {
 
   function sign(privateKey: CryptoKey, claims: JWTPayload): Promise<string> {
     return new SignJWT(claims)
-      .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1', signer: ALB_ARN, exp: Math.floor(Date.now() / 1000) + 300 })
       .setIssuedAt()
       .setExpirationTime('5m')
       .sign(privateKey)
@@ -180,6 +181,7 @@ describe('aws-cognito role resolution (#414)', () => {
     const token = await sign(privateKey, { sub: 'u', 'cognito:groups': ['cog-admins'] })
     const provider = createAwsCognitoAuthProvider({
       region: 'us-east-1',
+      albArn: ALB_ARN,
       jwksFactory,
       roleMapping: { claim: 'cognito:groups', map: { 'cog-admins': 'admin' }, defaultRole: 'viewer' },
     })
@@ -193,6 +195,7 @@ describe('aws-cognito role resolution (#414)', () => {
     const token = await sign(privateKey, { sub: 'u', 'cognito:groups': ['unmapped'] })
     const provider = createAwsCognitoAuthProvider({
       region: 'us-east-1',
+      albArn: ALB_ARN,
       jwksFactory,
       roleMapping: { claim: 'cognito:groups', map: { 'cog-admins': 'admin' }, defaultRole: 'viewer' },
     })
@@ -205,6 +208,7 @@ describe('aws-cognito role resolution (#414)', () => {
     const token = await sign(privateKey, { sub: 'u', 'cognito:groups': ['unmapped'] })
     const provider = createAwsCognitoAuthProvider({
       region: 'us-east-1',
+      albArn: ALB_ARN,
       jwksFactory,
       roleMapping: { claim: 'cognito:groups', map: { 'cog-admins': 'admin' } },
     })
@@ -218,6 +222,7 @@ describe('aws-cognito role resolution (#414)', () => {
     const token = await sign(privateKey, { sub: 'u', 'cognito:groups': ['cog-translators'] })
     const provider = createAwsCognitoAuthProvider({
       region: 'us-east-1',
+      albArn: ALB_ARN,
       jwksFactory,
       roleMapping: { claim: 'cognito:groups', map: { 'cog-translators': 'translator' }, defaultRole: 'viewer' },
       customRoles: { translator: ['read:pages', 'edit:locale-variants'] },
@@ -230,7 +235,12 @@ describe('aws-cognito role resolution (#414)', () => {
   it('without roleMapping, falls back to constructor defaultRole (back-compat)', async () => {
     const { privateKey, jwksFactory } = await setup()
     const token = await sign(privateKey, { sub: 'u', 'cognito:groups': ['ignored'] })
-    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', jwksFactory, defaultRole: 'viewer' })
+    const provider = createAwsCognitoAuthProvider({
+      region: 'us-east-1',
+      albArn: ALB_ARN,
+      jwksFactory,
+      defaultRole: 'viewer',
+    })
     const principal = await provider.extractPrincipal(reqOf({ 'x-amzn-oidc-data': token }))
     expect(principal!.role).toBe('viewer')
   })

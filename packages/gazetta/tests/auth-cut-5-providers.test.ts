@@ -126,24 +126,40 @@ describe('createAzureEasyAuthProvider (Cut 5)', () => {
 
 // --- aws-cognito --------------------------------------------------
 
+const ALB_ARN = 'arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/gazetta/50dc6c495c0c9188'
+const inFiveMinutes = () => Math.floor(Date.now() / 1000) + 300
+
 describe('AuthConfigSchema — aws-cognito (Cut 5)', () => {
   it('accepts a valid AWS region', () => {
-    const r = AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'us-east-1' })
+    const r = AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'us-east-1', albArn: ALB_ARN })
     expect(r.success).toBe(true)
   })
 
   it('accepts EU regions', () => {
-    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'eu-west-2' }).success).toBe(true)
-    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'ap-southeast-3' }).success).toBe(true)
+    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'eu-west-2', albArn: ALB_ARN }).success).toBe(
+      true,
+    )
+    expect(
+      AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'ap-southeast-3', albArn: ALB_ARN }).success,
+    ).toBe(true)
   })
 
   it('rejects malformed region', () => {
-    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'us-east' }).success).toBe(false)
-    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'US-EAST-1' }).success).toBe(false)
+    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'us-east', albArn: ALB_ARN }).success).toBe(false)
+    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'US-EAST-1', albArn: ALB_ARN }).success).toBe(
+      false,
+    )
   })
 
   it('rejects missing region', () => {
-    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito' }).success).toBe(false)
+    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', albArn: ALB_ARN }).success).toBe(false)
+  })
+  it('rejects a config without albArn, and accepts a list of ARNs', () => {
+    expect(AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'us-east-1' }).success).toBe(false)
+    expect(
+      AuthConfigSchema.safeParse({ trust: 'aws-cognito', region: 'us-east-1', albArn: [ALB_ARN, `${ALB_ARN}2`] })
+        .success,
+    ).toBe(true)
   })
 })
 
@@ -155,16 +171,16 @@ describe('createAwsCognitoAuthProvider (Cut 5)', () => {
   }
 
   it('throws AuthConfigurationError on empty region', () => {
-    expect(() => createAwsCognitoAuthProvider({ region: '' })).toThrow(AuthConfigurationError)
+    expect(() => createAwsCognitoAuthProvider({ region: '', albArn: ALB_ARN })).toThrow(AuthConfigurationError)
   })
 
   it('throws AuthConfigurationError on malformed region', () => {
-    expect(() => createAwsCognitoAuthProvider({ region: 'us-east' })).toThrow(AuthConfigurationError)
+    expect(() => createAwsCognitoAuthProvider({ region: 'us-east', albArn: ALB_ARN })).toThrow(AuthConfigurationError)
   })
 
   it('returns null when x-amzn-oidc-data is absent', async () => {
     const { jwksFactory } = await setup()
-    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', jwksFactory })
+    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', albArn: ALB_ARN, jwksFactory })
     const principal = await provider.extractPrincipal(makeReq())
     expect(principal).toBeNull()
   })
@@ -172,11 +188,11 @@ describe('createAwsCognitoAuthProvider (Cut 5)', () => {
   it('returns Principal for a valid signed token', async () => {
     const { privateKey, jwksFactory } = await setup()
     const token = await new SignJWT({ sub: 'cognito-user-1', email: 'bob@example.com' })
-      .setProtectedHeader({ alg: 'RS256', kid: 'cognito-key-1' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'cognito-key-1', signer: ALB_ARN, exp: inFiveMinutes() })
       .setIssuedAt()
       .setExpirationTime('5m')
       .sign(privateKey)
-    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', jwksFactory })
+    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', albArn: ALB_ARN, jwksFactory })
     const principal = await provider.extractPrincipal(makeReq({ 'x-amzn-oidc-data': token }))
     expect(principal!.id).toBe('cognito-user-1')
     expect(principal!.email).toBe('bob@example.com')
@@ -187,11 +203,15 @@ describe('createAwsCognitoAuthProvider (Cut 5)', () => {
     const setupA = await setup()
     const setupB = await setup()
     const forgedToken = await new SignJWT({ sub: 'admin' })
-      .setProtectedHeader({ alg: 'RS256', kid: 'cognito-key-1' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'cognito-key-1', signer: ALB_ARN, exp: inFiveMinutes() })
       .setIssuedAt()
       .setExpirationTime('5m')
       .sign(setupA.privateKey)
-    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', jwksFactory: setupB.jwksFactory })
+    const provider = createAwsCognitoAuthProvider({
+      region: 'us-east-1',
+      albArn: ALB_ARN,
+      jwksFactory: setupB.jwksFactory,
+    })
     await expect(provider.extractPrincipal(makeReq({ 'x-amzn-oidc-data': forgedToken }))).rejects.toBeInstanceOf(
       AuthenticationError,
     )
@@ -200,18 +220,42 @@ describe('createAwsCognitoAuthProvider (Cut 5)', () => {
   it('falls back to username when sub is absent', async () => {
     const { privateKey, jwksFactory } = await setup()
     const token = await new SignJWT({ username: 'bob' })
-      .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1', signer: ALB_ARN, exp: inFiveMinutes() })
       .setIssuedAt()
       .setExpirationTime('5m')
       .sign(privateKey)
-    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', jwksFactory })
+    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', albArn: ALB_ARN, jwksFactory })
     const principal = await provider.extractPrincipal(makeReq({ 'x-amzn-oidc-data': token }))
     expect(principal!.id).toBe('bob')
   })
 
+  it('throws AuthConfigurationError without albArn', () => {
+    expect(() => createAwsCognitoAuthProvider({ region: 'us-east-1' } as never)).toThrow(AuthConfigurationError)
+  })
+
+  it.each([
+    [
+      'another load balancer signed it',
+      { signer: 'arn:aws:elasticloadbalancing:us-east-1:444455556666:loadbalancer/app/other/1' },
+    ],
+    ['the header has no signer', { signer: undefined }],
+    ['the header expired', { exp: 1000000000 }],
+    ['the header has no exp', { exp: undefined }],
+  ])('rejects a token when %s', async (_why, header) => {
+    const { privateKey, jwksFactory } = await setup()
+    const token = await new SignJWT({ sub: 'u' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1', signer: ALB_ARN, exp: inFiveMinutes(), ...header })
+      .setIssuedAt()
+      .sign(privateKey)
+    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', albArn: ALB_ARN, jwksFactory })
+    await expect(provider.extractPrincipal(makeReq({ 'x-amzn-oidc-data': token }))).rejects.toBeInstanceOf(
+      AuthenticationError,
+    )
+  })
+
   it('rejects garbage token', async () => {
     const { jwksFactory } = await setup()
-    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', jwksFactory })
+    const provider = createAwsCognitoAuthProvider({ region: 'us-east-1', albArn: ALB_ARN, jwksFactory })
     await expect(provider.extractPrincipal(makeReq({ 'x-amzn-oidc-data': 'not-a-jwt' }))).rejects.toBeInstanceOf(
       AuthenticationError,
     )
@@ -277,7 +321,7 @@ describe('AuthConfigSchema — full discriminated union (Cut 5)', () => {
       { trust: 'forwarded-user' as const, allowAnyOrigin: true },
       { trust: 'cloudflare-access' as const, teamDomain: 'acme' },
       { trust: 'azure-easy-auth' as const },
-      { trust: 'aws-cognito' as const, region: 'us-east-1' },
+      { trust: 'aws-cognito' as const, region: 'us-east-1', albArn: ALB_ARN },
       { trust: 'tailscale' as const },
     ]
     for (const cfg of modes) {

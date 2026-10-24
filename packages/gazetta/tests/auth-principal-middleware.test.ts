@@ -188,7 +188,11 @@ describe('buildAuthProvider (Cut 7)', () => {
   })
 
   it('returns aws-cognito provider', () => {
-    const provider = buildAuthProvider({ trust: 'aws-cognito', region: 'us-east-1' })
+    const provider = buildAuthProvider({
+      trust: 'aws-cognito',
+      region: 'us-east-1',
+      albArn: 'arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/gazetta/50dc6c495c0c9188',
+    })
     expect(provider.trustMode).toBe('aws-cognito')
   })
 
