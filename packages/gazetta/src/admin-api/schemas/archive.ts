@@ -9,6 +9,14 @@
  * consumes to drive the resolve modal.
  */
 import { z } from 'zod'
+import { ALIAS_TARGET_MESSAGE, aliasTargetIssue } from '../../runtime/archive-marker.js'
+
+/** An alias target, checked as the archive marker and `_redirects` will carry it. */
+const AliasTargetSchema = z
+  .string()
+  .min(1)
+  // An empty string is min(1)'s to report.
+  .refine(v => v === '' || aliasTargetIssue(v) === null, { message: ALIAS_TARGET_MESSAGE })
 
 /**
  * POST /api/{kind}/:name/archive body. `aliasOf` is optional —
@@ -18,7 +26,7 @@ import { z } from 'zod'
 export const ArchiveRequestSchema = z.object({
   /** Live target name to redirect to. Pages: name resolves via
    *  `deriveRoute`. Fragments: referenced as `@name` at compose time. */
-  aliasOf: z.string().min(1).optional(),
+  aliasOf: AliasTargetSchema.optional(),
 })
 export type ArchiveRequest = z.infer<typeof ArchiveRequestSchema>
 
@@ -100,7 +108,7 @@ export type ArchiveHasLiveRefs = z.infer<typeof ArchiveHasLiveRefsSchema>
  */
 export const SetAliasRequestSchema = z.object({
   /** New alias target. `null` strips the alias (pure soft-delete). */
-  aliasOf: z.string().min(1).nullable(),
+  aliasOf: AliasTargetSchema.nullable(),
 })
 export type SetAliasRequest = z.infer<typeof SetAliasRequestSchema>
 

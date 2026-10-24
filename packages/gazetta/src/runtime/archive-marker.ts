@@ -35,12 +35,17 @@ const MARKER_PREFIX_BYTES = 200
 /** Regex anchors at start of input; closed-form grammar. */
 const MARKER_RE = /^<!-- gazetta:archived (alias=([\S]+)|gone) -->/
 
-export type AliasTargetIssue = 'whitespace' | 'relative' | 'segments'
+export type AliasTargetIssue = 'whitespace' | 'relative' | 'segments' | 'markup'
+
+/** What an alias target may be, for messages shown where one is set. */
+export const ALIAS_TARGET_MESSAGE =
+  'An alias is a page or fragment name: no spaces, no leading /, no \\, ?, #, < or >, and no empty, . or .. parts'
 
 export function aliasTargetIssue(target: string): AliasTargetIssue | null {
   if (!target || /\s/.test(target)) return 'whitespace'
   if (target.startsWith('/') || target.includes('\\') || /[?#]/.test(target)) return 'relative'
   if (target.split('/').some(part => part === '' || part === '.' || part === '..')) return 'segments'
+  if (/[<>]/.test(target)) return 'markup'
   return null
 }
 
@@ -75,6 +80,9 @@ export function archiveMarker(marker: ArchiveMarker): string {
       throw new Error(
         `Invalid archive alias target ${JSON.stringify(target)} — must not contain empty, "." or ".." path segments.`,
       )
+    }
+    if (issue === 'markup') {
+      throw new Error(`Invalid archive alias target ${JSON.stringify(target)} — must not contain < or >.`)
     }
     const line = `<!-- gazetta:archived alias=${target} -->`
     if (new TextEncoder().encode(line).byteLength > MARKER_PREFIX_BYTES) {

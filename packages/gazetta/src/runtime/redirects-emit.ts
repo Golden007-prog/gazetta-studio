@@ -53,8 +53,11 @@ export interface ArchiveSummary {
  * cache hit on republish without changes).
  */
 export function emitCloudflareRedirects(archives: ReadonlyArray<ArchiveSummary>): string {
-  if (archives.length === 0) return ''
-  const sorted = [...archives].sort((a, b) => a.from.localeCompare(b.from))
+  // Fields are separated by whitespace, so a route containing any would
+  // split its row into more fields or rows; such a row is left out.
+  const rows = archives.filter(a => !/\s/.test(a.from) && (a.to === undefined || !/\s/.test(a.to)))
+  if (rows.length === 0) return ''
+  const sorted = [...rows].sort((a, b) => a.from.localeCompare(b.from))
   const lines = sorted.map(a => (a.to ? `${a.from}  ${a.to}  301` : `${a.from}  /  410`))
   return lines.join('\n') + '\n'
 }

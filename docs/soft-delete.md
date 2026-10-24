@@ -61,6 +61,8 @@ Content-Type: application/json
 
 Returns `200 { ok: true, name, archivedAt, aliasOf? }`.
 
+`aliasOf` is a page or fragment name: no spaces, no leading `/`, no `\`, `?`, `#`, `<` or `>`, and no empty, `.` or `..` parts. Anything else returns `400`, here and when editing an alias.
+
 Capability: `delete:pages` (or `delete:fragments`). Same authority as the hard-delete operation it replaces — archive removes from the live tree.
 
 **Refuse-with-live-refs (P8 save-handler check):** when archiving without `aliasOf` AND live items reference the target, the route returns `409 ARCHIVE_HAS_LIVE_REFS` with the blocking refs in the body. Author resolves by setting `aliasOf` (which keeps refs working via the alias chain) OR removing the live refs first. Admin operators can bypass with `?force=true`.
