@@ -194,4 +194,4 @@ export function createHistoryAuditProvider(opts: HistoryAuditProviderOptions): A
     // queryUrl intentionally omitted — HistoryAuditProvider has
     // queryable storage; the drawer reads via query() directly.
   }
-  }
+}
