@@ -82,7 +82,7 @@ Who the first screen speaks to, in what words, and which alternatives the honest
 
 **Audience.** The first sentence speaks to developers who run a site in more than one environment and want to move content between them, in their own words ("push it to production", "without copying a database"). The second line says content is files in your own storage, served from a Worker or any Node host.
 
-Decided: maintainer, 2026-10-24 (#PRNUM)
+Decided: maintainer, 2026-10-24 (#1416)
 
 | Rejected | Why |
 |---|---|
@@ -91,7 +91,7 @@ Decided: maintainer, 2026-10-24 (#PRNUM)
 
 **Category word.** Plain "CMS": "An open-source CMS that …" plus what it does. "Stateless" stays the idea of the launch essay ("Why a CMS should store nothing"), and the repo keeps its `flat-file-cms` topic.
 
-Decided: maintainer, 2026-10-24 (#PRNUM)
+Decided: maintainer, 2026-10-24 (#1416)
 
 | Rejected | Why |
 |---|---|
@@ -100,7 +100,7 @@ Decided: maintainer, 2026-10-24 (#PRNUM)
 
 **First sentence (draft).** Environments first: "An open-source CMS that publishes your site between local, staging and production, in either direction, without copying a database." Second line: "Content is files in your own storage (a folder, R2, S3 or Azure Blob), served from a Cloudflare Worker or any Node host." The maintainer writes the final wording; [#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189) changes the README.
 
-Decided: maintainer, 2026-10-24 (#PRNUM)
+Decided: maintainer, 2026-10-24 (#1416)
 
 | Rejected | Draft |
 |---|---|
@@ -109,7 +109,7 @@ Decided: maintainer, 2026-10-24 (#PRNUM)
 
 **Comparison.** The Stage 1 honest comparison names EmDash, Payload and TinaCMS: one per architecture a chooser weighs (Cloudflare's own CMS with its database on D1, the default self-hosted TypeScript CMS, and the Git-based family).
 
-Decided: maintainer, 2026-10-24 (#PRNUM)
+Decided: maintainer, 2026-10-24 (#1416)
 
 | Rejected | Why |
 |---|---|
