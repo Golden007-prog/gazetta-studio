@@ -61,7 +61,7 @@ Stage 0:
 - A listing on up-for-grabs.net; goodfirstissue.dev once its rules are checked
 - GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1266)
 
 ### Bug backlog
 

@@ -68,7 +68,7 @@ Every channel opens at a stage, and a stage opens only when its gate is met.
 
 Stage 1 needs both checks: CI catches the docs drifting from the code, and watching people catches what CI can't, such as a step that is technically correct but confusing.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1266)
 
 | Rejected | Why |
 |---|---|
@@ -118,7 +118,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 | 4 | Docs per major version, stability policy, migration guides | — | Fleet | ✓ |
 | never | Waitlist, mass comparison pages, benchmark claims, paid ads | — | — | — |
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1266)
 
 ### How it runs
 
@@ -127,7 +127,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 - **What tells a stage is working:** Stage 0, outside PRs merged and contributors coming back; Stage 1, strangers finishing the tutorial and issues from strangers; Stage 2, other people's sites and returning users. Stars and npm downloads aren't measures: both are easy to inflate.
 - **The maintainer's own words are needed only for** the Show HN post, the essays, the comparison wording, release approvals and social posts. Everything else is fleet work.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1266)
 
 | Rejected | Why |
 |---|---|
