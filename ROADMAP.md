@@ -45,6 +45,24 @@ The back end's first cuts, the UI primitives, the story runner and screenshots i
 
 [#103](https://github.com/gazetta-studio/gazetta-studio/issues/103) page/fragment/component creation UX — needs Discovery + UX-grilling pass per [`feature-design-process.md`](.claude/rules/feature-design-process.md). Labeled `ready-for-human`; design before implementation.
 
+### Website and channels
+
+The plan in [`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md): every channel (the site, the repo, npm, communities, newsletters) opens at one of five stages, and a stage opens only when its gate is met. Each channel is kept true by a check, or the maintainer writes it. Stage 0 starts now, with Contribute as the home page's main button and a small "Try it" beside it. Stage 1 makes "Use it" the main button; its gate is the Onboarding sprint's release that matches the docs ([#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178)) and a first publish that reaches a second target ([#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177)), checked by a tutorial in CI and by 3–5 people completing it without help.
+
+Stage 0:
+
+- GitHub README's first screen: one sentence, a status line, Contribute and Try it ([#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189))
+- GitHub topics, and always 3 or more open good first issues
+- GitHub Discussions, with a pinned "How did you find Gazetta?"
+- gazetta.studio home page: a status line, "Built and published with Gazetta", the blog link removed
+- A Contribute page: agents welcome, what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, the good first issues, design docs, credits
+- Docs on the site built from the repo's `docs/` instead of the hand-copied page
+- `llms.txt`, a Markdown copy of every page, a link to AGENTS.md
+- A listing on up-for-grabs.net; goodfirstissue.dev once its rules are checked
+- GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet
+
+Decided: maintainer, 2026-10-24 (#PR)
+
 ### Bug backlog
 
 User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor, and [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262), which waits for a design answer:
