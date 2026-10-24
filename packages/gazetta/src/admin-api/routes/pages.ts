@@ -266,6 +266,15 @@ export function pageRoutes(
     if (result.code === 'VALIDATION_FAILED') {
       return c.json({ code: 'VALIDATION_FAILED' as const, issues: result.issues }, 409)
     }
+    if (result.code === 'AUDIT_FAILED') {
+      // Strict audit mode refused the write before anything changed
+      // (#1393). 500 per the audit error taxonomy: the failure is
+      // server-side (audit storage), not the client's request.
+      return c.json(
+        { code: 'AUDIT_FAILED' as const, message: 'Audit recording failed; save refused (strict mode)' },
+        500,
+      )
+    }
     // HOOK_CANCELLED — exhaustive narrow per Q1 lock.
     return c.json({ code: 'HOOK_CANCELLED' as const, hook: result.hook, reason: result.reason }, 409)
   })
