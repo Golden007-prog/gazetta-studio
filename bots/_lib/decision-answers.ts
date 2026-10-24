@@ -12,7 +12,7 @@
  * "human") or a picker answer whose `sourceToolAssistantUUID` points at a
  * real AskUserQuestion call. A message typed while a turn runs is a typed
  * reply too: a `queued_command` attachment whose origin is "human", backed
- * by the queue entries that record its typing and delivery. Notices, agent
+ * by its own queue entries recording its typing and delivery. Notices, agent
  * reports, injected and compacted entries, pasted text and tool output don't.
  *
  * A transcript is tamper-evident, not tamper-proof: a shell command can
@@ -107,10 +107,16 @@ export interface TranscriptIndex {
   toolCalls: ToolCall[]
   /** How many entries carry a result for each tool call id. */
   resultCounts: Map<string, number>
-  /** When a queued message was typed, and how many entries came before that record. */
-  enqueues: { timestamp: string; after: number }[]
-  /** Commands of queued messages that were delivered. */
-  delivered: Set<string>
+  /** Records of queued messages being typed: when, their place among queue entries, and how many entries came before them. */
+  enqueues: { timestamp: string; time: number; seq: number; after: number }[]
+  /** Delivery records of queued messages, by command: how many there are, and the first one's place among queue entries. */
+  deliveries: Map<string, { count: number; seq: number }>
+  /** How many queued messages carry each command. */
+  queuedCommands: Map<string, number>
+  /** Queue entries seen so far. */
+  queueOps: number
+  /** How many typed messages each typing record backs, computed on first use. */
+  typingUse?: Map<number, number>
 }
 
 export function emptyIndex(): TranscriptIndex {
@@ -121,7 +127,9 @@ export function emptyIndex(): TranscriptIndex {
     toolCalls: [],
     resultCounts: new Map(),
     enqueues: [],
-    delivered: new Set(),
+    deliveries: new Map(),
+    queuedCommands: new Map(),
+    queueOps: 0,
   }
 }
 
@@ -163,8 +171,17 @@ function toAnswers(raw: unknown): Record<string, string> | undefined {
 /** Claude Code records a queued message's typing (`enqueue`) and its delivery (`remove`). */
 function addQueueOperation(index: TranscriptIndex, entry: Record<string, unknown>): void {
   if (typeof entry.timestamp !== 'string') return
-  if (entry.operation === 'enqueue') index.enqueues.push({ timestamp: entry.timestamp, after: index.order.length })
-  if (entry.operation === 'remove' && typeof entry.commandUuid === 'string') index.delivered.add(entry.commandUuid)
+  const seq = index.queueOps++
+  index.typingUse = undefined
+  if (entry.operation === 'enqueue') {
+    const time = Date.parse(entry.timestamp)
+    index.enqueues.push({ timestamp: entry.timestamp, time, seq, after: index.order.length })
+  }
+  if (entry.operation === 'remove' && typeof entry.commandUuid === 'string') {
+    const known = index.deliveries.get(entry.commandUuid)
+    if (known) known.count++
+    else index.deliveries.set(entry.commandUuid, { count: 1, seq })
+  }
 }
 
 /** Add one transcript line. Unparsable lines, and repeats of an id already seen, are ignored. */
@@ -225,6 +242,9 @@ export function addLine(index: TranscriptIndex, line: string): void {
 
   index.nodes.set(node.uuid, node)
   index.order.push(node)
+  index.typingUse = undefined
+  if (node.queueCommand)
+    index.queuedCommands.set(node.queueCommand, (index.queuedCommands.get(node.queueCommand) ?? 0) + 1)
   const sameTime = index.byTimestamp.get(timestamp)
   if (sameTime) sameTime.push(node.uuid)
   else index.byTimestamp.set(timestamp, [node.uuid])
@@ -264,24 +284,58 @@ function entryProblem(index: TranscriptIndex, node: Node): string | undefined {
 /** The queue entry and the message take their times from separate clock reads, seen 0–2 ms apart. */
 const QUEUE_CLOCK_SLACK_MS = 1000
 
+/** The typing record written before a message and nearest to its time, within the clock slack. */
+function typingRecordOf(index: TranscriptIndex, node: Node): number | undefined {
+  const typedAt = Date.parse(node.timestamp)
+  let nearest: number | undefined
+  let nearestGap = Number.POSITIVE_INFINITY
+  index.enqueues.forEach((record, i) => {
+    const gap = Math.abs(record.time - typedAt)
+    if (record.after <= node.pos && gap <= QUEUE_CLOCK_SLACK_MS && gap < nearestGap) {
+      nearest = i
+      nearestGap = gap
+    }
+  })
+  return nearest
+}
+
+/** How many messages the maintainer typed, between turns or during one, each typing record backs. */
+function typingUse(index: TranscriptIndex): Map<number, number> {
+  if (index.typingUse) return index.typingUse
+  const use = new Map<number, number>()
+  for (const node of index.order) {
+    if (!isTypedReply(node)) continue
+    const record = typingRecordOf(index, node)
+    if (record !== undefined) use.set(record, (use.get(record) ?? 0) + 1)
+  }
+  index.typingUse = use
+  return use
+}
+
 /**
  * A message typed while a turn runs is written when it's delivered, after the
  * entries from the time in between, so its own time can't follow the entry
  * before it. Its time order is checked instead at the queue entry written
  * when it was typed, and its delivery at the one naming its command. A
- * message appended later has no earlier queue entry.
+ * message appended later has no earlier queue entry. Each record backs one
+ * message, as each picker question has one answer: a second message claiming
+ * it makes both broken, since nothing tells which one is real.
  */
 function queuedProblem(index: TranscriptIndex, node: Node): string | undefined {
   if (!hasEarlierParent(index, node)) return 'its parent entry is missing'
-  const typedAt = Date.parse(node.timestamp)
-  const typing = index.enqueues.find(
-    e => e.after <= node.pos && Math.abs(Date.parse(e.timestamp) - typedAt) <= QUEUE_CLOCK_SLACK_MS,
-  )
-  if (!typing) return 'no earlier queue entry records it being typed'
+  const record = typingRecordOf(index, node)
+  if (record === undefined) return 'no earlier queue entry records it being typed'
+  const typing = index.enqueues[record]
   if (!isInTimeOrder(index, typing.after, typing.timestamp)) {
     return 'the queue entry for its typing is timestamped earlier than the entry before it'
   }
-  if (!node.queueCommand || !index.delivered.has(node.queueCommand)) return 'no queue entry records its delivery'
+  if ((typingUse(index).get(record) ?? 0) > 1) return 'the queue entry for its typing also backs another message'
+  const command = node.queueCommand
+  const delivery = command ? index.deliveries.get(command) : undefined
+  if (!command || !delivery) return 'no queue entry records its delivery'
+  if (delivery.count > 1) return 'more than one queue entry records its delivery'
+  if ((index.queuedCommands.get(command) ?? 0) > 1) return 'another message names the same delivery'
+  if (delivery.seq < typing.seq) return 'its delivery is recorded before its typing'
   return undefined
 }
 
