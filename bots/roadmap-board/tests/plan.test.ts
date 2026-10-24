@@ -58,6 +58,25 @@ describe('planSync — issues the file mentions', () => {
     ])
   })
 
+  it('lists the closed issues the file still lists, for the Shipped appendix (Q15)', () => {
+    const plan = planSync({
+      roadmap: roadmap({
+        placements: new Map([
+          [515, { number: 515, bucket: 'Now', section: 'Review workflow' }],
+          [516, { number: 516, bucket: 'Now', section: 'Review workflow' }],
+        ]),
+      }),
+      issues: new Map([
+        [515, info(515, 'CLOSED')],
+        [516, info(516, 'OPEN')],
+        [600, info(600, 'CLOSED')],
+      ]),
+      items: [],
+      allowRemovals: false,
+    })
+    expect(plan.closedListed).toEqual([515])
+  })
+
   it('puts a mentioned closed issue in Done and keeps its section', () => {
     const plan = planSync({
       roadmap: roadmap({ placements: new Map([[515, { number: 515, bucket: 'Now', section: 'Review workflow' }]]) }),

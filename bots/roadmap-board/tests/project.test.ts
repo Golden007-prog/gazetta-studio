@@ -25,6 +25,19 @@ import {
   VIEWS,
 } from '../project.js'
 
+describe('the views (Q14, Q15)', () => {
+  it('has no By area tab: Area is a slice of the bucket tabs', () => {
+    expect(VIEWS.map(v => v.name)).toEqual(['Roadmap', 'Now', 'Next', 'Later', 'All', 'Not in ROADMAP.md'])
+  })
+
+  it('hides Done in the views that would show closed issues', () => {
+    const filter = (name: string) => VIEWS.find(v => v.name === name)?.filter
+    expect(filter('Roadmap')).toBe('has:section -status:Done')
+    expect(filter('All')).toBe('has:section -status:Done')
+    expect(filter('Now')).toBe('status:Now')
+  })
+})
+
 const option = (id: string, name: string, color: FieldOption['color'] = 'GRAY', description = ''): FieldOption => ({
   id,
   name,
@@ -72,7 +85,8 @@ describe('project text', () => {
     expect(text).toContain('https://github.com/gazetta-studio/gazetta-studio/blob/main/ROADMAP.md')
     expect(text).toContain('column by Section')
     expect(text).toContain("hide the other buckets' sections")
-    expect(text).toContain('group by Area')
+    expect(text).toContain('Slice by Area')
+    expect(text).not.toMatch(/by area:|By area/)
     expect(text).toContain('filter `is:issue is:open`')
   })
 
@@ -148,6 +162,7 @@ describe('applyPlan: two requests per new card, and no clears on it (Q13)', () =
     untouched: [],
     notIssues: [],
     multiArea: [],
+    closedListed: [],
     collidingDrafts: [],
     blocked: null,
   }
@@ -196,6 +211,7 @@ describe('applyPlan: stops between cards at the cap (Q13)', () => {
     untouched: [],
     notIssues: [],
     multiArea: [],
+    closedListed: [],
     collidingDrafts: [],
     blocked: null,
   }

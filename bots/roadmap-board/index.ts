@@ -207,6 +207,10 @@ function report(
   }
   if (plan.multiArea.length > 0)
     console.log(`Issues with two area labels: ${plan.multiArea.map(n => `#${n}`).join(', ')}`)
+  if (plan.closedListed.length > 0)
+    console.log(
+      `Closed but still in ROADMAP.md; move them to the Shipped appendix: ${plan.closedListed.map(n => `#${n}`).join(', ')}`,
+    )
   if (plan.notIssues.length > 0)
     console.log(`Not issues (pull requests or missing): ${plan.notIssues.map(n => `#${n}`).join(', ')}`)
   if (plan.untouched.length > 0) console.log(`Left alone: ${plan.untouched.join(', ')}`)

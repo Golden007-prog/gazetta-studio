@@ -68,12 +68,12 @@ export const BUCKET_COLORS: Readonly<Record<Exclude<Status, 'Done'>, Color>> = {
 }
 
 export const VIEWS: ReadonlyArray<{ name: string; layout: 'BOARD_LAYOUT' | 'TABLE_LAYOUT'; filter: string }> = [
-  { name: 'Roadmap', layout: 'BOARD_LAYOUT', filter: 'has:section' },
+  // Done is hidden in every view (design-roadmap-board.md Q15); the bucket tabs filter by bucket anyway.
+  { name: 'Roadmap', layout: 'BOARD_LAYOUT', filter: 'has:section -status:Done' },
   { name: 'Now', layout: 'BOARD_LAYOUT', filter: 'status:Now' },
   { name: 'Next', layout: 'BOARD_LAYOUT', filter: 'status:Next' },
   { name: 'Later', layout: 'BOARD_LAYOUT', filter: 'status:Later' },
-  { name: 'By area', layout: 'BOARD_LAYOUT', filter: 'has:section' },
-  { name: 'All', layout: 'TABLE_LAYOUT', filter: 'has:section' },
+  { name: 'All', layout: 'TABLE_LAYOUT', filter: 'has:section -status:Done' },
   { name: 'Not in ROADMAP.md', layout: 'TABLE_LAYOUT', filter: 'no:section is:open' },
 ]
 
@@ -114,20 +114,19 @@ export function readme(repo: string): string {
 
 ## Views
 
-- **Roadmap**: a column per bucket (Now, Next, Later, Deferred), and Done for closed issues.
-- **Now**, **Next**, **Later**: one bucket, with a column per section.
-- **By area**: bucket columns, with a row per area.
-- **All**: every item, grouped by section.
+- **Roadmap**: a column per bucket (Now, Next, Later, Deferred). Closed issues don't show.
+- **Now**, **Next**, **Later**: one bucket, with a column per section; slice by Area to see one area.
+- **All**: every open item on the roadmap, grouped by section.
 - **Not in ROADMAP.md**: open issues the file doesn't mention.
 
 Cards without an issue are drafts: items the file lists without one.
 
 ## One-time setup
 
-The API can't set a view's columns or grouping, or the auto-add rule, so they're set by hand once:
+The API can't set a view's columns, grouping or slice, or the auto-add rule, so they're set by hand once:
 
-- Roadmap and By area: column by Status. By area: group by Area.
-- Now, Next and Later: column by Section, and in the column menu hide the other buckets' sections, so each tab shows only its own.
+- Roadmap: column by Status.
+- Now, Next and Later: column by Section, and in the column menu hide the other buckets' sections, so each tab shows only its own. Slice by Area.
 - All: group by Section.
 - Workflows, "Auto-add to project": repository \`${repo}\`, filter \`is:issue is:open\`.
 
