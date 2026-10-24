@@ -14,11 +14,12 @@ import { Hono } from 'hono'
 import { createAdminApp } from '../src/admin-api/index.js'
 import { createSourceContext } from '../src/admin-api/source-context.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
+import type { SiteManifest } from '../src/types.js'
 
 let app: Hono
 let storage: MemoryStorage
 
-function setup(seed: Record<string, string> = {}) {
+function setup(seed: Record<string, string> = {}, auth?: NonNullable<SiteManifest['admin']>['auth']) {
   storage = memoryStorage()
   storage.seed({
     'pages/home/page.json': JSON.stringify({ template: 'page-default', content: { title: 'Home' } }),
@@ -34,7 +35,7 @@ function setup(seed: Record<string, string> = {}) {
     storage,
     siteDir: '',
     projectSiteDir: '/test-project',
-    manifest: { name: 'test-site', targets: targetConfigs },
+    manifest: { name: 'test-site', targets: targetConfigs, ...(auth ? { admin: { auth } } : {}) },
   })
   app = createAdminApp({
     source,
@@ -231,5 +232,74 @@ describe('POST /api/fragments/:name/rename', () => {
     const old = await readJson('fragments/header/fragment.json')
     expect(old.archived).toBe(true)
     expect(old.aliasOf).toBe('top-bar')
+  })
+})
+
+describe('rename without keeping an alias', () => {
+  // Same role mapping as the redirect capability tests: the built-in
+  // editor role has edit:* but no delete:*.
+  const editorAuth = {
+    trust: 'forwarded-user' as const,
+    allowAnyOrigin: true,
+    roleMapping: { claim: 'groups', map: { editors: 'editor' }, defaultRole: 'viewer' },
+  }
+  const asEditor = {
+    'Content-Type': 'application/json',
+    'X-Forwarded-User': 'ed@example.com',
+    'X-Forwarded-Email': 'ed@example.com',
+    'X-Forwarded-Groups': 'editors',
+  }
+
+  it('needs delete:pages, so an editor gets 403 and nothing changes', async () => {
+    setup({}, editorAuth)
+    const res = await app.request('/api/pages/landing/rename', {
+      method: 'POST',
+      headers: asEditor,
+      body: JSON.stringify({ to: 'welcome', keepAlias: false }),
+    })
+    expect(res.status).toBe(403)
+    expect(((await res.json()) as { missing?: string[] }).missing).toEqual(['delete:pages'])
+    expect((await readJson('pages/landing/page.json')).archived).toBeUndefined()
+    expect(await storage.exists('pages/welcome/page.json')).toBe(false)
+  })
+
+  it('still lets an editor rename with an alias', async () => {
+    setup({}, editorAuth)
+    const res = await app.request('/api/pages/landing/rename', {
+      method: 'POST',
+      headers: asEditor,
+      body: JSON.stringify({ to: 'welcome' }),
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('refuses while pages still use the fragment, as archiving does, and changes nothing', async () => {
+    setup({
+      'pages/about/page.json': JSON.stringify({ template: 'page-default', content: {}, components: ['@header'] }),
+    })
+    const res = await app.request('/api/fragments/header/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'masthead', keepAlias: false }),
+    })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { code?: string; liveRefs?: Array<{ kind: string; name: string }> }
+    expect(body.code).toBe('ARCHIVE_HAS_LIVE_REFS')
+    expect(body.liveRefs).toContainEqual({ kind: 'page', name: 'about' })
+    expect((await readJson('fragments/header/fragment.json')).archived).toBeUndefined()
+    expect(await storage.exists('fragments/masthead/fragment.json')).toBe(false)
+  })
+
+  it('goes ahead with ?force=true, as archiving does', async () => {
+    setup({
+      'pages/about/page.json': JSON.stringify({ template: 'page-default', content: {}, components: ['@header'] }),
+    })
+    const res = await app.request('/api/fragments/header/rename?force=true', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'masthead', keepAlias: false }),
+    })
+    expect(res.status).toBe(200)
+    expect((await readJson('fragments/header/fragment.json')).archived).toBe(true)
   })
 })
