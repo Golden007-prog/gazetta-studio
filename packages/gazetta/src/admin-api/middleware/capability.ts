@@ -58,14 +58,17 @@ function actionForCapability(capability: string): AuditAction | null {
 /**
  * Item scope on the /api/pages|fragments|assets/:name routes that
  * carry one; site scope otherwise (design-audit.md scope rules).
+ * The CLI mounts the admin app under /admin, so match the first
+ * /api/<collection>/ segment anywhere in the path instead of
+ * anchoring at the root. First match wins: a greedy :name can
+ * itself contain later /api/.../ segments.
  */
 function denialScope(path: string, name: string | undefined): AuditScope {
-  if (name !== undefined) {
-    if (path.startsWith('/api/pages/')) return { kind: 'page', name }
-    if (path.startsWith('/api/fragments/')) return { kind: 'fragment', name }
-    if (path.startsWith('/api/assets/')) return { kind: 'asset', name }
-  }
-  return { kind: 'site' }
+  if (name === undefined) return { kind: 'site' }
+  const match = /(?:^|\/)api\/(pages|fragments|assets)\//.exec(path)
+  if (match === null) return { kind: 'site' }
+  const kind = match[1] === 'pages' ? 'page' : match[1] === 'fragments' ? 'fragment' : 'asset'
+  return { kind, name }
 }
 
 /**
@@ -76,18 +79,21 @@ function denialScope(path: string, name: string | undefined): AuditScope {
 export function requireCapability(capability: string) {
   return createMiddleware<AuditEnv>(async (c, next) => {
     const principal = c.get('principal')
-    // Record one audit event per denied WRITE attempt (#1192); record()
-    // never throws, so an audit failure cannot change the response.
+    // Record one audit event per denied WRITE attempt (#1192). The
+    // denial response must never depend on audit availability:
+    // record() never throws, and the context itself is absent when a
+    // consumer wires requireCapability without auditMiddleware (the
+    // mutation-coverage harnesses do), so the access is guarded too.
     const action = actionForCapability(capability)
     const recordDenial = (outcome: 'unauthenticated' | 'forbidden') =>
       action === null
         ? Promise.resolve()
-        : c.var.audit.record({
+        : (c.var.audit?.record({
             action,
             outcome,
             scope: denialScope(c.req.path, c.req.param('name')),
             metadata: { missingCapabilities: [capability] },
-          })
+          }) ?? Promise.resolve())
     // Anonymous principal — no upstream identity. Translate to
     // 401 (not 403); the request hasn't authenticated yet.
     if (principal.id === UNKNOWN_ACTOR_ID && principal.role === 'unknown') {
