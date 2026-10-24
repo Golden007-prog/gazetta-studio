@@ -74,6 +74,7 @@ export type AuditAction =
   | 'review-withdraw'
   | 'ai-suggest-alt'
   | 'create-redirect'
+  | 'upload'
 
 /**
  * Closed enum of outcomes. Locked: every recording site supplies
@@ -88,6 +89,7 @@ export type AuditOutcome =
   | 'unauthenticated'
   | 'hook-cancelled'
   | 'timeout'
+  | 'write-failed'
 
 /**
  * Snapshot of the principal at decision time — never a live
