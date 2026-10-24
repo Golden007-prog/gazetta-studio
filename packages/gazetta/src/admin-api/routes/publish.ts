@@ -1287,4 +1287,4 @@ async function collectPublishedItemsForHistory(
     }
   }
   return out
-              }
+}
