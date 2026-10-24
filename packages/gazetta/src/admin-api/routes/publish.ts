@@ -1056,11 +1056,6 @@ export function publishRoutes(
     const body = (await c.req.json()) as { source: string; items?: string[]; destination?: string }
     if (!body.source) return c.json({ error: 'Missing "source" target name' }, 400)
 
-    // The destination defaults to the author's working source, which
-    // is not a target write; gate only a named destination (#1191).
-    const fetchProductionForbidden = productionGateFailure(c.var.principal, [body.destination])
-    if (fetchProductionForbidden) return c.json(fetchProductionForbidden, 403)
-
     const t = await getTargets()
     const targetStorage = t.get(body.source)
     if (!targetStorage) return c.json({ error: `Unknown target: ${body.source}` }, 400)
@@ -1072,6 +1067,15 @@ export function publishRoutes(
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)
     }
+
+    // #1191: gate the RESOLVED destination. An omitted destination
+    // resolves to the registry's default editable target, which can be
+    // an editable production target; resolve() only reads, so nothing
+    // is written before this check.
+    const fetchProductionForbidden = productionGateFailure(c.var.principal, [
+      destination.targetName ?? body.destination,
+    ])
+    if (fetchProductionForbidden) return c.json(fetchProductionForbidden, 403)
 
     let items: string[]
     if (body.items?.length) {
