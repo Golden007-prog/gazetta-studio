@@ -136,11 +136,15 @@ export interface Issue {
 
 - **background**: Admin server runs a long-lived scanner. Initial scan on admin boot. Incremental rescan when file watcher detects manifest/template/asset changes. Per-page validation run cached by content hash; only re-runs when something material changed. Issues stored in a Pinia store, surfaced in the UI.
 
-- **pre-publish**: The admin runs the audit on every Publish, and the server runs it again before publishing. Decided: maintainer, 2026-10-24 (#1295). Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
+- **pre-publish**: The server runs the audit before every Publish from the admin. The dialog runs it first, except after the confirmation a production destination asks for, which skips it ([#1328](https://github.com/gazetta-studio/gazetta-studio/issues/1328), a bug). Decided: maintainer, 2026-10-24 (#1295). Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
 
 - **cli**: `gazetta validate` runs all validators in non-interactive mode. Exit non-zero on any error. Useful for CI gating before deploy.
 
-On a target without `publishAudit.strict`, the publish audit neither shows nor blocks on warnings, `broken-links` included: the dialog publishes without showing them, and the server gate blocks only on errors. They show in Site health.
+Warnings at publish (`broken-links` only ever warns):
+- When the dialog's audit finds no errors, the dialog publishes without showing its warnings; they show in Site health.
+- When it finds an error on any destination, the dialog shows every issue, and each warning must be ignored before publishing.
+- The server gate blocks only on errors. After the production confirmation, only the gate runs, so only its errors show ([#1328](https://github.com/gazetta-studio/gazetta-studio/issues/1328)).
+- A destination with `publishAudit.strict` turns its warnings into errors.
 
 Decided: maintainer, 2026-10-24 (#1295)
 
@@ -167,7 +171,7 @@ Decided: maintainer, 2026-10-24 (#1295)
 | `orphaned-locale-file` | — | ✓ warn | — | ✓ warn |
 | `unused-fragment` | — | ✓ info | — | ✓ info |
 
-`broken-links` runs for every page in the background scan and on every Publish from the admin (at publish, its warnings show or block only on strict targets, as above); [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost.
+`broken-links` runs for every page in the background scan and on every Publish from the admin (at publish its warnings show only on strict destinations or when the audit also finds an error, as above); [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost.
 
 Decided: maintainer, 2026-10-24 (#1295)
 
