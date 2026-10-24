@@ -269,7 +269,7 @@ Two POST routes under `/api/*` write nothing (`POST /api/publish/audit`, the pub
 |---|---|
 | Exclude those two routes | Needs a list of routes kept in sync with the code, which the `sign-in` decision turned down |
 
-A `sign-in` row says which check refused the request: the token, the credentials, an untrusted proxy, no matching role, or `unverifiable`, a credential Gazetta couldn't check because the identity provider's signing keys or verification service couldn't be reached, so an outage reads as an outage rather than a scan. A no-role row's actor is the verified user, pseudonymized like other actors when `actorPseudonym` is set; the others record actor `unknown`, since their identity isn't verified. An operator can tell a user missing from `roleMapping` from someone probing. Decided: maintainer, 2026-10-24 (#1263).
+A `sign-in` row says which check refused the request: the token, the credentials, an untrusted proxy, no matching role, or `unverifiable`: the identity provider's key endpoint or verification service couldn't be reached, timed out, or answered with a server error, so an outage reads as an outage rather than a scan. An answer that rejects the key (such as Cognito's for a key id it doesn't know) stays `credentials`, so forged tokens still read as a scan. A no-role row's actor is the verified user, pseudonymized like other actors when `actorPseudonym` is set; the others record actor `unknown`, since their identity isn't verified. An operator can tell a user missing from `roleMapping` from someone probing. Decided: maintainer, 2026-10-24 (#1263).
 
 A refusal from an identity provider that doesn't say which check refused it (such as one an operator adds) is recorded as `credentials`, which is what the provider contract means by refusing; #1262 adds the check, and the verified user on no-role refusals, to the built-in providers' refusals. Decided: maintainer, 2026-10-24 (#1263).
 
@@ -277,11 +277,12 @@ A refusal from an identity provider that doesn't say which check refused it (suc
 |---|---|
 | Method and path only, actor `unknown` | Every row would read alike, and why a request was refused isn't recorded anywhere on the server: its request log has only the method, path and status |
 | Four checks, without `unverifiable` | During a key-endpoint outage every legitimate write would read as a `credentials` refusal from `unknown`, like a scan |
-| Record a provider's unexplained refusal as `unknown` | In the provider contract, a plain refusal already means a missing or invalid credential |
+| Record a provider's unexplained refusal as `unknown` | In the provider contract, a plain refusal already means an invalid credential |
+| Any error from the key endpoint or verification service counts as `unverifiable` | Cognito builds its key URL from the unverified token, so a forged token's made-up key id would read as an outage |
 
 Refused write requests from senders without a verified identity share one allowance per instance: `sign-in` rows refused by the token, the credentials, an untrusted proxy or `unverifiable`, and the capability middleware's `unauthenticated` rows for a request that carries no credential at all, which the identity provider passes through as anonymous. A scan looks the same whichever check refuses it. Each instance records the first 20 of these a day in full, then one row an hour with the count of the rest: about 16,000 rows a year per instance under constant probing. No-role refusals, which only users the identity provider has verified can trigger, get their own allowance, counted the same way, so "Alice matched no role" stays visible during a scan. The stored path is cut to 200 characters. Decided: maintainer, 2026-10-24 (#1263).
 
-A count row covers one hour and says how many each check refused. The first refused request after that hour writes it, since nothing in the audit layer runs on a timer; an instance that stops before then loses that hour's count. Decided: maintainer, 2026-10-24 (#1263).
+A count row covers one hour. A timer writes it when the hour ends, the way the retention pruner runs on a timer; a restart loses only the current hour's count. It's a `sign-in` row for the whole site, actor `unknown`, with the hour and one count per check (`token`, `credentials`, `proxy`, `unverifiable`, `no-role`) plus `none` for requests with no credential at all, each a field of its own in `metadata`, so the drawer shows each count. Decided: maintainer, 2026-10-24 (#1263).
 
 | Rejected | Why |
 |---|---|
@@ -290,6 +291,9 @@ A count row covers one hour and says how many each check refused. The first refu
 | 20 an hour | Constant probing would add about 184,000 rows a year per instance, piling up while retention is off, and every author save on that instance waits while the whole file is rewritten |
 | One allowance for all checks, no-role included | A scan uses up the allowance within seconds, and a real user refused for having no role would show only inside the count |
 | No count: one row saying further refused requests aren't recorded until the allowance resets | Nothing would be counted |
+| The next refused request after the hour writes the count row | A scan's last hours would wait in memory until then, and a restart or deploy would lose them if none came |
+| Leave the count row's action and fields to #1262 | Requests with no credential match none of the five checks, and the drawer would show a nested count as `[object Object]` |
+| Store the allowance with the events, so it survives restarts | Every refused request would cost one more read and write on cloud storage, the cost the cap is meant to avoid |
 
 **Recording sites** (the layer that produced the outcome records its own event):
 - Save/publish/delete handler success path → `success`
@@ -298,6 +302,7 @@ A count row covers one hour and says how many each check refused. The first refu
 - Production publish gate 403 (publish, publish stream, fetch) → `forbidden` (with `metadata.missingCapabilities`)
 - Capability middleware 401 path (a request with no principal) → `unauthenticated`, counted against the shared allowance (not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262))
 - `GAZETTA_TOKEN` guard 401, and principal middleware 401 when the identity provider rejects the request, for write methods on `/api/*` → `sign-in` / `unauthenticated` (with the method, the path cut to 200 characters, and which check refused it in `metadata`; counted against the shared allowance, or no-role's own; not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262))
+- Hourly timer → the hour's `sign-in` count row (not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262))
 
 **Anti-pattern avoided**: a global "audit interceptor" that wraps every handler and infers outcome from HTTP status. That couples audit to HTTP shape (forbids non-HTTP audit sources later, like CLI commands). Each site explicitly records its own outcome.
 
@@ -583,7 +588,7 @@ How audit log composes with each of the other 12 foundational dimensions plus th
 - At envelope (~25K events/year per `design-scale.md`): full-scan grep ~50ms filesystem, ~500ms cloud storage — well under 5-second admin SLA.
 - At 100K events: query latency p95 approaches 2 seconds — index sidecar trigger fires.
 - At hard limit (250K+): index sidecars required for SLA.
-- Refused write requests from senders without a verified identity come as often as outsiders send them; the shared allowance keeps them to the first 20 a day in full, then one count row an hour: about 16,000 rows a year per instance under constant probing, per replica, since each instance has its own allowance and file. They accumulate while retention is off.
+- Refused write requests from senders without a verified identity come as often as outsiders send them; the shared allowance keeps them to the first 20 a day in full, then one count row an hour: about 16,000 rows a year per instance under constant probing, per replica, since each instance has its own allowance. A restart starts a new allowance, so the 16,000 assumes a long-running instance: an admin that scales to zero can record a slow scan in full after every cold start. They accumulate while retention is off. Decided: maintainer, 2026-10-24 (#1263).
 - Audit recording cost: 50-200ms per event (sync fail-open, parallel fan-out). Acceptable on save (invisible to authors); ~1-2% overhead on publish (already 1-30s).
 - External-sink providers add their own latency to the slowest-provider envelope.
 
