@@ -51,6 +51,11 @@ describe('askIdentity', () => {
     expect(await askIdentity({ fetch: down, online: () => false })).toEqual({ kind: 'offline' })
   })
 
+  it('is offline when the server answers 503 and the browser is offline', async () => {
+    const fetch503 = fakeFetch({ '/me': () => json({}, 503), '/site': () => json(SITE) })
+    expect(await askIdentity({ fetch: fetch503, online: () => false })).toEqual({ kind: 'offline' })
+  })
+
   it('is offline when the server does not answer in time and the browser is offline', async () => {
     expect(await askIdentity({ fetch: hang, timeoutMs: 20, online: () => false })).toEqual({ kind: 'offline' })
   })
@@ -60,6 +65,11 @@ describe('askIdentity', () => {
   it.each([
     ['the network fails', { fetch: down }],
     ['the server does not answer in time', { fetch: hang, timeoutMs: 20 }],
+    ['the server answers 503', { fetch: fakeFetch({ '/me': () => json({}, 503), '/site': () => json(SITE) }) }],
+    [
+      'a proxy answers 502',
+      { fetch: fakeFetch({ '/me': () => json(ME), '/site': () => new Response('Bad gateway', { status: 502 }) }) },
+    ],
   ])('is unreachable when %s but the browser is online', async (_, opts) => {
     expect(await askIdentity({ ...opts, online: () => true })).toEqual({ kind: 'unreachable' })
   })
@@ -138,6 +148,16 @@ describe('retryIdentity', () => {
     })
     expect(known).toEqual([me])
     expect(await store.lastIdentity()).toEqual(me)
+  })
+
+  it('keeps asking through server errors (unreachable)', async () => {
+    const store = createMemoryDraftStore()
+    const known: unknown[] = []
+    const ask = answers({ kind: 'unreachable' }, { kind: 'unreachable' }, { kind: 'known', identity: me })
+    await new Promise<void>(resolve => {
+      retryIdentity(store, { ask, intervalMs: 1, onKnown: id => (known.push(id), resolve()) })
+    })
+    expect(known).toEqual([me])
   })
 
   it('stops when the answer is a login page (unknown)', async () => {
