@@ -280,9 +280,9 @@ REJECT.
    `STORY_SCREENSHOTS` (the Read tool shows images). For a state the
    orchestrator didn't capture, take one yourself:
    ```bash
-   npx tsx bots/_lib/screenshot.ts "$STORYBOOK_URL/iframe.html?id=<story-id>&viewMode=story" /tmp/<story-id>.png
+   npx tsx bots/_lib/screenshot.ts "<STORYBOOK_URL>/iframe.html?id=<story-id>&viewMode=story" /tmp/<story-id>.png
    ```
-   then `Read` it. Write screenshots under `/tmp/` only, never in the repo.
+   with `<STORYBOOK_URL>` replaced by the `STORYBOOK_URL` input (it isn't an environment variable), then `Read` it. Write screenshots under `/tmp/` only, never in the repo.
 2. **Compare with the design doc's state table** for this component (the
    "UX surface decisions" section of `design-{FEATURE_SLUG}.md`, or the
    cut's `## Acceptance`): does each story show the state, copy and

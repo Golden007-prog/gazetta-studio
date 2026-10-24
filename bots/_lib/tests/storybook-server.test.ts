@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,6 +74,44 @@ describe('serveStatic', () => {
     const server = await serveStatic(dir)
     try {
       expect((await get(server.url, path)).status).toBe(404)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('refuses an encoded `..%2f` path to a file next to the served folder', async () => {
+    // new URL() resolves `/../x` and `/%2e%2e/x` itself; only `%2f` reaches the guard.
+    const served = join(dir, 'served')
+    mkdirSync(served)
+    writeFileSync(join(served, 'iframe.html'), 'x')
+    writeFileSync(join(dir, 'secret.txt'), 'outside')
+    const server = await serveStatic(served)
+    try {
+      expect((await get(server.url, '/..%2fsecret.txt')).status).toBe(404)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('answers a malformed escape with 400 and keeps serving', async () => {
+    writeFileSync(join(dir, 'iframe.html'), 'x')
+    const server = await serveStatic(dir)
+    try {
+      expect((await get(server.url, '/%E0%A4%A')).status).toBe(400)
+      expect((await get(server.url, '/iframe.html')).status).toBe(200)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it.skipIf(process.getuid?.() === 0)("answers a file it can't read with 500 and keeps serving", async () => {
+    writeFileSync(join(dir, 'iframe.html'), 'x')
+    writeFileSync(join(dir, 'locked.js'), 'x')
+    chmodSync(join(dir, 'locked.js'), 0o000)
+    const server = await serveStatic(dir)
+    try {
+      expect((await get(server.url, '/locked.js')).status).toBe(500)
+      expect((await get(server.url, '/iframe.html')).status).toBe(200)
     } finally {
       await server.stop()
     }

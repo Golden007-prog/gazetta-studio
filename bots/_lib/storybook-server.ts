@@ -6,24 +6,18 @@
  * `.github/workflows/**` (#840). A failed build is a `skipped` result, never
  * a throw — the visual check is advisory and must not stop the review.
  */
-import { spawnSync } from 'node:child_process'
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { extname, join, resolve, sep } from 'node:path'
+import { spawnBounded } from './spawn-bounded.js'
 
 export type CommandResult = { ok: true } | { ok: false; error: string }
 export type RunCommand = (cmd: string, args: readonly string[], cwd: string) => CommandResult
 
 export const runCommand: RunCommand = (cmd, args, cwd) => {
-  const r = spawnSync(cmd, [...args], {
-    cwd,
-    stdio: ['ignore', 'ignore', 'pipe'],
-    encoding: 'utf-8',
-    maxBuffer: 16 * 1024 * 1024,
-  })
-  if (r.status === 0) return { ok: true }
-  return { ok: false, error: (r.stderr?.trim() || r.error?.message || `exit ${r.status}`).slice(-1000) }
+  const r = spawnBounded(cmd, args, { cwd, timeoutMs: 15 * 60_000, maxBuffer: 16 * 1024 * 1024 })
+  return r.ok ? { ok: true } : { ok: false, error: r.error.slice(-1000) }
 }
 
 export interface StaticServer {
@@ -47,20 +41,33 @@ const TYPES: Record<string, string> = {
 /** Serve `dir` on 127.0.0.1 at a free port. Paths outside `dir` answer 404. */
 export async function serveStatic(dir: string): Promise<StaticServer> {
   const root = resolve(dir)
+  // The server runs inside the orchestrator: a throw here would end the bot's run.
   const server = createServer((req, res) => {
-    const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname)
-    let file = resolve(join(root, pathname))
-    if (file !== root && !file.startsWith(root + sep)) {
-      res.writeHead(404).end()
-      return
+    try {
+      const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname)
+      let file = resolve(join(root, pathname))
+      if (file !== root && !file.startsWith(root + sep)) {
+        res.writeHead(404).end()
+        return
+      }
+      if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+      if (!existsSync(file) || !statSync(file).isFile()) {
+        res.writeHead(404).end()
+        return
+      }
+      const stream = createReadStream(file)
+      stream.once('open', () => {
+        res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
+        stream.pipe(res)
+      })
+      stream.once('error', () => {
+        if (res.headersSent) res.destroy()
+        else res.writeHead(500).end()
+      })
+    } catch {
+      if (res.headersSent) res.destroy()
+      else res.writeHead(400).end()
     }
-    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
-    if (!existsSync(file) || !statSync(file).isFile()) {
-      res.writeHead(404).end()
-      return
-    }
-    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
-    createReadStream(file).pipe(res)
   })
   await new Promise<void>((ok, fail) => {
     server.once('error', fail)

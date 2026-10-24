@@ -10,10 +10,10 @@
  * CLI, for Agent B's extra shots (it has Bash, not this module):
  *   npx tsx bots/_lib/screenshot.ts <url> <out.png> [width] [height]
  */
-import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawnBounded } from './spawn-bounded.js'
 
 export interface Viewport {
   width: number
@@ -150,13 +150,8 @@ async function shoot(
  * be changed by a bot (#840), so the install happens here at runtime.
  */
 export function ensureChromium(cwd: string): { ok: true } | { ok: false; error: string } {
-  const r = spawnSync('npx', ['playwright', 'install', 'chromium'], {
-    cwd,
-    stdio: ['ignore', 'ignore', 'pipe'],
-    encoding: 'utf-8',
-  })
-  if (r.status === 0) return { ok: true }
-  return { ok: false, error: (r.stderr?.trim() || r.error?.message || `exit ${r.status}`).slice(0, 500) }
+  const r = spawnBounded('npx', ['playwright', 'install', 'chromium'], { cwd, timeoutMs: 10 * 60_000 })
+  return r.ok ? { ok: true } : { ok: false, error: r.error.slice(0, 500) }
 }
 
 /** True when Playwright can be imported and its Chromium binary is downloaded. */

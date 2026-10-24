@@ -11,8 +11,8 @@
  * Every function returns a result instead of throwing: screenshots are an
  * enhancement, and a hosting failure must never block a PR or a merge.
  */
-import { spawnSync } from 'node:child_process'
 import { basename } from 'node:path'
+import { spawnBounded } from './spawn-bounded.js'
 
 export const SCREENSHOT_RELEASE_TAG = 'bot-screenshots'
 
@@ -24,10 +24,10 @@ export interface RepoSlug {
 export type GhResult = { ok: true; stdout: string } | { ok: false; error: string }
 export type GhRunner = (args: readonly string[]) => GhResult
 
+// The upload runs after the push and before the PR opens, so a stall would hold the PR back.
 export const runGhCapture: GhRunner = args => {
-  const r = spawnSync('gh', [...args], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf-8' })
-  if (r.status === 0) return { ok: true, stdout: r.stdout ?? '' }
-  return { ok: false, error: (r.stderr?.trim() || r.error?.message || `gh exited ${r.status}`).slice(0, 1000) }
+  const r = spawnBounded('gh', args, { timeoutMs: 5 * 60_000, captureStdout: true })
+  return r.ok ? r : { ok: false, error: r.error.slice(0, 1000) }
 }
 
 function slugPart(s: string): string {
