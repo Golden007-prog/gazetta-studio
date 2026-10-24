@@ -52,14 +52,14 @@ The plan in [`docs/audits/website-and-channels.md`](docs/audits/website-and-chan
 Stage 0:
 
 - GitHub README's first screen: one sentence, a status line, Contribute and Try it ([#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189))
-- GitHub topics, and always 3 or more open good first issues
-- GitHub Discussions, with a pinned "How did you find Gazetta?"
-- gazetta.studio home page: a status line, "Built and published with Gazetta", the blog link removed
-- A Contribute page: agents welcome, what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, the good first issues, design docs, credits
-- Docs on the site built from the repo's `docs/` instead of the hand-copied page
-- An experiment on gazetta.studio only: its docs pages in Markdown when an agent asks for Markdown, an `llms.txt`, links to both, and a link to AGENTS.md, with requests to them logged by user agent. Gazetta doing this for every site stays Deferred
-- A listing on up-for-grabs.net; goodfirstissue.dev once its rules are checked
-- GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet
+- GitHub topics, and always 3 or more open good first issues ([#1271](https://github.com/gazetta-studio/gazetta-studio/issues/1271))
+- GitHub Discussions, with a pinned "How did you find Gazetta?" ([#1274](https://github.com/gazetta-studio/gazetta-studio/issues/1274))
+- gazetta.studio home page: a status line, "Built and published with Gazetta", the blog link removed ([#1269](https://github.com/gazetta-studio/gazetta-studio/issues/1269))
+- A Contribute page: agents welcome, what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, the good first issues, design docs, credits; Contribute becomes the home page's main button ([#1270](https://github.com/gazetta-studio/gazetta-studio/issues/1270))
+- Docs on the site built from the repo's `docs/` instead of the hand-copied page ([#1272](https://github.com/gazetta-studio/gazetta-studio/issues/1272))
+- An experiment on gazetta.studio only: its docs pages in Markdown when an agent asks for Markdown, an `llms.txt`, links to both, and a link to AGENTS.md, with requests to them logged by user agent ([#1273](https://github.com/gazetta-studio/gazetta-studio/issues/1273)). Gazetta doing this for every site stays Deferred
+- A listing on up-for-grabs.net; goodfirstissue.dev once its rules are checked ([#1275](https://github.com/gazetta-studio/gazetta-studio/issues/1275))
+- GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet ([#1276](https://github.com/gazetta-studio/gazetta-studio/issues/1276))
 
 Decided: maintainer, 2026-10-24 (#1266)
 
