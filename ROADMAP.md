@@ -57,7 +57,7 @@ Stage 0:
 - gazetta.studio home page: a status line, "Built and published with Gazetta", the blog link removed
 - A Contribute page: agents welcome, what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, the good first issues, design docs, credits
 - Docs on the site built from the repo's `docs/` instead of the hand-copied page
-- `llms.txt`, a Markdown copy of every page, a link to AGENTS.md
+- On gazetta.studio only: `llms.txt`, Markdown copies of the docs pages, a link to AGENTS.md. Gazetta generating them for every site stays Deferred
 - A listing on up-for-grabs.net; goodfirstissue.dev once its rules are checked
 - GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet
 
@@ -100,7 +100,6 @@ Reduce time-to-first-deploy for new operators. Moved from Now on 2026-10-23.
   - [#1186](https://github.com/gazetta-studio/gazetta-studio/issues/1186) docs and code disagree on a cloud target's default environment
   - [#1187](https://github.com/gazetta-studio/gazetta-studio/issues/1187) the generated `wrangler.toml` uses a subdomain as `zone_name` (needs a test on a real account)
   - [#1188](https://github.com/gazetta-studio/gazetta-studio/issues/1188) docs and `init` put pages in different folders, and new pages need a `gazetta dev` restart
-  - [#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189) the README's quick start is for contributors
 - [#1171](https://github.com/gazetta-studio/gazetta-studio/issues/1171) starter themes
 - [#209](https://github.com/gazetta-studio/gazetta-studio/issues/209) Netlify static, after [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152)'s cuts 1–2 and [#1149](https://github.com/gazetta-studio/gazetta-studio/issues/1149). #1152's cut 2 waits for target removal cut 1, whose planner issue opens after publish undo cut 2, target indices cut 2 and review workflow cuts 12–13
 

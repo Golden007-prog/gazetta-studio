@@ -10,11 +10,11 @@
 
 | Channel | State |
 |---|---|
-| gazetta.studio | Three pages. Home: hero "The CMS that stores nothing", a "How it works" section, a "Why not a traditional CMS?" table, an animated quick start, "Get Started" → /docs. Docs: one long page, an older hand-copied version of the repo's `docs/`. Blog: a placeholder. Built and published with Gazetta (R2 + a Cloudflare Worker), which the site doesn't say. |
-| GitHub repo | Public since 2026-04-05. 0 stars, 4 forks. 30 unique visitors in 14 days; referrers: github.com, Google, gazetta.studio (1). CONTRIBUTING.md, `good first issue` and `ready-for-agent` labels, AGENTS.md, public design docs. The README's quick start is for contributors ([#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189)). |
+| gazetta.studio | Three pages. Home: hero "The CMS that stores nothing", a "How it works" section, a "Why not a traditional CMS?" table, an animated quick start, "Get Started" → /docs. Docs: one long page, an older hand-copied version of the repo's `docs/`. Blog: a placeholder. Built and published with Gazetta (R2 + a Cloudflare Worker), which the site doesn't say; the footer reads "Built with Claude Code" and links to GitHub, CONTRIBUTING.md and the licence. |
+| GitHub repo | Public since 2026-04-05. 0 stars, 4 forks. 30 unique visitors in 14 days; referrers: github.com, Google, app.intercom.com and gazetta.studio, one visitor each. CONTRIBUTING.md, `good first issue` and `ready-for-agent` labels, AGENTS.md, public design docs. The README's quick start is for contributors ([#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189)). |
 | npm ([gazetta](https://www.npmjs.com/package/gazetta)) | `latest` 0.8.0, published 2026-05-14; 12 versions since 0.1.0. No README: `packages/gazetta/` has none and the package ships only `dist/` and `admin-dist/`. Description, keywords, MIT, links to the site, repo and issues are filled in. Downloads per month, May to October: 1,857, 465, 307, 316, 175, 990 (bots and mirrors included, so an upper bound). |
 | Outside contributors | Since 1 October: mangomac 30 merged PRs (opened over about 2.6 days), Vidit-Yadav 5, Golden007-prog 1, Oikantik Basu 1 commit. Golden007-prog's PR says "implemented and validated with Codex"; the maintainer reports the others work with agents too. Their PRs update the matching design docs, as AGENTS.md asks. mangomac's #1253 fixed [#1191](https://github.com/gazetta-studio/gazetta-studio/issues/1191) (an editor could publish to production). How they found Gazetta is unknown. |
-| Delivery | Twelve bots (triage, discovery prep, cut planning, features, fixes, reviews, review on comment, flaky tests, mutation tests, mutation scope, dead code, the roadmap board) plus local Claude Code, which handles PRs and brings the maintainer only decisions. The scarce resource is the maintainer's decisions, not review time. |
+| Delivery | Eleven bots (triage, discovery prep, cut planning, features, fixes, reviews, review on comment, flaky tests, mutation tests, mutation scope, dead code), the roadmap-board sync, and local Claude Code, which handles PRs and brings the maintainer only decisions. The scarce resource is the maintainer's decisions, not review time. |
 | First run | A new site has one target, so its first publish goes nowhere ([#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177)). The Onboarding sprint in ROADMAP's Next targets time to first deploy. |
 
 ## What a site can be for
@@ -25,7 +25,7 @@ Thirteen main jobs came out of the research, plus three from the maintainer's id
 |---|---|---|---|
 | **Contributors first** | Supported before 1.0: "In the early stages… Most of the interested visitors you get will be developers" ([Fogel](https://producingoss.com/en/getting-started.html)); newcomers prefer young, small, active projects with clear guidelines ([Nirmani et al. 2026](https://arxiv.org/abs/2607.25126)). Already happening here. No study shows contributors become users. | Works today: contributors run `main` | Main button now |
 | **Path to a first install** | htmx 2020, Bun 2022, Vite 2021, Pages CMS, Outstatic, TinaCMS. Pages CMS had about 900 stars 11 days after a 351-point Show HN; Outstatic about 1,300 after a 203-point one | Broken today | Main button after the release |
-| **A door for coding agents** | 11 of 14 CMS sites serve `llms.txt`; Deno: "Paste this into any coding agent: Read deno.com/agents.md"; Outstatic: "Install with Claude" | Cheap: generated from the docs | Yes |
+| **A door for coding agents** | 11 of 14 CMS sites serve `llms.txt`, but nobody measured its value; Deno: "Paste this into any coding agent: Read deno.com/agents.md"; Outstatic: "Install with Claude" | Cheap: generated from the docs | Yes, on gazetta.studio only (see "Channels by stage") |
 | **Docs as the site** | Needed under every option; Elysia's, Rome's and Hono's early homepages were their docs | /docs is a third copy | Yes, one source built from the repo |
 | **README as the site** | Zod (README-only through 3.0), Vite v1, Deno 2018–19, Sveltia for about two years | npm page empty | The npm README yes; the whole site no |
 | **Real-world test of Gazetta** | 9 of 14 CMS sites confirmed built with their own product, 2 partly; nobody measured the effect | Already true | Yes, and say so |
@@ -88,7 +88,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 | 0 | **gazetta.studio home** | Thin page; status line; "Built and published with Gazetta"; blog link removed | Fleet | — |
 | 0 | **Contribute page** | "Agents welcome", what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, live list of good first issues, design docs, credits | Fleet; you approve the review rules | — |
 | 0 | **Docs on the site** | Built from the repo's `docs/` instead of the hand-copied page | Fleet | — |
-| 0 | **Door for coding agents** | `llms.txt`, a Markdown copy of every page, a link to AGENTS.md | Fleet | — |
+| 0 | **Door for coding agents** | On gazetta.studio only: `llms.txt`, Markdown copies of the docs pages, a link to AGENTS.md | Fleet | — |
 | 0 | **up-for-grabs.net** | A PR adding a YAML entry pointing at the label | Fleet | ✓ |
 | 0 | goodfirstissue.dev | Listing requirements | Fleet checks first | ✗ |
 | 0 | **PR limits, ready but off** | GitHub's open-PR cap with a bypass list; on only if PRs outpace the fleet | You decide when | ✓ |
@@ -119,6 +119,15 @@ Decided: maintainer, 2026-10-24 (#1266)
 | never | Waitlist, mass comparison pages, benchmark claims, paid ads | — | — | — |
 
 Decided: maintainer, 2026-10-24 (#1266)
+
+The door for coding agents covers gazetta.studio only, as part of the site; the site's docs come from the repo's Markdown anyway. Gazetta generating `llms.txt` and Markdown copies for every site it publishes stays Deferred in ROADMAP (decided 2026-10-23, #1179) until there's evidence that AI platforms read them, or an operator asks. `seo-plan.md` calls llms.txt "too early", and this research found no measure of its value either: 11 of 14 CMS sites serve one.
+
+Decided: maintainer, 2026-10-24 (#1266)
+
+| Rejected | Why |
+|---|---|
+| Keep it deferred, for gazetta.studio too (only the AGENTS.md link at Stage 0) | Gives up a cheap door for the agents outside contributors already use |
+| Gazetta generates them for every site now, and gazetta.studio uses that | More work, and it reverses the 2026-10-23 decision for the product without new evidence |
 
 ### How it runs
 
