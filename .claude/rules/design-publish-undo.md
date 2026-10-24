@@ -186,7 +186,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 | 5 | Admin and CLI: the publish panel flow per the UX table, History Restore through the same flow, CLI output and `--yes`, Storybook stories from the table | 4 | component + e2e | Medium |
 | 6 | Docs: "undo restores content, not templates" (History help and docs), `docs/hooks.md` trigger field, alignment note in `design-publishing.md` | 4 | docs | Low |
 
-Cuts 1 and 3 run in parallel. If #1082 stalls, cut 3 is filed for fix-bot.
+Cuts 1 and 3 run in parallel. Cut 3 landed in #1082 (2026-10-21).
 
 Cut 1 builds the function itself: everything Q4 lists except removals, which cut 2 adds. Review workflow cuts 12–13, which wait for it, then build the approval gate in its final place.
 
