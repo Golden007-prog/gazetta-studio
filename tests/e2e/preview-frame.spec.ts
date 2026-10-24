@@ -1,4 +1,6 @@
 import { test, expect } from './fixtures'
+import { openEditor } from './helpers'
+import { ComponentTreePom } from './pages/ComponentTree'
 
 /**
  * The preview shows a page's HTML, which carries script from templates and
@@ -22,5 +24,25 @@ test.describe('Preview frame', () => {
     })
 
     expect(seen).toEqual({ origin: 'null', parentAccess: 'SecurityError' })
+  })
+
+  test('applies an edit to the preview in place, without reloading it', async ({ page }) => {
+    await openEditor(page, 'home')
+    await new ComponentTreePom(page).open('hero')
+    const preview = page.frameLocator('[data-testid="preview-iframe"]')
+    await preview.locator('[data-gz]').first().waitFor({ timeout: 10000 })
+
+    // A mark on the frame's current document; a reload would drop it.
+    const frame = await (await page.locator('[data-testid="preview-iframe"]').elementHandle())?.contentFrame()
+    await frame?.evaluate(() => {
+      ;(window as Window & { gzMark?: boolean }).gzMark = true
+    })
+
+    const title = page.locator('input[name="root_title"]').first()
+    await title.waitFor({ timeout: 10000 })
+    await title.fill('Updated in place')
+
+    await expect(preview.locator('h1', { hasText: 'Updated in place' })).toBeVisible({ timeout: 15000 })
+    expect(await frame?.evaluate(() => (window as Window & { gzMark?: boolean }).gzMark)).toBe(true)
   })
 })

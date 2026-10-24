@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
-import morphdom from 'morphdom'
+import morphdomSource from 'morphdom/dist/morphdom-umd.min.js?raw'
 import { useEventListener, watchDebounced } from '@vueuse/core'
 import { useSelectionStore } from '../stores/selection.js'
 import { useEditingStore } from '../stores/editing.js'
@@ -35,6 +35,8 @@ const router = useRouter()
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const loading = ref(false)
 let currentHtml = ''
+/** The bridge in the current frame document has started (`gazetta:ready`). */
+let frameReady = false
 let previewHoverTimer: ReturnType<typeof setTimeout> | null = null
 
 const focus = useComponentFocusStore()
@@ -140,10 +142,14 @@ function sendScope() {
 }
 watch(fragmentScopeGzId, sendScope)
 
-// Bridge script — three-mode behavior controlled by parent via postMessage
+// Bridge script — three-mode behavior controlled by parent via postMessage.
+// The frame is sandboxed without allow-same-origin, so page script can't
+// reach the admin; the bridge morphs its own document on `gazetta:morph`.
 const BRIDGE_SCRIPT = `
+<script>${morphdomSource.replace(/<\/script/gi, '<\\/script')}<\/script>
 <script>
 (function() {
+  var adminOrigin = ${JSON.stringify(window.location.origin)};
   // Hover overlay — transient, subtle, fades
   var hoverOvl = document.createElement('div');
   hoverOvl.id = 'gz-hover';
@@ -300,7 +306,7 @@ const BRIDGE_SCRIPT = `
       if (href) {
         e.preventDefault();
         e.stopPropagation();
-        if (href.startsWith('/') || href.startsWith(location.origin)) {
+        if (href.startsWith('/') || href.startsWith(adminOrigin)) {
           var path = href.startsWith('/') ? href : new URL(href).pathname;
           window.parent.postMessage({ type: 'gazetta:navigate', route: path }, '*');
         } else {
@@ -327,6 +333,31 @@ const BRIDGE_SCRIPT = `
   });
 
   window.addEventListener('message', function(e) {
+    if (e.source !== window.parent) return;
+    if (e.data && e.data.type === 'gazetta:morph') {
+      try {
+        var newDoc = new DOMParser().parseFromString(e.data.html, 'text/html');
+        morphdom(document.body, newDoc.body, {
+          onBeforeNodeDiscarded: function(node) {
+            return !(node.id === 'gz-hover' || node.id === 'gz-select' || node.id === 'gz-dim');
+          },
+          onBeforeElUpdated: function(fromEl, toEl) {
+            if (fromEl.id === 'gz-hover' || fromEl.id === 'gz-select' || fromEl.id === 'gz-dim') return false;
+            return !fromEl.isEqualNode(toEl);
+          }
+        });
+        var oldStyles = document.head.querySelectorAll('style');
+        var newStyles = newDoc.head.querySelectorAll('style');
+        for (var i = 0; i < oldStyles.length; i++) {
+          if (newStyles[i] && oldStyles[i].textContent !== newStyles[i].textContent) {
+            oldStyles[i].textContent = newStyles[i].textContent;
+          }
+        }
+        refreshOverlays();
+      } catch (err) {
+        window.parent.postMessage({ type: 'gazetta:morph-failed' }, '*');
+      }
+    }
     if (e.data && e.data.type === 'gazetta:mode') {
       mode = e.data.mode || 'browse';
       highlight = e.data.highlight !== false;
@@ -375,6 +406,8 @@ const BRIDGE_SCRIPT = `
       applyScope(e.data.gzId);
     }
   });
+
+  window.parent.postMessage({ type: 'gazetta:ready' }, '*');
 })();
 <\/script>
 `
@@ -387,6 +420,18 @@ function injectBridge(html: string): string {
 }
 
 async function handleMessage(e: MessageEvent) {
+  // Only the preview frame's bridge talks to this panel.
+  if (!e.source || e.source !== iframeRef.value?.contentWindow) return
+  if (e.data?.type === 'gazetta:ready') {
+    frameReady = true
+    sendBridgeMode()
+    sendScope()
+    return
+  }
+  if (e.data?.type === 'gazetta:morph-failed') {
+    applyHtml(currentHtml, false)
+    return
+  }
   if (e.data?.type === 'gazetta:escape') {
     if (uiMode.mode === 'fullscreen') uiMode.toggleFullscreen()
   }
@@ -531,49 +576,16 @@ function applyHtml(html: string, morph: boolean) {
   const iframe = iframeRef.value
   if (!iframe) return
 
-  if (!morph || !currentHtml || !iframe.contentDocument?.body?.innerHTML) {
+  // The frame's document is out of reach from here (its own origin), so an
+  // in-place update goes to the bridge, which answers `gazetta:morph-failed`
+  // when it can't apply it.
+  if (morph && currentHtml && frameReady && iframe.contentWindow) {
+    iframe.contentWindow.postMessage({ type: 'gazetta:morph', html }, '*')
+  } else {
+    frameReady = false
     iframe.srcdoc = html
-    currentHtml = html
-    return
   }
-
-  try {
-    const doc = iframe.contentDocument
-    if (!doc) {
-      iframe.srcdoc = html
-      currentHtml = html
-      return
-    }
-
-    const parser = new DOMParser()
-    const newDoc = parser.parseFromString(html, 'text/html')
-
-    morphdom(doc.body, newDoc.body, {
-      onBeforeNodeDiscarded(node) {
-        const id = (node as Element).id
-        if (id === 'gz-hover' || id === 'gz-select' || id === 'gz-dim') return false
-        return true
-      },
-      onBeforeElUpdated(fromEl, toEl) {
-        if (fromEl.id === 'gz-hover' || fromEl.id === 'gz-select' || fromEl.id === 'gz-dim') return false
-        if (fromEl.isEqualNode(toEl)) return false
-        return true
-      },
-    })
-
-    const oldStyles = doc.head.querySelectorAll('style')
-    const newStyles = newDoc.head.querySelectorAll('style')
-    oldStyles.forEach((s, i) => {
-      if (newStyles[i] && s.textContent !== newStyles[i].textContent) {
-        s.textContent = newStyles[i].textContent
-      }
-    })
-
-    currentHtml = html
-  } catch {
-    iframe.srcdoc = html
-    currentHtml = html
-  }
+  currentHtml = html
 }
 
 watch(
@@ -654,6 +666,7 @@ watchDebounced(
       </div>
       <div class="preview-frame-wrapper">
         <iframe ref="iframeRef" class="preview-iframe" data-testid="preview-iframe"
+          sandbox="allow-scripts"
           :title="previewTitle"
           :style="{ width: previewWidth, maxWidth: '100%' }" />
       </div>

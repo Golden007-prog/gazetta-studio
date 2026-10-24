@@ -197,6 +197,8 @@ Reference in any page with `"@header"`. Update the fragment once — every page 
 6. Click **Save** → writes to disk
 7. Click **Publish** → pre-renders and uploads to target
 
+The preview shows each page in a sandboxed frame with an origin of its own. Template scripts run there, but can't use cookies, `localStorage`, form submits, pop-ups or dialogs such as `alert()`; on the published site they can.
+
 ## Custom editors
 
 The CMS auto-generates forms from template schemas using @rjsf. You can replace the

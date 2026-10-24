@@ -32,59 +32,34 @@ test.describe('Target switch preserves preview', () => {
     await page.goto('/admin/pages/home')
     await page.waitForSelector('iframe[data-testid="preview-iframe"]', { timeout: 10000 })
 
-    // `body` is truthy before layout completes; a scroll issued then is
-    // silently discarded when readyState reaches 'complete'. Gate on
+    // The preview frame has its own origin, so read and scroll it from
+    // inside. `body` is truthy before layout completes; a scroll issued then
+    // is silently discarded when readyState reaches 'complete'. Gate on
     // 'complete' AND body content (skips the iframe's initial blank doc).
+    const preview = async () =>
+      (await page.locator('iframe[data-testid="preview-iframe"]').elementHandle())?.contentFrame()
     await expect
       .poll(
-        async () => {
-          return page.evaluate(() => {
-            const f = document.querySelector('iframe[data-testid="preview-iframe"]') as HTMLIFrameElement | null
-            return (
-              f?.contentDocument?.readyState === 'complete' && (f?.contentDocument?.body?.innerHTML?.length ?? 0) > 500
-            )
-          })
-        },
+        async () =>
+          (await preview())?.evaluate(() => document.readyState === 'complete' && document.body.innerHTML.length > 500),
         { timeout: 10000 },
       )
       .toBe(true)
 
     // Scroll the iframe.
-    await page.evaluate(() => {
-      const f = document.querySelector('iframe[data-testid="preview-iframe"]') as HTMLIFrameElement | null
-      f?.contentWindow?.scrollTo(0, 400)
-    })
+    await (await preview())?.evaluate(() => window.scrollTo(0, 400))
     await expect
-      .poll(
-        async () =>
-          page.evaluate(() => {
-            const f = document.querySelector('iframe[data-testid="preview-iframe"]') as HTMLIFrameElement | null
-            return f?.contentWindow?.scrollY ?? 0
-          }),
-        { timeout: 2000 },
-      )
+      .poll(async () => (await preview())?.evaluate(() => window.scrollY), { timeout: 2000 })
       .toBeGreaterThan(100)
 
-    const scrolled = await page.evaluate(() => {
-      const f = document.querySelector('iframe[data-testid="preview-iframe"]') as HTMLIFrameElement | null
-      return f?.contentWindow?.scrollY ?? 0
-    })
+    const scrolled = await (await preview())?.evaluate(() => window.scrollY)
 
     // Open the top-bar target switcher and select staging. The preview
     // should swap content via morphdom, preserving scroll.
     await page.locator('[data-testid="active-target-indicator"]').click()
     await page.locator('[data-testid="active-target-menu"]').getByRole('menuitem', { name: 'staging' }).click()
 
-    await expect
-      .poll(
-        async () =>
-          page.evaluate(() => {
-            const f = document.querySelector('iframe[data-testid="preview-iframe"]') as HTMLIFrameElement | null
-            return f?.contentWindow?.scrollY ?? 0
-          }),
-        { timeout: 5000 },
-      )
-      .toBe(scrolled)
+    await expect.poll(async () => (await preview())?.evaluate(() => window.scrollY), { timeout: 5000 }).toBe(scrolled)
 
     // Sanity: the indicator now reflects staging as active.
     await expect(page.locator('[data-testid="active-target-indicator"]')).toContainText('staging')
