@@ -29,15 +29,44 @@
  *
  * # SOLID lenses
  *
- *   - SRP: authorization gate only. Doesn't extract identity (Cut
- *     7's principalMiddleware does that), doesn't audit (Cut 5 of
- *     audit foundation does).
+ *   - SRP: authorization gate + the denial audit record (design-audit.md
+ *     "Recording scope (v1)" + "Dedup discipline": the layer that
+ *     produces the outcome records once, and this middleware
+ *     short-circuits before the handler runs). Doesn't extract
+ *     identity (Cut 7's principalMiddleware does that).
  *   - DIP: depends on `capabilityGrants` pure function, not on
  *     the principal middleware's internals.
  */
 import { createMiddleware } from 'hono/factory'
 import { capabilityGrants, UNKNOWN_ACTOR_ID } from '../../auth/index.js'
-import type { PrincipalEnv } from './principal.js'
+import type { AuditAction, AuditScope } from '../../audit/index.js'
+import type { AuditEnv } from './audit.js'
+
+/**
+ * design-audit.md "Recording scope (v1)": only write-attempt denials
+ * are recorded. `read:*` denials are out of v1's recording scope, and
+ * `configure:*` gates only read routes today, so both return null.
+ */
+function actionForCapability(capability: string): AuditAction | null {
+  if (capability.startsWith('edit:')) return 'save'
+  if (capability.startsWith('delete:')) return 'delete'
+  if (capability.startsWith('publish:')) return 'publish'
+  if (capability === 'restore:history') return 'restore'
+  return null
+}
+
+/**
+ * Item scope on the /api/pages|fragments|assets/:name routes that
+ * carry one; site scope otherwise (design-audit.md scope rules).
+ */
+function denialScope(path: string, name: string | undefined): AuditScope {
+  if (name !== undefined) {
+    if (path.startsWith('/api/pages/')) return { kind: 'page', name }
+    if (path.startsWith('/api/fragments/')) return { kind: 'fragment', name }
+    if (path.startsWith('/api/assets/')) return { kind: 'asset', name }
+  }
+  return { kind: 'site' }
+}
 
 /**
  * Build a middleware that requires the specified capability.
@@ -45,11 +74,24 @@ import type { PrincipalEnv } from './principal.js'
  * requests lacking the capability.
  */
 export function requireCapability(capability: string) {
-  return createMiddleware<PrincipalEnv>(async (c, next) => {
+  return createMiddleware<AuditEnv>(async (c, next) => {
     const principal = c.get('principal')
+    // Record one audit event per denied WRITE attempt (#1192); record()
+    // never throws, so an audit failure cannot change the response.
+    const action = actionForCapability(capability)
+    const recordDenial = (outcome: 'unauthenticated' | 'forbidden') =>
+      action === null
+        ? Promise.resolve()
+        : c.var.audit.record({
+            action,
+            outcome,
+            scope: denialScope(c.req.path, c.req.param('name')),
+            metadata: { missingCapabilities: [capability] },
+          })
     // Anonymous principal — no upstream identity. Translate to
     // 401 (not 403); the request hasn't authenticated yet.
     if (principal.id === UNKNOWN_ACTOR_ID && principal.role === 'unknown') {
+      await recordDenial('unauthenticated')
       return c.json(
         { code: 'UNAUTHENTICATED' as const, error: `This endpoint requires capability "${capability}"` },
         401,
@@ -58,6 +100,7 @@ export function requireCapability(capability: string) {
     }
     // Authenticated principal — capability check.
     if (!capabilityGrants(principal.capabilities, capability)) {
+      await recordDenial('forbidden')
       return c.json(
         {
           code: 'FORBIDDEN' as const,
