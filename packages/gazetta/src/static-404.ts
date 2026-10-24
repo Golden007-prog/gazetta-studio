@@ -5,13 +5,12 @@
  * Pages serves the homepage for every unknown path.
  */
 import type { StorageProvider } from './types.js'
-import type { Site } from './site-loader.js'
-import { isArchived } from './archive-helpers.js'
-import { renderPageStatic } from './publish-renderers.js'
+import { staticPageIndexPath } from './publish-item.js'
+import { parseArchiveMarker } from './runtime/archive-marker.js'
 
 export const STATIC_404_PATH = '404.html'
 
-/** Shown when the site has no live `/404` page. */
+/** Shown while the target has no published `/404` page. */
 export const MINIMAL_404_HTML = `<!doctype html>
 <html>
 <head>
@@ -27,25 +26,22 @@ export const MINIMAL_404_HTML = `<!doctype html>
 `
 
 /**
- * The site's default-language `/404` page, rendered as a static target
- * serves it, or the minimal noindex page when the site has none (or it
- * can't be rendered).
+ * The target's own `/404` page in the default language, as published, or the
+ * minimal noindex page when the target has none or holds it archived. Copying
+ * what the target serves at `/404`, not rendering the source's page, keeps
+ * unpublished edits of the 404 page off the target (#1231).
  */
-export async function static404Html(site: Site): Promise<string> {
-  for (const [name, page] of site.pages) {
-    if (page.route !== '/404') continue
-    if (isArchived(page)) break
-    try {
-      const output = await renderPageStatic(name, { site })
-      return output.indexHtml
-    } catch {
-      break
-    }
-  }
-  return MINIMAL_404_HTML
+export async function static404Html(storage: StorageProvider): Promise<string> {
+  const published = staticPageIndexPath('/404')
+  if (!(await storage.exists(published))) return MINIMAL_404_HTML
+  const html = await storage.readFile(published)
+  return parseArchiveMarker(html) ? MINIMAL_404_HTML : html
 }
 
-/** Writes `404.html` at the target root. Every publish rewrites it, so it stays current. */
-export async function writeStatic404(storage: StorageProvider, site: Site): Promise<void> {
-  await storage.writeFile(STATIC_404_PATH, await static404Html(site))
+/**
+ * Writes `404.html` at the target root. Callers run it after the publish's own
+ * writes, so a `/404` page published in the same run is the one copied.
+ */
+export async function writeStatic404(storage: StorageProvider): Promise<void> {
+  await storage.writeFile(STATIC_404_PATH, await static404Html(storage))
 }

@@ -1,47 +1,35 @@
 /**
- * What a static target's root `404.html` holds (#1152 decision 3): the
- * site's default-language `/404` page, rendered as static publish renders
- * it, or a minimal noindex page when the site has no live `/404` page.
+ * What a static target's root `404.html` holds (#1152 decision 3, #1231):
+ * the target's own `/404` page as published, or a minimal noindex page
+ * when the target has none or holds it archived.
  */
 import { describe, expect, it } from 'vitest'
-import { loadSite } from '../src/site-loader.js'
-import { renderPageStatic } from '../src/publish-renderers.js'
-import { createContentRoot } from '../src/content-root.js'
-import { createFilesystemProvider } from '../src/providers/filesystem.js'
+import { archiveMarker } from '../src/runtime/archive-marker.js'
 import { MINIMAL_404_HTML, static404Html } from '../src/static-404.js'
-import { starterManifest, starterTargetDir, starterTemplatesDir } from './_helpers/starter.js'
+import { memoryStorage } from './_helpers/memory-storage.js'
 
-async function loadStarterSite() {
-  const contentRoot = createContentRoot(createFilesystemProvider(starterTargetDir), '')
-  return loadSite({ contentRoot, templatesDir: starterTemplatesDir, manifest: await starterManifest() })
-}
+const page = '<!doctype html><html><head><title>Not here</title></head><body>Lost</body></html>'
 
 describe('static404Html', () => {
-  it("returns the site's default-language /404 page as static publish renders it", async () => {
-    const site = await loadStarterSite()
-    const expected = (await renderPageStatic('404', { site })).indexHtml
+  it("returns the target's published /404 page", async () => {
+    const storage = memoryStorage()
+    storage.seed({ '404/index.html': page })
 
-    const html = await static404Html(site)
-
-    expect(html).toBe(expected)
-    expect(html).not.toBe(MINIMAL_404_HTML)
+    expect(await static404Html(storage)).toBe(page)
   })
 
-  it('returns the minimal noindex page when the site has no /404 page', async () => {
-    const site = await loadStarterSite()
-    site.pages.delete('404')
-
-    const html = await static404Html(site)
+  it('returns the minimal noindex page while the target has no /404 page', async () => {
+    const html = await static404Html(memoryStorage())
 
     expect(html).toBe(MINIMAL_404_HTML)
     expect(html).toContain('<meta name="robots" content="noindex">')
     expect(html).toContain('Page not found')
   })
 
-  it('returns the minimal page when the /404 page is archived', async () => {
-    const site = await loadStarterSite()
-    site.pages.set('404', { ...site.pages.get('404')!, archived: true })
+  it("returns the minimal page when the target's /404 page is archived", async () => {
+    const storage = memoryStorage()
+    storage.seed({ '404/index.html': `${archiveMarker({ kind: 'gone' })}${page}` })
 
-    expect(await static404Html(site)).toBe(MINIMAL_404_HTML)
+    expect(await static404Html(storage)).toBe(MINIMAL_404_HTML)
   })
 })

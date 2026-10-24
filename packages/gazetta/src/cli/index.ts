@@ -870,7 +870,7 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
     // Plain hosts show a top-level 404.html for missing paths (#1152).
     if (targetType === 'static') {
       const { writeStatic404 } = await import('../static-404.js')
-      await writeStatic404(targetStorage, site)
+      await writeStatic404(targetStorage)
       totalFiles++
       console.log(`    ${c.dim('· 404.html')}`)
     }

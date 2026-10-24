@@ -48,10 +48,12 @@ reports/
 #   - the site-root index.html (rendered home page)
 #   - site.json (publish-time site manifest summary)
 #   - index/fragments.json and any other aggregate indices
+#   - 404.html at a static target's root (#1152)
 **/targets/**/index.html
 **/targets/**/index.*.html
 **/targets/**/site.json
 **/targets/**/index/
+**/targets/**/404.html
 
 # Bot transcripts — uploaded as workflow artifact in CI; locally accumulate after
 # real bot runs or replays. Don't commit.

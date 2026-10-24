@@ -1,8 +1,9 @@
 /**
  * #1152 cut 1: every publish to a static target writes `404.html` at the
- * target root — plain hosts show it for paths with no file. ESI targets
- * get none: `gazetta serve` and the worker answer with the site's /404
- * page themselves.
+ * target root — plain hosts show it for paths with no file. It's a copy of
+ * the target's own /404 page, so it never carries unpublished edits (#1231).
+ * ESI targets get none: `gazetta serve` and the worker answer with the
+ * site's /404 page themselves.
  */
 import { describe, expect, it } from 'vitest'
 import type { Hono } from 'hono'
@@ -78,12 +79,32 @@ describe('publish route — 404.html at a static target root (#1152)', { timeout
     expect(await targetStorage.readFile('404.html')).toBe(MINIMAL_404_HTML)
   })
 
+  it('writes the minimal page until the 404 page is first published', async () => {
+    const { app, targetStorage } = buildApp({ type: 'static', with404: true })
+    await publish(app, ['fragments/header'])
+
+    expect(await targetStorage.readFile('404.html')).toBe(MINIMAL_404_HTML)
+  })
+
   it('writes 404.html even when the publish renders no page', async () => {
     const { app, targetStorage } = buildApp({ type: 'static', with404: true })
+    await publish(app, ['pages/404'])
+    await targetStorage.rm('404.html')
     // On a static target a fragment with no users renders nothing.
     await publish(app, ['fragments/header'])
 
     expect(await targetStorage.readFile('404.html')).toContain('Lost-marker-one')
+  })
+
+  it('keeps unpublished edits of the 404 page off 404.html', async () => {
+    const { app, sourceStorage, targetStorage } = buildApp({ type: 'static', with404: true })
+    await publish(app, ['pages/404'])
+    await sourceStorage.writeFile('pages/404/page.json', notFoundPage('<p>Lost-marker-two</p>'))
+    await publish(app, ['fragments/header'])
+
+    const html = await targetStorage.readFile('404.html')
+    expect(html).toContain('Lost-marker-one')
+    expect(html).not.toContain('Lost-marker-two')
   })
 
   it('updates 404.html when the 404 page changes', async () => {

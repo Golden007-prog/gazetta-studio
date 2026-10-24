@@ -439,6 +439,15 @@ Decided: maintainer, 2026-10-23 (#1163).
 | Only on Pages targets | Netlify and GitHub Pages use a top-level `404.html` too, so the site's own 404 page would go unused there. |
 | Each language's 404 page too (`fr/404.html`) | Pages would show it, since it uses the closest `404.html`, and so would Netlify with a `/fr/*  /fr/404.html  404` row per language, but GitHub Pages and S3 websites would keep showing the default one, so visitors would get a different 404 page per host; cut 1 stays small (Future directions). |
 
+`404.html` is a copy of the target's own `/404` page (`404/index.html`), made after the publish's other writes, or the minimal page when the target has none. So it can't carry an unpublished edit of the 404 page, and it always matches what `/404` serves; until a site's 404 page is first published to a target, that target shows the minimal page. An archived 404 page counts as none: its file is a marker, not a page.
+
+Decided: maintainer, 2026-10-24 (#1231).
+
+| Rejected | Why |
+|---|---|
+| Render it from the source's current 404 page on every publish, and say so in the docs | A publish of any other page also ships unpublished edits of the 404 page. |
+| Render it from the source only when `pages/404` is published in the same run, or when `404.html` is missing | A first publish without `pages/404` can still ship a draft. |
+
 **4. Removed pages answer 404 on every plain host.** `_redirects` writes no 410 rows for `netlify` either (#1149 drops them for `cloudflare`), so a removed page on a plain host answers 404 (an S3 website may answer 403), with the site's 404 page on Pages, Netlify and GitHub Pages. Q14's invariant 2 is scoped to match: 410 wherever Gazetta answers the request (Q14). `gone-status` stays a worker capability, as `inspectTarget` already says, and `docs/runtime-capabilities.md`, which marks it ✓ for these formats, is corrected. `json` keeps its gone list for custom integrations.
 
 Decided: maintainer, 2026-10-23 (#1163).

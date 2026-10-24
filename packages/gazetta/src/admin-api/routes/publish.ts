@@ -600,7 +600,7 @@ export function publishRoutes(
         // for missing paths (#1152).
         if (isStatic) {
           const { writeStatic404 } = await import('../../static-404.js')
-          await writeStatic404(targetStorage, site)
+          await writeStatic404(targetStorage)
           totalFiles++
         }
 

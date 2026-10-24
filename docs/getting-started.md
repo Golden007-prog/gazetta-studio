@@ -570,6 +570,8 @@ Create a `pages/404/` page like any other page. It's automatically served with a
 
 Works with both `gazetta serve` and Cloudflare Workers. Fragments are assembled normally.
 
+On a static target, every publish also copies the published 404 page to `404.html` at the target root, which Cloudflare Pages, Netlify and GitHub Pages show for missing paths. Until `pages/404` is published to a target, its `404.html` is a minimal "Page not found" page.
+
 ### Cache configuration
 
 Per target:
