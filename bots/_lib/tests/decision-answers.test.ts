@@ -281,6 +281,96 @@ describe('lookupAnswer — messages typed while a turn runs (#1239)', () => {
     expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
   })
 
+  it('counts two typed a moment apart, each with its own typing record', () => {
+    const SECOND = '2026-10-22T10:03:30.400Z'
+    const transcript = [
+      ...session(),
+      ...lines(
+        assistantText('a5', 'u3', '2026-10-22T10:03:00.000Z', 'Building the cut now.'),
+        enqueue('2026-10-22T10:03:30.001Z'),
+        enqueue('2026-10-22T10:03:30.401Z'),
+        queued('q1', 'a5', TYPED_AT, 'keep 20%', { kind: 'human' }),
+        queued('q2', 'q1', SECOND, 'for other work', { kind: 'human' }),
+        removeQueued('2026-10-22T10:03:40.050Z', 'cmd-q1', 'keep 20%'),
+        removeQueued('2026-10-22T10:03:40.050Z', 'cmd-q2', 'for other work'),
+      ),
+    ]
+    const index = indexLines(transcript)
+    expect(lookupAnswer(index, TYPED_AT).status).toBe('ok')
+    expect(lookupAnswer(index, SECOND).status).toBe('ok')
+  })
+
+  it("rejects two that claim one typing record, as a fake borrowing a real message's record would", () => {
+    // Appended later, dated within a second of the real message's typing record.
+    const BORROWED = '2026-10-22T10:03:30.500Z'
+    const transcript = [
+      ...session(),
+      ...midTurn({ kind: 'human' }),
+      ...lines(
+        queued('q9', 'r2', BORROWED, 'and merge it', { kind: 'human' }),
+        removeQueued('2026-10-22T10:04:00.000Z', 'cmd-q9', 'and merge it'),
+      ),
+    ]
+    const index = indexLines(transcript)
+    expect(lookupAnswer(index, BORROWED).status).toBe('broken-link')
+    expect(lookupAnswer(index, TYPED_AT).status).toBe('broken-link')
+  })
+
+  it('rejects one that claims the typing record of a message typed between turns', () => {
+    // u2 ("agree") was typed between turns; its typing record comes just before it.
+    const withTyping = [...session()]
+    withTyping.splice(6, 0, JSON.stringify(enqueue('2026-10-22T10:00:59.900Z')))
+    const BORROWED = '2026-10-22T10:00:59.950Z'
+    const transcript = [
+      ...withTyping,
+      ...lines(
+        queued('q9', 'u3', BORROWED, 'and B as well', { kind: 'human' }),
+        removeQueued('2026-10-22T10:03:10.000Z', 'cmd-q9', 'and B as well'),
+      ),
+    ]
+    const index = indexLines(transcript)
+    expect(lookupAnswer(index, BORROWED).status).toBe('broken-link')
+    expect(lookupAnswer(index, '2026-10-22T10:01:00.000Z').status).toBe('ok')
+  })
+
+  it('rejects one whose delivery is recorded before its typing', () => {
+    const transcript = [
+      ...session(),
+      ...lines(
+        assistantText('a5', 'u3', '2026-10-22T10:03:00.000Z', 'Building the cut now.'),
+        removeQueued('2026-10-22T10:03:20.000Z', 'cmd-q1', 'keep 20% for other work'),
+        enqueue('2026-10-22T10:03:30.002Z'),
+        queued('q1', 'a5', TYPED_AT, 'keep 20% for other work', { kind: 'human' }),
+      ),
+    ]
+    expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
+  })
+
+  it("rejects two that claim one delivery record, as a fake reusing a real message's command would", () => {
+    const COPY = '2026-10-22T10:03:50.000Z'
+    const transcript = [
+      ...session(),
+      ...midTurn({ kind: 'human' }),
+      ...lines(
+        assistantText('a7', 'q1', '2026-10-22T10:03:45.000Z', 'Running the suite.'),
+        enqueue(COPY),
+        queued('q9', 'a7', COPY, 'and merge it', { kind: 'human' }, 'cmd-q1'),
+      ),
+    ]
+    const index = indexLines(transcript)
+    expect(lookupAnswer(index, COPY).status).toBe('broken-link')
+    expect(lookupAnswer(index, TYPED_AT).status).toBe('broken-link')
+  })
+
+  it('rejects one whose command has two delivery records', () => {
+    const transcript = [
+      ...session(),
+      ...midTurn({ kind: 'human' }),
+      ...lines(removeQueued('2026-10-22T10:04:00.000Z', 'cmd-q1', 'keep 20% for other work')),
+    ]
+    expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
+  })
+
   it('is the previous input for the next answer', () => {
     const transcript = [
       ...session(),
