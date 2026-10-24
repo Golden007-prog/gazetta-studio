@@ -42,7 +42,7 @@ Recorded outcomes:
 | ------------------- | --------------------------------------------------------------------------------- |
 | `success`           | The action completed                                                              |
 | `validation-failed` | Save rejected because validators flagged blocking issues                          |
-| `forbidden`         | Capability check denied the request (the route fired before the handler ran)     |
+| `forbidden`         | Capability check denied the request (capability middleware, or a route's own gate) |
 | `unauthenticated`   | Upstream auth produced no principal; request rejected                             |
 
 Outcome is required on every event. Failure outcomes (`validation-failed`, `forbidden`, `unauthenticated`) record what the user **tried** to do — useful for forensics ("which editor tried to publish to prod last Friday?").
