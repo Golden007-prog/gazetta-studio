@@ -47,7 +47,7 @@ The back end's first cuts, the UI primitives, the story runner and screenshots i
 
 ### Website and channels
 
-The plan in [`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md): every channel (the site, the repo, npm, communities, newsletters) opens at one of five stages, and a stage opens only when its gate is met. Each channel is kept true by a check, or the maintainer writes it. Stage 0 starts now, with Contribute as the home page's main button and a small "Try it" beside it. Stage 1 makes "Use it" the main button; its gate is the Onboarding sprint's release that matches the docs ([#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178)) and a first publish that reaches a second target ([#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177)), checked by a tutorial in CI and by 3–5 people completing it without help.
+The plan in [`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md): every channel (the site, the repo, npm, communities, newsletters) opens at one of five stages, and a stage opens only when its gate is met. Each channel is kept true by a check, or the maintainer writes it. Stage 0 starts now, with Contribute as the home page's main button and a small "Try it" beside it. Stage 1 makes "Use it" the main button; its gate is the Onboarding sprint's release that matches the docs ([#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178)) and a first publish that reaches a second target ([#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177)), checked by a tutorial in CI and by 3–5 people completing it without help. The tutorial and its CI check are designed in [`design-tutorial.md`](.claude/rules/design-tutorial.md) (#1338).
 
 Stage 0:
 
@@ -62,6 +62,12 @@ Stage 0:
 - GitHub's open-PR cap ready but off, switched on only if outside PRs outpace the fleet ([#1276](https://github.com/gazetta-studio/gazetta-studio/issues/1276))
 
 Decided: maintainer, 2026-10-24 (#1266)
+
+### Media works end to end
+
+The asset library is broken at several layers: published images return 404 on deployed servers ([#1330](https://github.com/gazetta-studio/gazetta-studio/issues/1330); static `gazetta serve` corrupts them, [#1249](https://github.com/gazetta-studio/gazetta-studio/issues/1249)), the asset picker never renders ([#1345](https://github.com/gazetta-studio/gazetta-studio/issues/1345)), a target's `transforms` setting is never read ([#1332](https://github.com/gazetta-studio/gazetta-studio/issues/1332)), asset edits and locale images never reach targets ([#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334), [#1350](https://github.com/gazetta-studio/gazetta-studio/issues/1350)), and the resolver drops an asset's own focal point ([#1346](https://github.com/gazetta-studio/gazetta-studio/issues/1346)). These are fix-bot one-shots. The rest of the editor flow (per-reference overrides, same-name uploads, per-locale alt, documents and fonts) waits on a UX design round ([#1357](https://github.com/gazetta-studio/gazetta-studio/issues/1357)). The Stage 1 tutorial adds an image, so #1330, #1249 and #1345 are Stage 1 gate items (`design-tutorial.md` Q14).
+
+Decided: maintainer, 2026-10-24 (#PR)
 
 ### Bug backlog
 
