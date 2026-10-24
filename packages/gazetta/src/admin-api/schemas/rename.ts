@@ -8,6 +8,7 @@
  *   - I1: 500 RENAME_PARTIAL with structured state for idempotent retry
  */
 import { z } from 'zod'
+import { isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE } from '../../item-name.js'
 
 /**
  * POST /api/{kind}/:name/rename body. `to` is required; `keepAlias`
@@ -17,7 +18,7 @@ import { z } from 'zod'
  */
 export const RenameRequestSchema = z.object({
   /** Target name. Must not collide with a live item; archived target produces ARCHIVED_NAME_CONFLICT. */
-  to: z.string().min(1),
+  to: z.string().refine(isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE),
   /** When true (default), the old name is archived with `aliasOf: <to>`; render emits 301 + worker marker. */
   keepAlias: z.boolean().default(true),
 })

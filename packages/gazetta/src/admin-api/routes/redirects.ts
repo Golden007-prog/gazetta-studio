@@ -51,6 +51,7 @@ import type { ItemRef } from '../../dep-sidecars.js'
 import { deriveRoute } from '../../site-loader.js'
 import { CreateRedirectRequestSchema, type CreateRedirectResponse } from '../schemas/redirects.js'
 import type { ComponentManifest, FragmentManifest, PageManifest } from '../../types.js'
+import { isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE } from '../../item-name.js'
 
 type RedirectKind = 'page' | 'fragment'
 
@@ -152,6 +153,9 @@ async function handleCreateRedirect(
       },
       400,
     )
+  }
+  if (!isSafeItemName(from) || !isSafeItemName(to)) {
+    return c.json({ code: 'INVALID', error: UNSAFE_ITEM_NAME_MESSAGE }, 400)
   }
 
   const source = await resolve(c.req.query('target'))

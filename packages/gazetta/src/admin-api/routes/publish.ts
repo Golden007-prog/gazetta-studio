@@ -34,6 +34,7 @@ import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
 import { runPublishAudit } from '../../validation/publish-audit.js'
 import type { Issue } from '../../validation/types.js'
 import { trimTrailingSlashes } from '../../url.js'
+import { isSafeItemName } from '../../item-name.js'
 
 /**
  * Progress events streamed by runPublish. Consumed both by the SSE route
@@ -106,10 +107,7 @@ export function publishRoutes(
         name = name.slice(0, ci)
       }
     }
-    if (name.length === 0) return null
-    for (const seg of name.split('/')) {
-      if (seg === '' || seg === '.' || seg === '..') return null
-    }
+    if (!isSafeItemName(name)) return null
     // Existence is checked for folder items (pages/fragments/templates);
     // asset-style names pass the segment rules only.
     return { dir: prefix ? `${prefix}/${name}` : name, knownPrefix: prefix !== null && prefix !== 'assets' }

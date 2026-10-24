@@ -5,6 +5,7 @@
  * at runtime by api-contract.test.ts.
  */
 import { z } from 'zod'
+import { isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE } from '../../item-name.js'
 
 /** Summary used in list responses (GET /api/fragments). */
 export const FragmentSummarySchema = z.object({
@@ -26,8 +27,8 @@ export type FragmentSummary = z.infer<typeof FragmentSummarySchema>
 
 /** Body for POST /api/fragments (create). */
 export const CreateFragmentRequestSchema = z.object({
-  /** Fragment name — used as the directory name and identity. Must be non-empty. */
-  name: z.string().min(1),
+  /** Fragment name — used as the directory name and identity. Must be a safe item name. */
+  name: z.string().refine(isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE),
   /** Template name to bind. Must be non-empty. */
   template: z.string().min(1),
 })

@@ -13,6 +13,7 @@
  * tracked as a follow-up to testing-plan.md Priority 3.2.
  */
 import { z } from 'zod'
+import { isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE } from '../../item-name.js'
 
 /** SEO metadata for a page — surfaced in <head> and used by sitemap generation. */
 export const PageMetadataSchema = z
@@ -54,8 +55,8 @@ export type PageSummary = z.infer<typeof PageSummarySchema>
 
 /** Body for POST /api/pages (create). */
 export const CreatePageRequestSchema = z.object({
-  /** Page name — used as the directory name and identity. Must be non-empty. */
-  name: z.string().min(1),
+  /** Page name — used as the directory name and identity. Must be a safe item name. */
+  name: z.string().refine(isSafeItemName, UNSAFE_ITEM_NAME_MESSAGE),
   /** Template name to bind. Must be non-empty. */
   template: z.string().min(1),
   /** Optional initial content; defaults to `{ title: name }` server-side. */

@@ -43,7 +43,13 @@ export function createContentRoot(storage: StorageProvider, rootPath = ''): Cont
     storage,
     rootPath,
     path(...segments) {
-      return rootPath ? join(rootPath, ...segments) : join(...segments)
+      // A segment with `..` must not climb out of the content root;
+      // routes reject such names first, this is the backstop.
+      const relativePath = join(...segments)
+      if (/^\.\.(?:[\\/]|$)/.test(relativePath)) {
+        throw new Error(`Content path leaves the content root: ${segments.join('/')}`)
+      }
+      return rootPath ? join(rootPath, relativePath) : relativePath
     },
     relative(path) {
       if (!rootPath) return path
