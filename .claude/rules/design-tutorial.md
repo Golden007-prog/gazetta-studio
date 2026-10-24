@@ -44,7 +44,7 @@ The Stage 1 tutorial: one path a newcomer follows from `npx gazetta init` to und
 
 The last step undoes the publish to staging, and the reader sees staging's old title come back. Stage 1 still opens only once that works, but tester round 1 runs before it, on install to publish; only round 2 waits for #1092.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -56,7 +56,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 The reader publishes the untouched site to staging and looks at it, edits the hero and saves, publishes again, and Undo brings back the title they saw on staging. One edit.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -67,7 +67,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 The Publish panel and its Undo button: the content author's path. The CLI commands (`gazetta publish staging`, `gazetta undo staging`) go in the publishing guide.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -78,7 +78,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 `gazetta dev` keeps running; in a second terminal the reader runs `npx gazetta serve staging --port 3001` and opens localhost:3001. Needed because undo happens in the admin while staging is viewed. This answers #1284's open point about the port clash.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -89,7 +89,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 CI starts a Verdaccio registry holding the freshly packed tarball, with `gazetta` not fetched from npm, so the docs' commands run word for word and get the new code. A check confirms the installed package is the tarball. No product change (Storybook's pattern).
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -100,7 +100,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 A Playwright spec holds each step's command and checks, and fails when the tutorial's shell blocks differ from its list in text, order or count. Editing either without the other fails CI. No markers in the Markdown, so nothing collides with #1272's raw-HTML rule.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -111,7 +111,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 A one-off `rc` release on npm (`npx gazetta@rc init`), approved by the maintainer; `latest` stays 0.8.0. The closest to what users will run. #1282 rejected publishing every merge as `next`, not a single release candidate.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -122,7 +122,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 A `tutorial` job in `ci.yml` after `pack`, on every PR and push to main, Ubuntu only, about 3–4 minutes; plus a weekly and after-release run against npm. The maintainer adds the job once in a PR; the spec, registry config and checks are fleet work.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -132,7 +132,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 `templates.md`, `pages-and-fragments.md`, `customize-editor.md` and `targets.md` first: they move existing text, fixing that text's audit findings. Then `publishing.md` (publish, undo, history) and `cli.md` (every command and flag), which are mostly new writing. After #1272 merges; one page per PR.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -143,7 +143,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 `publishing.md` in Start, after the tutorial; `targets.md` first in Deploy; `templates.md`, `pages-and-fragments.md` and `customize-editor.md` in Content and templates; `cli.md` in Admin and operations. No new group.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -153,7 +153,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 (a) No stated time until measured, then the testers' median rounded up. (b) CI runs it on every PR and push to main, plus weekly and after each release against npm. (c) The undo step is marked as an expected failure until #1092 lands, so CI shows the day it starts working. (d) The split lands after #1272 merges. (e) A "How Gazetta works" explanation page comes later; the tutorial's opening and recap carry it for Stage 1.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -163,7 +163,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 A short round of its own, once the tutorial's preconditions (#1284, #1300, #1304 and the rest) are close: whether undo counts, AI assistants, live or recorded sessions, the pass rule, recruiting, an incentive, recording, retention, legal basis, whose machine, the starting page, publishing results. Tester round 1 can't start before it.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
@@ -220,7 +220,7 @@ Docs and CI, no product surface: multi-instance, scale, themes, auth, audit, rev
 
 Cuts 1–7 go to feature-bot through a planner issue. The tutorial waits for pages 1–4 so the text it drops already has a home.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1338)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
