@@ -54,12 +54,12 @@ variables are configured. Skipped when `CI=true`.
 **`gazetta dev`:** No caching. Every request re-renders from source. Dev server sends
 `Cache-Control: no-store` to prevent browser caching. Always fresh.
 
-**`gazetta serve`:** In-memory template cache (LRU). On ESI targets (`type: 'dynamic'`), pages get `Cache-Control: public, max-age=<browser>, s-maxage=<edge>` plus an ETag for 304, from the target's `cache` config (and per-page overrides), which publish writes into each page:
+**`gazetta serve`:** No in-memory cache yet (#76). On ESI targets (`type: 'dynamic'`), live pages at their routes get `Cache-Control: public, max-age=<browser>, s-maxage=<edge>` plus an ETag for 304, from the target's `cache` config (and per-page overrides), which publish writes into each page:
 - `browser: 0` → `max-age=0` (browser revalidates every request)
 - `browser: 86400` → `max-age=86400` (browser caches 24h)
 - `edge: 86400` → `s-maxage=86400` (CDN caches 24h)
 
-Pages on static targets (the default type) always get `Cache-Control: public, max-age=0, must-revalidate` with an ETag, whatever `cache` says: browsers and CDNs revalidate every request, so a publish shows at once with no purge step. This is intended.
+Live pages on static targets (the default type), at their routes, always get `Cache-Control: public, max-age=0, must-revalidate` with an ETag, whatever `cache` says: browsers and CDNs revalidate every request, so a publish shows at once with no purge step. This is intended. On both target types, archived pages answer 301 or 410 with `max-age=300` (`design-soft-delete.md` Q10).
 
 Decided: maintainer, 2026-10-24 (#1243)
 
