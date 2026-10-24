@@ -31,6 +31,7 @@ import { isArchived } from './archive-helpers.js'
 import { renderComponent, renderPage } from './renderer.js'
 import { resolveFragment, resolvePage } from './resolver.js'
 import { archiveMarker } from './runtime/archive-marker.js'
+import { appendFragmentMarker, insertPageMarker } from './runtime/published-marker.js'
 import { escapeAttr, resolveSeoTags, type SeoContext } from './seo.js'
 import type { Site } from './site-loader.js'
 import type { CacheConfig, PageManifest } from './types.js'
@@ -218,7 +219,7 @@ export async function renderPageWithEsi(pageName: string, ctx: PageRenderContext
   const edge = localePage.cache?.edge ?? ctx.targetCache?.edge ?? 86400
   const cacheComment = `<!--cache:browser=${browser},edge=${edge}-->\n`
 
-  const indexHtml = `${cacheComment}<!DOCTYPE html>
+  const indexHtml = insertPageMarker(`${cacheComment}<!DOCTYPE html>
 <html lang="${escapeAttr(lang)}">
 <head>
   ${headContent}
@@ -226,7 +227,7 @@ export async function renderPageWithEsi(pageName: string, ctx: PageRenderContext
 <body>
 ${bodyContent}
 </body>
-</html>`
+</html>`)
 
   const indexFile = ctx.locale ? `index.${ctx.locale}.html` : 'index.html'
 
@@ -255,11 +256,13 @@ export async function renderPageStatic(pageName: string, ctx: PageRenderContext)
 
   const localePage = pageForLocale(pageName, page, ctx)
   const resolved = await resolvePage(pageName, ctx.site, ctx.locale)
-  const indexHtml = await renderPage(resolved, {
-    metadata: localePage.metadata,
-    route: localePage.route,
-    seo: ctx.seo,
-  })
+  const indexHtml = insertPageMarker(
+    await renderPage(resolved, {
+      metadata: localePage.metadata,
+      route: localePage.route,
+      seo: ctx.seo,
+    }),
+  )
 
   // Static mode bakes everything inline — no separate hashed CSS/JS files.
   // The renderPage helper handles that internally.
@@ -306,7 +309,7 @@ export async function renderFragmentRendered(fragmentName: string, ctx: Fragment
   }
 
   const headSection = headParts.length ? `<head>\n${headParts.join('\n')}\n</head>\n` : ''
-  const indexHtml = `${headSection}${rendered.html}`
+  const indexHtml = appendFragmentMarker(`${headSection}${rendered.html}`)
   const indexFile = ctx.locale ? `index.${ctx.locale}.html` : 'index.html'
 
   return { indexFile, indexHtml, files, archived: false }

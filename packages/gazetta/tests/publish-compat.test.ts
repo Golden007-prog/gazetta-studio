@@ -20,7 +20,7 @@ import { starterManifest, starterTargetDir, starterTemplatesDir } from './_helpe
  * Every file on the target, keyed by path. Normalised: publish timestamps,
  * and the starter `counter` template's random element id (it calls
  * Math.random(), so two renders of the same page differ) together with the
- * script filename hash that depends on it.
+ * script filename and published-marker hashes that depend on it.
  */
 function snapshot(storage: MemoryStorage): Record<string, string> {
   const dec = new TextDecoder()
@@ -29,6 +29,7 @@ function snapshot(storage: MemoryStorage): Record<string, string> {
       .replace(/\.pub-\d{8}T\d{6}Z/g, '.pub-TS')
       .replace(/counter-[a-z0-9]{1,8}\b/g, 'counter-ID')
       .replace(/script\.[a-f0-9]{8}\.js/g, 'script.HASH.js')
+      .replace(/gazetta:published hash=[a-f0-9]{8}/g, 'gazetta:published hash=HASH')
   return Object.fromEntries([...storage.dump()].map(([path, bytes]) => [norm(path), norm(dec.decode(bytes))]))
 }
 

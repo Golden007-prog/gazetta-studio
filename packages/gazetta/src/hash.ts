@@ -127,6 +127,16 @@ function substituteHashes(
   })
 }
 
+/**
+ * Version of publish output, part of every page and fragment hash. Raise it
+ * whenever what publish writes for unchanged content changes, so the next
+ * publish rewrites every item instead of skipping them as unchanged
+ * (`sidecars.md`, "Hash input").
+ *
+ * 1: the published-version marker (design-live-check.md Q4).
+ */
+export const RENDER_FORMAT_VERSION = 1
+
 export interface HashManifestOptions {
   templateHashes: Map<string, string>
   /**
@@ -140,6 +150,8 @@ export interface HashManifestOptions {
    * request. References nested inside its inline components are still baked.
    */
   topLevelFragmentsComposedAtRequest?: boolean
+  /** Defaults to `RENDER_FORMAT_VERSION`; tests override it. */
+  renderFormatVersion?: number
 }
 
 /**
@@ -159,6 +171,7 @@ export function hashManifest(manifest: PageManifest | FragmentManifest, opts: Ha
   const template = manifest.template
   const rootHash = template !== undefined ? opts.templateHashes.get(template) : undefined
   const normalized: Record<string, unknown> = {
+    renderFormat: opts.renderFormatVersion ?? RENDER_FORMAT_VERSION,
     template: template !== undefined ? (rootHash ? `${template}#${rootHash}` : template) : null,
     content: manifest.content ?? null,
     components:

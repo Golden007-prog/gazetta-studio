@@ -22,8 +22,11 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
-import { renderPageWithEsi } from '../src/publish-renderers.js'
+import { assembleEsi, splitFragment } from '../src/assemble.js'
+import { renderFragmentRendered, renderPageWithEsi } from '../src/publish-renderers.js'
+import { parsePublishedMarkers } from '../src/runtime/published-marker.js'
 import { loadSite } from '../src/site-loader.js'
+import { invalidateTemplate } from '../src/template-loader.js'
 import { tempDir } from './_helpers/temp.js'
 
 let testDir: string
@@ -56,6 +59,11 @@ function scopeOf(html: string, inner: string): string {
 
 function md5_8(s: string) {
   return createHash('md5').update(s).digest('hex').slice(0, 8)
+}
+
+/** The published marker, hashed over the page without it, on its own line before `</head>`. */
+function withMarker(unmarked: string): string {
+  return unmarked.replace('\n</head>', `\n<!-- gazetta:published hash=${md5_8(unmarked)} -->\n</head>`)
 }
 
 async function loadTestSite(locales?: string[]) {
@@ -133,8 +141,7 @@ describe('renderPageWithEsi — exact output', () => {
       '<!--esi-head:/fragments/nav/index.html-->',
       `<script type="module" src="/${jsPath}"></script>`,
     ].join('\n  ')
-    expect(out.indexHtml).toBe(
-      `<!--cache:browser=0,edge=86400-->
+    const unmarked = `<!--cache:browser=0,edge=86400-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -146,8 +153,8 @@ describe('renderPageWithEsi — exact output', () => {
 <div data-gz="${script}"><script-only></div>
 <div data-gz="${bare}"><bare></div>
 </body>
-</html>`,
-    )
+</html>`
+    expect(out.indexHtml).toBe(withMarker(unmarked))
   })
 
   it('emits no hashed files and no links when nothing has css/js/head', async () => {
@@ -167,8 +174,7 @@ describe('renderPageWithEsi — exact output', () => {
       '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
       '<meta property="og:type" content="website">\n  <meta name="twitter:card" content="summary">',
     ].join('\n  ')
-    expect(out.indexHtml).toBe(
-      `<!--cache:browser=0,edge=86400-->
+    const unmarked = `<!--cache:browser=0,edge=86400-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -177,8 +183,8 @@ describe('renderPageWithEsi — exact output', () => {
 <body>
 <div data-gz="${bare}"><bare></div>
 </body>
-</html>`,
-    )
+</html>`
+    expect(out.indexHtml).toBe(withMarker(unmarked))
   })
 
   it('a page template without css adds no css line', async () => {
@@ -209,7 +215,7 @@ describe('renderPageWithEsi — exact output', () => {
     expect(out.indexFile).toBe('index.fr.html')
     expect(out.indexHtml).toContain('<html lang="fr">')
     expect(out.indexHtml).toContain(
-      '<meta name="twitter:card" content="summary">\n  <!--esi-head:/fragments/nav/index.fr.html-->\n</head>',
+      '<meta name="twitter:card" content="summary">\n  <!--esi-head:/fragments/nav/index.fr.html-->\n<!-- gazetta:published hash=',
     )
     expect(out.indexHtml).toContain('<body>\n<!--esi:/fragments/nav/index.fr.html-->\n</body>')
   })
@@ -312,5 +318,55 @@ describe('renderPageWithEsi — exact output', () => {
     await expect(renderPageWithEsi('gone', { site })).rejects.toThrow(
       'Page "gone" is archived; use renderArchiveMarker instead',
     )
+  })
+})
+
+describe('published markers through ESI assembly', () => {
+  it('keeps the page marker in <head> and puts each fragment marker in the body', async () => {
+    await writeTestFile(sourceDir, 'fragments/side/fragment.json', JSON.stringify({ template: 'leaf' }))
+    await writeTestFile(
+      sourceDir,
+      'pages/home/page.json',
+      JSON.stringify({ route: '/', template: 'plain-layout', components: ['@nav', '@side'] }),
+    )
+    const site = await loadTestSite()
+
+    const page = await renderPageWithEsi('home', { site })
+    const nav = await renderFragmentRendered('nav', { site })
+    const side = await renderFragmentRendered('side', { site })
+    const pageHash = parsePublishedMarkers(page.indexHtml).page
+    const navHash = parsePublishedMarkers(nav.indexHtml).fragments[0]
+    const sideHash = parsePublishedMarkers(side.indexHtml).fragments[0]
+    expect(new Set([pageHash, navHash, sideHash]).size).toBe(3)
+
+    const assembled = assembleEsi(
+      page.indexHtml,
+      new Map([
+        ['/fragments/nav/index.html', splitFragment(nav.indexHtml)],
+        ['/fragments/side/index.html', splitFragment(side.indexHtml)],
+      ]),
+    )
+
+    expect(parsePublishedMarkers(assembled)).toEqual({ page: pageHash, fragments: [navHash, sideHash] })
+    const body = assembled.slice(assembled.indexOf('<body>'))
+    expect(body).toContain(`<!-- gazetta:published hash=${navHash} -->`)
+    expect(body).toContain(`<!-- gazetta:published hash=${sideHash} -->`)
+  })
+
+  it('changes the page marker when a template changes the rendered output', async () => {
+    await writeTestFile(
+      sourceDir,
+      'pages/plain/page.json',
+      JSON.stringify({ route: '/plain', template: 'plain-layout', components: [{ name: 'b', template: 'probe' }] }),
+    )
+    await writeTemplate('probe', { html: '<probe>', css: '', js: '', head: '' })
+    invalidateTemplate('probe')
+    const before = parsePublishedMarkers((await renderPageWithEsi('plain', { site: await loadTestSite() })).indexHtml)
+    await writeTemplate('probe', { html: '<probe-v2>', css: '', js: '', head: '' })
+    invalidateTemplate('probe')
+    const after = parsePublishedMarkers((await renderPageWithEsi('plain', { site: await loadTestSite() })).indexHtml)
+    expect(before.page).not.toBeNull()
+    expect(after.page).not.toBeNull()
+    expect(after.page).not.toBe(before.page)
   })
 })

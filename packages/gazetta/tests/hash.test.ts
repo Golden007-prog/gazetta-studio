@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { composeFragmentHashes, hashManifest, parseSidecarName, sidecarNameFor } from '../src/hash.js'
+import {
+  composeFragmentHashes,
+  hashManifest,
+  parseSidecarName,
+  RENDER_FORMAT_VERSION,
+  sidecarNameFor,
+} from '../src/hash.js'
 import type { FragmentManifest, PageManifest } from '../src/types.js'
 
 describe('sidecarNameFor / parseSidecarName', () => {
@@ -30,16 +36,16 @@ describe('hashManifest', () => {
       ['page-default', 'p1'],
     ])
 
-    it('a page without metadata keeps the hash it had before metadata counted', () => {
-      // Recorded before the change; a different value would show every
-      // published page without metadata as changed after upgrading.
-      expect(hashManifest(baseManifest, { templateHashes: t })).toBe('66dc7999')
-      expect(hashManifest({ ...baseManifest, metadata: {} }, { templateHashes: t })).toBe('66dc7999')
+    it('a page without metadata hashes the same as one with empty metadata', () => {
+      // Pinned at render format 1; a different value at the same format
+      // would show every published page without metadata as changed.
+      expect(hashManifest(baseManifest, { templateHashes: t })).toBe('8b66546b')
+      expect(hashManifest({ ...baseManifest, metadata: {} }, { templateHashes: t })).toBe('8b66546b')
     })
 
     it('changes when metadata changes, whatever its key order', () => {
       const withTitle = hashManifest({ ...baseManifest, metadata: { title: 'A' } }, { templateHashes: t })
-      expect(withTitle).not.toBe('66dc7999')
+      expect(withTitle).not.toBe('8b66546b')
       expect(hashManifest({ ...baseManifest, metadata: { title: 'B' } }, { templateHashes: t })).not.toBe(withTitle)
       expect(hashManifest({ ...baseManifest, metadata: { title: 'A', description: 'D' } }, { templateHashes: t })).toBe(
         hashManifest({ ...baseManifest, metadata: { description: 'D', title: 'A' } }, { templateHashes: t }),
@@ -223,5 +229,24 @@ describe('hashManifest — archived items (#1090)', () => {
     expect(hashManifest({ template: 'h' } as FragmentManifest, { templateHashes })).toBe(
       hashManifest({ template: 'h', archived: false } as FragmentManifest, { templateHashes }),
     )
+  })
+})
+
+describe('hashManifest — render format version', () => {
+  const templateHashes = new Map([
+    ['page-default', 'p1'],
+    ['hero', 'h1'],
+  ])
+  const cases: [string, PageManifest | FragmentManifest][] = [
+    ['page', { route: '/', template: 'page-default', components: ['@header'] }],
+    ['page with metadata', { route: '/', template: 'page-default', metadata: { title: 'T' } }],
+    ['fragment', { template: 'hero', content: { title: 'A' } } as FragmentManifest],
+    ['archived', { template: 'hero', archived: true, aliasOf: 'home' } as FragmentManifest],
+  ]
+
+  it.each(cases)('%s: raising the version changes the hash', (_label, manifest) => {
+    const current = hashManifest(manifest, { templateHashes })
+    expect(hashManifest(manifest, { templateHashes, renderFormatVersion: RENDER_FORMAT_VERSION })).toBe(current)
+    expect(hashManifest(manifest, { templateHashes, renderFormatVersion: RENDER_FORMAT_VERSION + 1 })).not.toBe(current)
   })
 })

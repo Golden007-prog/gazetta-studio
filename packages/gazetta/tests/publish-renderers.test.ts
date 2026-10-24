@@ -20,7 +20,9 @@ import {
   renderPageWithEsi,
   type PageRenderContext,
 } from '../src/publish-renderers.js'
+import { splitFragment } from '../src/assemble.js'
 import { createContentRoot } from '../src/content-root.js'
+import { outputHash, parsePublishedMarkers } from '../src/runtime/published-marker.js'
 import { createFilesystemProvider } from '../src/providers/filesystem.js'
 import { starterManifest, starterTargetDir, starterTemplatesDir } from './_helpers/starter.js'
 
@@ -177,5 +179,57 @@ describe('renderFragmentRendered — pure fn', () => {
     if (!fragName) return
     const out = await renderFragmentRendered(fragName, { site, locale: 'fr' })
     expect(out.indexFile).toBe('index.fr.html')
+  })
+})
+
+describe('published-version marker', () => {
+  const MARKER_LINE = /^<!-- gazetta:published hash=[0-9a-f]{8} -->$/
+
+  function markerLines(html: string): string[] {
+    return html.split('\n').filter(l => MARKER_LINE.test(l))
+  }
+
+  it.each([
+    ['ESI', renderPageWithEsi, '<!--cache:'],
+    ['static', renderPageStatic, '<!DOCTYPE html>'],
+  ] as const)('%s page: one marker right before </head>, line 1 unchanged', async (_label, render, firstLine) => {
+    const site = await loadStarterSite()
+    const out = await render('home', { site })
+    const lines = out.indexHtml.split('\n')
+    expect(lines[0].startsWith(firstLine)).toBe(true)
+    expect(markerLines(out.indexHtml)).toHaveLength(1)
+    expect(lines[lines.indexOf('</head>') - 1]).toMatch(MARKER_LINE)
+  })
+
+  it.each([
+    ['ESI', renderPageWithEsi],
+    ['static', renderPageStatic],
+  ] as const)('%s page: the hash is of the output without the marker', async (_label, render) => {
+    const site = await loadStarterSite()
+    const out = await render('about', { site })
+    const [line] = markerLines(out.indexHtml)
+    const unmarked = out.indexHtml.replace(`${line}\n`, '')
+    expect(parsePublishedMarkers(out.indexHtml).page).toBe(outputHash(unmarked))
+  })
+
+  it('fragment: the marker ends the body, hashed over the whole output', async () => {
+    const site = await loadStarterSite()
+    const out = await renderFragmentRendered('header', { site })
+    const lines = out.indexHtml.split('\n')
+    const last = lines[lines.length - 1]
+    expect(last).toMatch(MARKER_LINE)
+    expect(markerLines(out.indexHtml)).toHaveLength(1)
+    const unmarked = lines.slice(0, -1).join('\n')
+    expect(last).toBe(`<!-- gazetta:published hash=${outputHash(unmarked)} -->`)
+    // The marker belongs to the body the worker inserts, not the head it hoists.
+    expect(splitFragment(out.indexHtml).body.endsWith(last)).toBe(true)
+  })
+
+  it.each([
+    ['alias', { aliasOf: 'welcome' }],
+    ['gone', {}],
+  ])('archive marker (%s) carries no published marker', (_label, page) => {
+    const out = renderArchiveMarker(page)
+    expect(out.indexHtml).not.toContain('gazetta:published')
   })
 })

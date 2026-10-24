@@ -123,7 +123,12 @@ references with hashed forms so the hash catches upstream changes:
   so a fragment change must invalidate every page that uses it.
 - A page's `metadata`, when it has at least one field. It renders into the
   page's `<head>`, so a metadata-only edit is a change. A page without
-  metadata, or with `{}`, hashes as it did before metadata counted.
+  metadata hashes the same as one with `{}`.
+- The render-format version, `RENDER_FORMAT_VERSION` in `hash.ts`. Raise it
+  whenever publish output changes for unchanged content (a new tag, a changed
+  layout): every hash changes, so the next publish rewrites every page and
+  fragment once instead of skipping them as unchanged. Version 1 added the
+  published-version marker (`design-live-check.md` Q4).
 
 ESI-mode pages don't include fragment hashes — fragments are published
 separately, and the edge runtime composes per request.
