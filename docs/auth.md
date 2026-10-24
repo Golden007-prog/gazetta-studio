@@ -109,10 +109,14 @@ admin: {
   auth: {
     trust: 'aws-cognito',
     region: 'us-east-1',
+    // Required: the load balancer in front of the admin (or a list of them)
+    albArn: 'arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/my-admin/50dc6c495c0c9188',
     audience: 'cognito-app-client-id', // optional but recommended
   },
 }
 ```
+
+Every ALB in a region signs with keys from the same endpoint, so Gazetta accepts a token only when its header's `signer` is one of the `albArn` values, as AWS's documentation says to check, and only until the header's `exp`.
 
 ### `tailscale`
 

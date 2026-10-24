@@ -179,6 +179,12 @@ const awsCognitoAuthSchema = z
     trust: z.literal('aws-cognito'),
     /** AWS region (e.g. "us-east-1"). Required for the JWKS URL. */
     region: z.string().regex(/^[a-z]{2}-[a-z]+-\d+$/, 'region must be an AWS region like "us-east-1"'),
+    /**
+     * ARN of the load balancer (or load balancers) in front of the
+     * admin. The token header's `signer` must be one of them: the key
+     * endpoint is shared by every ALB in the region.
+     */
+    albArn: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
     /** Optional aud claim — Cognito user-pool app client id. */
     audience: z.string().optional(),
     roles: z.record(z.string(), roleSchema).optional(),

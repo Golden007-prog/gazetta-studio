@@ -87,6 +87,7 @@ export function buildAuthProvider(config: AuthConfig | undefined): AuthIdentityP
     case 'aws-cognito':
       return createAwsCognitoAuthProvider({
         region: config.region,
+        albArn: config.albArn,
         audience: config.audience,
         roleMapping: config.roleMapping,
         customRoles: flattenRoles(config.roles),

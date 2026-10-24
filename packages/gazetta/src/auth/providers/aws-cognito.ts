@@ -42,6 +42,12 @@ export interface AwsCognitoConfig {
    */
   region: string
   /**
+   * ARN of the load balancer (or load balancers) in front of the admin.
+   * Every ALB in a region signs with keys from the same endpoint, so the
+   * token header's `signer` must name one of these (AWS's documented check).
+   */
+  albArn: string | ReadonlyArray<string>
+  /**
    * Optional `aud` claim — Cognito user-pool app client id. Setting
    * this prevents token replay across other Cognito-protected apps
    * sharing the same user pool.
@@ -139,6 +145,12 @@ export function createAwsCognitoAuthProvider(config: AwsCognitoConfig): AuthIden
     )
   }
 
+  const albArns = new Set(typeof config.albArn === 'string' ? [config.albArn] : (config.albArn ?? []))
+  if (albArns.size === 0 || [...albArns].some(arn => !arn)) {
+    throw new AuthConfigurationError(
+      'aws-cognito trust mode requires albArn: the ARN of the load balancer in front of the admin',
+    )
+  }
   const jwks = (config.jwksFactory ?? defaultJwksFactory)(config.region)
   const defaultRole = config.defaultRole ?? 'editor'
 
@@ -149,13 +161,22 @@ export function createAwsCognitoAuthProvider(config: AwsCognitoConfig): AuthIden
       if (!token) return null
 
       let payload: CognitoClaims
+      let header: { signer?: unknown; exp?: unknown }
       try {
         const result = await jwtVerify<CognitoClaims>(token, jwks, {
           audience: config.audience,
         })
         payload = result.payload
+        header = result.protectedHeader as { signer?: unknown; exp?: unknown }
       } catch (err) {
         throw new AuthenticationError(`AWS Cognito JWT verification failed: ${(err as Error).message}`)
+      }
+      // The ALB puts its own ARN and the token's expiry in the header.
+      if (typeof header.signer !== 'string' || !albArns.has(header.signer)) {
+        throw new AuthenticationError('AWS Cognito JWT was not signed by the configured load balancer (albArn)')
+      }
+      if (typeof header.exp !== 'number' || header.exp <= Math.floor(Date.now() / 1000)) {
+        throw new AuthenticationError('AWS Cognito JWT has expired')
       }
 
       const id = payload.sub ?? payload.username
