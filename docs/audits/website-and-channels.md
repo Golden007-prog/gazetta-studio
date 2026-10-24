@@ -149,7 +149,7 @@ Decided with the maintainer on 2026-10-24, answering #1178's discovery questions
 - **The npm page:** the repo's README.md, copied into `packages/gazetta/` at publish ([#1280](https://github.com/gazetta-studio/gazetta-studio/issues/1280)).
 - **A new site's dependency:** `gazetta init` writes `^<the CLI's own version>` instead of `*` ([#1281](https://github.com/gazetta-studio/gazetta-studio/issues/1281)); for 0.x versions the caret allows only patch updates.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1282)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
