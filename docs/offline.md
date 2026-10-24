@@ -128,7 +128,8 @@ Two limits to know:
   no earlier unsaved edits and keeps them as they are. It keeps asking the
   server, and once it answers, edits you make meanwhile are kept under
   your name. Until then, reloading the page loses them; your earlier
-  unsaved edits come back on the next load.
+  unsaved edits come back on the next load. The site tree from your last
+  visit isn't shown either: it fills in once the server answers.
 - **If the admin can't tell who you are** (your sign-in expired and the
   proxy answers with its login page), it shows no unsaved edits and
   keeps them as they are. Sign in again and reload.
