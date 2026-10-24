@@ -11,8 +11,8 @@ name: Fix bot
 # TDD-first hard contract: bot's first commit MUST be a failing test or
 # it stops. See bots/fix-bot/prompt.md.
 on:
-  # No schedule of its own: night-shift.yml starts it every night except Friday, one bot at
-  # a time, after checking the Claude quota.
+  # No schedule of its own: night-shift.yml starts it every night, after
+  # feature-bot, one bot at a time, after checking the Claude usage.
   workflow_dispatch:
     inputs:
       issue:

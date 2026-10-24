@@ -17,8 +17,8 @@ name: Feature bot
 # Design: .claude/rules/design-feature-bot.md
 # Concurrency invariant: ADR-0011 (single-instance via group: feature-bot)
 on:
-  # No schedule of its own: night-shift.yml starts it on Friday nights, one bot at
-  # a time, after checking the Claude quota.
+  # No schedule of its own: night-shift.yml starts it every night, right after
+  # cut-planner, one bot at a time, after checking the Claude usage.
   workflow_dispatch:
     inputs:
       issue:

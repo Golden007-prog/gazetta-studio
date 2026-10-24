@@ -471,7 +471,7 @@ Test tier values match [`testing-plan.md`](testing-plan.md) "Shape per sub-syste
 ### Bot pipeline
 
 ```
-Cron (daily 04:30 UTC, after fix-bot at 04:00):
+Night shift (every night, right after cut-planner; night-shift.yml):
     ↓
 1. Query: gh issue list --label feature-cut --label ready-for-agent --state open
     ↓
@@ -544,6 +544,15 @@ Cron (daily 04:30 UTC, after fix-bot at 04:00):
 5. PR opens with Fixes #<cut-sub-issue-N>. Merge closes sub-issue,
    advances tracking issue tasklist.
 ```
+
+Feature-bot runs every night from `night-shift.yml`, right after cut-planner. Bot PRs are reviewed daily, so a cut merged during the day gets its successor implemented that night. From 2026-10-11 to 2026-10-24 it ran on Friday nights only, before a Saturday review; before that, on a daily cron.
+
+Decided: maintainer, 2026-10-24 (#NNNN)
+
+| Rejected | Why |
+|---|---|
+| A few nights a week (for example Monday, Wednesday and Friday) | With daily reviews, a cut merged on the other days waits a day or two for its successor |
+| Friday nights only, with reviews on Saturdays | Each feature moves at most one cut a week |
 
 ### Durable memory (per `bots/README.md` "Durable memory pattern")
 

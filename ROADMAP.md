@@ -18,7 +18,7 @@ Priorities derive from [`docs/audits/cms-feature-audit.md`](docs/audits/cms-feat
 
 ## Now (committed, 4-8 weeks)
 
-The publishing-safety designs and the review workflow's cuts ship one cut at a time through feature-bot's weekly run (Friday nights, `night-shift.yml`), so 4–8 weeks covers their first cuts, not their completion. Target removal's first cut waits for its planner issue (see its row).
+The publishing-safety designs and the review workflow's cuts ship one cut at a time through feature-bot's nightly run (`night-shift.yml`), so 4–8 weeks covers their first cuts, not their completion. Target removal's first cut waits for its planner issue (see its row).
 
 ### Publishing safety
 

@@ -39,7 +39,7 @@ cut-planner therefore **refines before it re-decomposes**, and is explicitly for
 - One long-lived **planner issue** per feature, replacing today's tracking issue
 - cut-planner files **one** cut sub-issue at a time (`enhancement` + `ready-for-agent` + `area: X`)
 - **Input contract: the planner issue, and nothing else.** cut-planner never reads a design doc or an impl doc; seeding is maintainer work (open-Q 4)
-- **Cron at 03:00 UTC** — before feature-bot's 04:17, off-peak so it does not contend with interactive sessions for the shared token bucket (open-Q 1)
+- **Runs in the night shift** — up to four runs every night, right before feature-bot, with a 03:00 UTC cron as a morning backup (open-Q 1, amended 2026-10-24)
 - Cut bodies carry functional requirements **and** technical suggestions — locked decisions transcribed from the design doc, named target files, the test files to add
 - feature-bot gains a non-terminal **`needs-refinement`** outcome: comment + label swap, no skip-list entry
 - cut-planner consumes the `needs-refinement` queue, revises the spec, swaps the label back
@@ -54,7 +54,7 @@ cut-planner therefore **refines before it re-decomposes**, and is explicitly for
 - Cross-feature planning (one planner issue per feature; no global queue)
 - Re-ordering the suggested plan's dependency graph wholesale
 - Writing or editing the design doc's `## Cut sequence` table (that stays maintainer-owned)
-- Any cost/quota awareness — handled by off-peak scheduling instead (open-Q 1)
+- Any usage awareness of its own — `night-shift.yml` checks the account's usage before each run (open-Q 1)
 - A pre-flight cut-size gate — dropped; re-decomposition is reactive only (open-Q 6)
 - Reading design docs or impl docs (open-Q 4)
 
@@ -555,6 +555,15 @@ Existing features have a tracking issue plus **all** their cut sub-issues alread
    Rationale: the contention is *temporal*, not architectural. Both 2026-10-03/04 runs were starved because an interactive session was burning the same bucket; a cron that runs while nobody is working has no one to contend with. A pre-call budget check was considered and rejected for v1 — it converts a mid-flight cutoff into a clean skip but *creates no capacity*, and it needs a remaining-quota signal the CLI does not currently expose.
 
    **Dependency:** this only works if cron actually fires. The 04:17 feature-bot cron silently did not fire on 2026-10-03 (verified — no `schedule` event in the run list, only `workflow_dispatch` and `push`). Diagnosing that is a prerequisite, not a nice-to-have, and is tracked separately from this design.
+
+   **Amended 2026-10-24: cut-planner runs in the night shift.** Feature-bot now runs every night (`design-feature-bot.md`), and bot PRs are reviewed daily, so `night-shift.yml` runs cut-planner up to four times (one per planner, each with Q5a's single action) right before feature-bot, stopping at the first run that takes no action. A cut merged during the day gets its successor implemented that night. The 03:00 UTC cron stays as a morning backup. The night shift reads the account's 5-hour and weekly usage before each run (`rate_limit_event` in stream-json), the signal this resolution said the CLI lacked.
+
+   Decided: maintainer, 2026-10-24 (#NNNN)
+
+   | Rejected | Why |
+   |---|---|
+   | Evening crons | GitHub starts scheduled runs two to five hours late, so the timing is unreliable |
+   | Unchanged (03:00 UTC) | One filing a day, in the morning: a cut merged during the day waits until the next morning for its successor |
 
 
 2. **Single point of failure.** Under this design the queue stalls if cut-planner stalls, whereas today feature-bot can run for weeks with no upstream. Acceptable? Or should the maintainer retain a manual "file the next cut" path?

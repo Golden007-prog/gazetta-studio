@@ -11,18 +11,12 @@ name: Cut planner
 # Concurrency invariant: ADR-0011 (single-instance via group: cut-planner)
 on:
   schedule:
-    # 03:00 UTC daily — deliberately BEFORE feature-bot (04:17) so a cut
-    # filed this run is available to the same morning's implementation run,
-    # and at an hour the maintainer is not consuming the shared 5-hour
-    # Anthropic token bucket.
-    #
-    # That second reason is the load-bearing one (design-cut-planner.md
-    # open-Q 1). Both 2026-10-03/04 feature-bot runs were starved mid-flight
-    # because an interactive session was burning the same bucket — the
-    # contention is TEMPORAL, not architectural, so the fix is scheduling
-    # rather than a quota check in code. There is no pre-call budget check:
-    # it would convert a mid-flight cutoff into a clean skip but creates no
-    # capacity, and needs a remaining-quota signal the CLI does not expose.
+    # 03:00 UTC daily: a morning backup. The main runs come from
+    # night-shift.yml, which runs cut-planner up to four times (one action
+    # each, design-cut-planner.md Q5a) right before feature-bot, so a cut
+    # merged during the day gets its successor implemented the same night.
+    # night-shift.yml checks the account's Claude usage before each run;
+    # this backup run doesn't, and costs about $1.50 at API prices.
     - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:

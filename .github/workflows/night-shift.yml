@@ -1,50 +1,42 @@
 name: Night shift
 
 # Runs the heavy Claude bots one at a time, at night, in priority order.
-# They share one Claude subscription budget with the maintainer's
-# interactive sessions, so running them in parallel or during the day
-# made them starve each other and the maintainer (see
-# design-cut-planner.md Q6 for the measured quota stops).
+# They share one Claude subscription with the maintainer's own sessions,
+# PR reviews and autonomous runs, so one chain runs them in sequence and
+# checks the account's usage before each.
 #
-# Weekly rhythm (the maintainer reviews on Saturdays, so everything that
-# opens PRs finishes by Saturday morning):
+# Every night: cut-planner files the next cut of each feature whose last
+# cut merged that day (up to 4 runs, one action each), feature-bot
+# implements the ready cuts, then fix-bot. Thursday adds
+# dead-code-watcher, Sunday and Tuesday add review-bot, and the first
+# Sunday of the month adds the compactors. Bot PRs are reviewed daily,
+# so a merged cut gets its successor implemented the same night.
 #
-#   Fri night   feature-bot alone, with the whole budget
-#   Thu night   dead-code-watcher, then fix-bot
-#   Sun, Tue    fix-bot, then review-bot (+ compactors on the first Sunday)
-#   Mon, Wed, Sat   fix-bot
-#
-# The cheap bots (triage, flake-watcher, discovery-prep, cut-planner,
-# mutation) keep their own schedules.
-#
-# GitHub starts scheduled runs late: a 03:00 UTC schedule here has
-# started between 05:40 and 10:00 UTC. The 20:37 UTC schedule therefore
-# lands around 01:00-04:00 UTC. The 21:37 schedule is a backup for the
-# nights GitHub drops a scheduled run; whichever starts second sees that
-# the other already ran the night's lineup and skips.
+# GitHub starts scheduled runs late: the 20:37 UTC schedule lands around
+# 23:00-01:00 UTC, sometimes later. The 21:37 schedule is a backup for
+# the nights GitHub drops a scheduled run; whichever starts second sees
+# that the other already ran the night's lineup and skips.
 #
 # Before each bot, a one-line Haiku call reports the account's 5-hour
 # and 7-day usage (`rate_limit_event` in stream-json). The chain stops
-# there if usage is high, instead of starting a run that would be cut
-# off and lose its partial work.
+# there when the week is ahead of pace: the bots may take the week's
+# usage up to PACE_START + PACE_PER_DAY for each day since the weekly
+# reset, and never past BOT_WEEK_CAP. Above the cap, 70-80% is kept for
+# PR reviews and autonomous runs (external contributors first), and the
+# last 20% for the maintainer's other work. Bots after the first also
+# stop when the 5-hour window is at 80%.
 
 on:
   schedule:
-    - cron: '37 20 * * 5' # Fri: feature-bot
-    - cron: '37 21 * * 5'
-    - cron: '37 20 * * 4' # Thu: dead-code-watcher, fix-bot
-    - cron: '37 21 * * 4'
-    - cron: '37 20 * * 0,2' # Sun, Tue: fix-bot, review-bot
-    - cron: '37 21 * * 0,2'
-    - cron: '37 20 * * 1,3,6' # Mon, Wed, Sat: fix-bot
-    - cron: '37 21 * * 1,3,6'
+    - cron: '37 20 * * *'
+    - cron: '37 21 * * *' # backup for a dropped run
   workflow_dispatch:
     inputs:
       lineup:
-        description: 'Space-separated bots to run in order, e.g. "fix-bot review-bot". Options: feature-bot fix-bot review-bot dead-code-watcher bots-compact'
+        description: 'Space-separated bots to run in order, e.g. "fix-bot review-bot". Options: cut-planner feature-bot fix-bot review-bot dead-code-watcher bots-compact'
         required: true
       dry_run:
-        description: 'Set to "1" to dispatch only bots that support dry_run (feature-bot, review-bot), in dry-run mode. Proves the chain without spending budget.'
+        description: 'Set to "1" to dispatch only bots that support dry_run (cut-planner, feature-bot, review-bot), in dry-run mode. Proves the chain without spending budget.'
         required: false
         default: ''
 
@@ -67,7 +59,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           EVENT: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
           INPUT_LINEUP: ${{ inputs.lineup }}
         run: |
           set -euo pipefail
@@ -89,17 +80,17 @@ jobs:
             fi
           done
 
-          case "${SCHEDULE#* }" in
-            '20 * * 5'|'21 * * 5') lineup='feature-bot' ;;
-            '20 * * 4'|'21 * * 4') lineup='dead-code-watcher fix-bot' ;;
-            '20 * * 0,2'|'21 * * 0,2') lineup='fix-bot review-bot' ;;
-            '20 * * 1,3,6'|'21 * * 1,3,6') lineup='fix-bot' ;;
-            *) echo "::error::No lineup for schedule '$SCHEDULE'"; exit 1 ;;
-          esac
-          # Compactors on the first Sunday night of the month. The run starts
-          # hours after the schedule, so date the night, not the start time.
+          # The run starts hours after the schedule, so date the night, not
+          # the start time.
           night=$(date -u -d '12 hours ago')
-          if [ "$(date -u -d "$night" +%u)" = 7 ] && [ "$(date -u -d "$night" +%-d)" -le 7 ]; then
+          day=$(date -u -d "$night" +%u) # 1 = Monday ... 7 = Sunday
+          lineup='cut-planner feature-bot fix-bot'
+          case "$day" in
+            4) lineup="$lineup dead-code-watcher" ;;
+            2|7) lineup="$lineup review-bot" ;;
+          esac
+          # Compactors on the first Sunday night of the month.
+          if [ "$day" = 7 ] && [ "$(date -u -d "$night" +%-d)" -le 7 ]; then
             lineup="$lineup bots-compact"
           fi
           echo "lineup=$lineup" >> "$GITHUB_OUTPUT"
@@ -109,8 +100,10 @@ jobs:
     needs: plan
     if: needs.plan.outputs.lineup != ''
     runs-on: ubuntu-latest
-    # feature-bot alone can take 180 min; two 60-min bots plus waiting fit too.
-    timeout-minutes: 300
+    # GitHub's maximum for a job on its hosted runners. feature-bot can take
+    # 180 min and fix-bot 120; on a typical night the pace check stops the
+    # chain, or the lineup finishes, well before this.
+    timeout-minutes: 360
     permissions:
       actions: write
     env:
@@ -119,6 +112,10 @@ jobs:
       LINEUP: ${{ needs.plan.outputs.lineup }}
       DRY_RUN: ${{ inputs.dry_run }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # The week's pace for the bots, as shares of the weekly limit.
+      PACE_START: '0.20'
+      PACE_PER_DAY: '0.10'
+      BOT_WEEK_CAP: '0.70'
     steps:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code@stable
@@ -127,41 +124,37 @@ jobs:
         run: |
           set -uo pipefail
 
-          # Prints "<five_hour> <seven_day> <status>" from a one-line Haiku call.
-          # Empty output means the CLI reported no usage; treated as unknown.
+          # Prints "<five_hour> <seven_day> <status> <seven_day_resets_at>"
+          # from a one-line Haiku call. Empty output means the CLI reported
+          # no usage; treated as unknown.
           probe() {
             claude -p 'Reply with OK.' --model haiku --output-format stream-json --verbose 2>/dev/null \
               | jq -r 'select(.type == "rate_limit_event") | .rate_limit_info
-                       | "\(.unifiedWindows.five_hour.utilization // 0) \(.unifiedWindows.seven_day.utilization // 0) \(.status)"' \
+                       | "\(.unifiedWindows.five_hour.utilization // 0) \(.unifiedWindows.seven_day.utilization // 0) \(.status) \(.unifiedWindows.seven_day.resetsAt // "")"' \
               | tail -1
           }
 
-          first=1
-          for bot in $LINEUP; do
-            read -r five seven status <<< "$(probe)"
-            echo "Before $bot: five_hour=${five:-?} seven_day=${seven:-?} status=${status:-?}"
-            if [ "${status:-}" = rejected ]; then
-              echo "::warning::Quota exhausted before $bot; stopping the chain."
-              break
-            fi
-            # The first bot runs unless the limit is already hit; later bots
-            # need headroom, so one bot's run doesn't use the night up.
-            if [ "$first" = 0 ] && [ -n "${five:-}" ] && \
-               awk -v f="$five" -v s="$seven" 'BEGIN { exit !(f >= 0.8 || s >= 0.9) }'; then
-              echo "::warning::Usage high before $bot (5h $five, 7d $seven); stopping the chain."
-              break
-            fi
-            first=0
+          # The share of the week the bots may have used by now, given the
+          # next weekly reset (epoch seconds). Without a reset time, the cap.
+          pace() {
+            awk -v reset="${1:-}" -v now="$(date +%s)" -v start="$PACE_START" -v per_day="$PACE_PER_DAY" -v cap="$BOT_WEEK_CAP" 'BEGIN {
+              line = cap
+              if (reset != "") {
+                days = 7 - (reset - now) / 86400
+                if (days < 0) days = 0
+                if (start + per_day * days < line) line = start + per_day * days
+              }
+              printf "%.2f", line
+            }'
+          }
 
-            args=()
-            case "$bot" in
-              feature-bot|review-bot) [ -n "$DRY_RUN" ] && args=(-f dry_run=1) ;;
-              *) if [ -n "$DRY_RUN" ]; then echo "Skipping $bot (no dry_run)"; continue; fi ;;
-            esac
-            [ "$bot" = bots-compact ] && args+=(-f target=all)
-
+          # Dispatches one run of a bot and waits for it to finish. Sets $id.
+          run_bot() {
+            local bot=$1
+            shift
+            local started
             started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            gh workflow run "$bot.yml" --ref "$GITHUB_REF_NAME" "${args[@]}"
+            gh workflow run "$bot.yml" --ref "$GITHUB_REF_NAME" "$@"
             id=''
             for _ in $(seq 1 30); do
               id=$(gh run list --workflow "$bot.yml" --event workflow_dispatch --created ">=$started" \
@@ -175,7 +168,49 @@ jobs:
             fi
             echo "$bot: https://github.com/$GH_REPO/actions/runs/$id"
             # A failed bot run doesn't stop the chain; each bot reports its
-            # own failures. Only the quota check above does.
+            # own failures. Only the usage checks do.
             gh run watch "$id" --interval 60 > /dev/null || echo "::warning::$bot run $id did not succeed"
             echo "$bot finished: $(gh run view "$id" --json conclusion --jq .conclusion)"
+          }
+
+          first=1
+          for bot in $LINEUP; do
+            # cut-planner takes one action per run (design-cut-planner.md
+            # Q5a), so it runs once per planner, until a run takes none.
+            runs=1
+            [ "$bot" = cut-planner ] && runs=4
+            for _ in $(seq 1 "$runs"); do
+              read -r five seven status reset <<< "$(probe)"
+              line=$(pace "${reset:-}")
+              echo "Before $bot: five_hour=${five:-?} seven_day=${seven:-?} status=${status:-?} pace=$line"
+              if [ "${status:-}" = rejected ]; then
+                echo "::warning::Quota exhausted before $bot; stopping the chain."
+                break 2
+              fi
+              if [ -n "${seven:-}" ] && awk -v s="$seven" -v l="$line" 'BEGIN { exit !(s >= l) }'; then
+                echo "::warning::The week is ahead of pace before $bot (7d $seven, pace $line); stopping the chain."
+                break 2
+              fi
+              # Later bots also need room in the 5-hour window, so one bot's
+              # run doesn't use the night up.
+              if [ "$first" = 0 ] && [ -n "${five:-}" ] && awk -v f="$five" 'BEGIN { exit !(f >= 0.8) }'; then
+                echo "::warning::5-hour usage high before $bot ($five); stopping the chain."
+                break 2
+              fi
+              first=0
+
+              args=()
+              case "$bot" in
+                cut-planner|feature-bot|review-bot) [ -n "$DRY_RUN" ] && args=(-f dry_run=1) ;;
+                *) if [ -n "$DRY_RUN" ]; then echo "Skipping $bot (no dry_run)"; continue 2; fi ;;
+              esac
+              [ "$bot" = bots-compact ] && args+=(-f target=all)
+
+              run_bot "$bot" "${args[@]}"
+              # A cut-planner run that took no action means no planner has
+              # one left tonight.
+              if [ "$bot" = cut-planner ] && ! gh run view "$id" --log 2>/dev/null | grep -q 'One action taken'; then
+                break
+              fi
+            done
           done
