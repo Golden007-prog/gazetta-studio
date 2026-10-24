@@ -144,11 +144,10 @@ describe('Cut 8b — navigate restores persisted dirty content', () => {
     // dirty=true because content !== savedJson
     expect(ec.dirty).toBe(true)
 
-    // The persisted entry is consumed (promoted to live edit).
-    // Verify it's been cleared from the store. Note that markDirty
-    // mirrors back into the store on the next ec.markDirty call,
-    // not on the open() — open() doesn't fire markDirty.
-    expect(persistedStore.has(key)).toBe(false)
+    // The entry stays stored after the restore (#1108): a restore
+    // overlays the content, it does not consume the draft, so a second
+    // reload brings it back. Save and Discard are the clears.
+    expect(persistedStore.has(key)).toBe(true)
   })
 
   it('does NOT overlay persisted content from a different page', async () => {

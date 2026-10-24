@@ -24,7 +24,7 @@ import { useEditorPersistenceStore, type ManifestWrite } from '../stores/editorP
 import { useEditorContentStore, type EditingTarget } from '../stores/editorContent.js'
 import { useValidationIssuesStore } from '../stores/validationIssues.js'
 import { type EditorSelection, selectionToStashKey, selectionToErrorLabel } from './editorSelection.js'
-import { api, type PageMetadata, StaleSaveError, ValidationFailedError } from '../api/client.js'
+import { api, type ComponentEntry, type PageMetadata, StaleSaveError, ValidationFailedError } from '../api/client.js'
 import { useLocaleStore } from '../stores/locale.js'
 import { useEditorEtagsStore, manifestPath } from '../stores/editorEtags.js'
 import { useSaveConflictsStore } from '../stores/saveConflicts.js'
@@ -74,6 +74,38 @@ export function useEditorActions() {
   // --- Cross-page persisted-edits key helper (Cut 8b) ---
 
   /**
+   * Build the persisted-edits key for a target path. A fragment target
+   * (`@header`, `@header/logo`) keys as fragment:name:locale:path with a
+   * `_root` page root, matching persistedEditKeyForSelection's
+   * fragmentEdit case, so a fragment draft is found after a reload no
+   * matter which entry point opened it (#1108).
+   */
+  function persistedKeyForTargetPath(targetPath: string): string | null {
+    const sel = useSelectionStore()
+    if (!sel.selection) return null
+    const locale = useLocaleStore().effectiveLocale ?? undefined
+    if (targetPath.startsWith('@')) {
+      const [name, ...rest] = targetPath.slice(1).split('/')
+      return persistedEditKey('fragment', name, locale, rest.join('/') || '_root')
+    }
+    const kind = sel.selection.type === 'page' ? 'page' : 'fragment'
+    return persistedEditKey(kind, sel.selection.name, locale, targetPath)
+  }
+
+  /** Names of the fragments a component list references, at any depth. */
+  function fragmentRefsOf(components: ComponentEntry[] | undefined): string[] {
+    const out: string[] = []
+    for (const c of components ?? []) {
+      if (typeof c === 'string') {
+        if (c.startsWith('@')) out.push(c.slice(1).split('/')[0])
+      } else {
+        out.push(...fragmentRefsOf(c.components))
+      }
+    }
+    return out
+  }
+
+  /**
    * Build the persisted-edits key for a (selection, target) pair.
    * Returns null when the active context isn't a persistable target
    * (no selection, no target, fragment-link host).
@@ -81,18 +113,12 @@ export function useEditorActions() {
   function persistedKeyForCurrent(): string | null {
     const sel = useSelectionStore()
     if (!sel.selection || !ec.target) return null
-    const kind = sel.selection.type === 'page' ? 'page' : 'fragment'
-    const locale = useLocaleStore().effectiveLocale ?? undefined
-    return persistedEditKey(kind, sel.selection.name, locale, ec.target.path)
+    return persistedKeyForTargetPath(ec.target.path)
   }
 
   /** Same shape, but for a stash entry's target.path. */
   function persistedKeyForStashEntry(targetPath: string): string | null {
-    const sel = useSelectionStore()
-    if (!sel.selection) return null
-    const kind = sel.selection.type === 'page' ? 'page' : 'fragment'
-    const locale = useLocaleStore().effectiveLocale ?? undefined
-    return persistedEditKey(kind, sel.selection.name, locale, targetPath)
+    return persistedKeyForTargetPath(targetPath)
   }
 
   /** The version the open editor's content is edited on: the manifest its save writes, with that manifest's etag. */
@@ -101,10 +127,9 @@ export function useEditorActions() {
     if (!sel || !ec.target) return undefined
     const locale = useLocaleStore().effectiveLocale ?? undefined
     const path = ec.target.path
-    const manifest =
-      sel.type === 'page' && path.startsWith('@')
-        ? manifestPath('fragment', path.slice(1).split('/')[0], locale)
-        : manifestPath(sel.type, sel.name, locale)
+    const manifest = path.startsWith('@')
+      ? manifestPath('fragment', path.slice(1).split('/')[0], locale)
+      : manifestPath(sel.type, sel.name, locale)
     const etag = useEditorEtagsStore().get(manifest)
     return etag ? { manifest, etag } : undefined
   }
@@ -497,6 +522,15 @@ export function useEditorActions() {
    * go through here.
    */
   async function navigate(sel: EditorSelection) {
+    // A fragment's own root has one editor on its own page (#1108):
+    // the tree root row, the preview's fragment-root click and a
+    // `#@name` hash are the same target, with one stash entry and one
+    // stored draft. Two editors for one content could hold different
+    // text under one stored key.
+    const navSelection = useSelectionStore().selection
+    if (sel.kind === 'fragmentEdit' && navSelection?.type === 'fragment' && navSelection.name === sel.fragmentName) {
+      sel = { kind: 'root' }
+    }
     cancelPending()
     stashCurrent()
 
@@ -551,14 +585,24 @@ export function useEditorActions() {
       if (signal.aborted) return
       activateDrafts()
       const persisted = persistedKey ? usePersistedEditsStore().get(persistedKey) : null
-      if (persisted) {
+      if (persisted && JSON.stringify(persisted.editedContent) === JSON.stringify(target.content)) {
+        // A draft that matches the content just loaded holds nothing
+        // new (#1108): another tab saved the same edit. Drop the entry
+        // instead of keeping it, or a later reopen would apply it as a
+        // stale edit against its old base. Compared before ec.open so a
+        // newer navigation can't race the check.
+        usePersistedEditsStore().clear(persistedKey!)
+        await ec.open(target)
+      } else if (persisted) {
         // Saved against the version the draft was made on, not the one just loaded.
         if (persisted.base) useEditorEtagsStore().set(persisted.base.manifest, persisted.base.etag)
         await ec.open(target, persisted.editedContent)
-        // Promote: the entry is now live in the editor; remove from
-        // the persisted store so a subsequent navigate-away → stash
-        // → restore flow doesn't re-apply the same content twice.
-        usePersistedEditsStore().clear(persistedKey!)
+        // The entry stays in the persisted store until Save or Discard
+        // (#1108): a restore overlays the content, it does not consume
+        // it, so re-applying after another reload is idempotent, and
+        // stashCurrent / markDirty overwrite the entry with newer
+        // content. Clearing here would drop the draft from storage the
+        // moment it is restored, and a second reload would lose it.
       } else {
         await ec.open(target)
       }
@@ -746,9 +790,14 @@ export function useEditorActions() {
     // Cut 8b: also drop the cross-page persisted mirror for this
     // path. The component is being removed from the manifest;
     // re-applying its persisted dirty content after a reload would
-    // resurrect content that no longer has a home.
-    const k = persistedKeyForStashEntry(path)
-    if (k) usePersistedEditsStore().clear(k)
+    // resurrect content that no longer has a home. A fragment
+    // reference ('@name') is the exception: the fragment survives the
+    // unlink and its draft keys under the fragment, shared across
+    // pages, so it is not orphaned with this page's reference (#1108).
+    if (!path.startsWith('@')) {
+      const k = persistedKeyForStashEntry(path)
+      if (k) usePersistedEditsStore().clear(k)
+    }
   }
 
   /**
@@ -790,6 +839,9 @@ export function useEditorActions() {
    * metadata.
    */
   function discard() {
+    // The open editor can be a fragment under a page selection; its
+    // draft keys under the fragment, outside clearItem's prefix below.
+    const openKey = persistedKeyForCurrent()
     ec.discard()
     dropStash()
     const key = currentManifestKey()
@@ -799,6 +851,14 @@ export function useEditorActions() {
     // Includes drafts restored after a reload for components not opened
     // since: opening one later would apply it over the other author's version.
     if (key) usePersistedEditsStore().clearItem(key.kind, key.name, useLocaleStore().effectiveLocale ?? undefined)
+    if (openKey) usePersistedEditsStore().clear(openKey)
+    // Fragment drafts key under the fragment, outside the prefix
+    // clears above. Discard on a selection removes every edit you'd
+    // see on it (#1108), whether or not it was opened since the reload.
+    const locale = useLocaleStore().effectiveLocale ?? undefined
+    for (const name of fragmentRefsOf(useSelectionStore().selection?.detail?.components)) {
+      usePersistedEditsStore().clearItem('fragment', name, locale)
+    }
     usePreviewStore().invalidateDraft()
   }
 
