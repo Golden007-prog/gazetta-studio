@@ -34,6 +34,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LIGHT_MODEL, runClaude } from '../_lib/claude.js'
 import { findIssuesByLabels, octokitFromEnv, repoFromEnv } from '../_lib/github.js'
+import { countOpenGoodFirstIssues, goodFirstIssueInputs } from './good-first-issue.js'
 import {
   printBanner,
   printCandidateHeader,
@@ -72,6 +73,7 @@ async function main(): Promise<void> {
     outputs: [
       'One of bug / enhancement / triage-uncertain + area: X',
       'Reproducible bug also gets ready-for-agent (auto-advances to fix-bot queue)',
+      'While fewer than 3 are open, a small single-area bug also gets good first issue',
     ],
   })
 
@@ -185,11 +187,17 @@ ${roadmap}
     // classified issues, so any candidate we see is either brand-new or
     // explicitly re-enqueued by a maintainer (who removed the prior
     // classification label). In both cases, classify from scratch.
+    // Counted per issue, so a label added earlier in this run counts.
+    const openGoodFirstIssues = await countOpenGoodFirstIssues(octokit, repo)
+    if (openGoodFirstIssues === null) {
+      printWarning("Couldn't count open good first issues; this issue won't get the label.")
+    }
     const prompt = `${promptTemplate}${referenceDocsBlock}
 
 ISSUE_NUMBER=${candidate.number}
 ISSUE_TITLE=${candidate.title}
-RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}`
+RUN_ID=${process.env.GITHUB_RUN_ID ?? 'local'}
+${goodFirstIssueInputs(openGoodFirstIssues)}`
 
     const transcriptPath = resolve(TRANSCRIPTS_DIR, `${RUN_TIMESTAMP}-issue-${candidate.number}.jsonl`)
     printTranscriptPath(transcriptPath)

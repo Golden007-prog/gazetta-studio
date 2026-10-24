@@ -18,6 +18,9 @@ So:
   own TDD-first guard: it must write a failing test first or it exits.)
 - **Uncertain** → apply `triage-uncertain` + `area: X` (skip category
   label; you don't have one). Maintainer decides via `/triage`.
+- **Small bug in one area that says what should happen, while fewer than 3
+  good first issues are open** → also apply `good first issue` (step 8f),
+  so newcomers always find a few on the repo's /contribute page.
 
 You ARE the decider on category. The maintainer is the decider on state
 advancement past `ready-for-agent` (they merge the fix-bot PR or not).
@@ -27,6 +30,10 @@ advancement past `ready-for-agent` (they merge the fix-bot PR or not).
 - `ISSUE_NUMBER` — the GitHub issue number to triage
 - `ISSUE_TITLE` — for context (the issue body has the full content)
 - `RUN_ID` — the workflow run ID (used for outcome tags); `local` if running outside CI
+- `OPEN_GOOD_FIRST_ISSUES` — how many open issues carry `good first issue`
+  (`unknown` if they couldn't be listed)
+- `GOOD_FIRST_ISSUE_WANTED` — `yes` when fewer than 3 are open, so a
+  qualifying bug may get the label (step 8f); otherwise `no`
 
 Every investigation is FRESH. The candidate query already excludes
 classified issues — if you're seeing this issue, it's either brand-new
@@ -465,6 +472,25 @@ bug as a test" on the issue. So `ready-for-agent` is a hint, not a
 guarantee — fix-bot self-polices when the bug isn't actually
 test-capturable. This makes auto-advance safe even on flake-labeled bugs.
 
+**8f. `good first issue` (only when `GOOD_FIRST_ISSUE_WANTED=yes`).**
+
+When `GOOD_FIRST_ISSUE_WANTED=yes`, also add `good first issue` to a bug
+that is all of:
+
+- **small**: the fix looks like a small change in one or two files;
+- **in one area**: you gave it a single `area:` label;
+- **clear about what should happen**: the issue says what the expected
+  behaviour is, not only what goes wrong.
+
+```
+gh issue edit $ISSUE_NUMBER --add-label "good first issue"
+```
+
+It doesn't change step 8e: add `ready-for-agent` or not exactly as you
+otherwise would (fix-bot may still take the issue). Never add `good first
+issue` when `GOOD_FIRST_ISSUE_WANTED=no`, to an enhancement, or to a
+`triage-uncertain` issue. When you add it, say so in your comment.
+
 ### 9. Post investigation notes — ONLY if repro succeeded
 
 These are **investigation notes**, NOT an agent brief. The distinction
@@ -536,6 +562,9 @@ roundtrips:
 # Confident bug, repro succeeded → auto-advances to ready-for-agent
 gh issue edit $ISSUE_NUMBER --add-label "bug,area: cms,ready-for-agent"
 
+# Same, and it qualifies as a good first issue (step 8f, GOOD_FIRST_ISSUE_WANTED=yes)
+gh issue edit $ISSUE_NUMBER --add-label "bug,area: cms,ready-for-agent,good first issue"
+
 # Confident bug, repro deferred (CI-only / env-specific / non-flake)
 gh issue edit $ISSUE_NUMBER --add-label "bug,area: cms"
 
@@ -551,6 +580,8 @@ gh issue edit $ISSUE_NUMBER --add-label "triage-uncertain,area: cms"
 - **State-advancement rules.**
   - You MAY apply `bug`, `enhancement`, `triage-uncertain`, `area: X`,
     `flake`, and `recurring-flake`.
+  - You MAY apply `good first issue` ONLY under step 8f: a bug,
+    `GOOD_FIRST_ISSUE_WANTED=yes`, and all three criteria met.
   - You MAY apply `ready-for-agent` ONLY when (8e auto-advance
     condition): outcome is "Confirmed" via local repro OR issue is
     producer-bot-filed.
