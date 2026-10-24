@@ -175,6 +175,14 @@ Each archetype gets a copy-paste-ready `site.config.ts` snippet + role mapping +
 - Review queue (`/api/reviews`) returns all pending items the user can READ (per coarse-grained discovery filter from `design-auth-rbac.md`)
 - UI client-side filters to "actionable for you" by default; toggle for "all pending I can read"
 - Approver visibility of OWN submissions: yes (need to see them to approve when self-approval allowed)
+- The route is `GET /api/reviews?action=pending-review` (the one below; cut 17). Each item carries `canApprove`: the user has `review:approve`, and the item isn't their own submission when `allowSelfApproval` is `false`. The admin's "actionable for you" default filters on it. Read access stays the boundary, so the route returns nothing the user couldn't already read.
+
+  Decided: maintainer, 2026-10-24 (#PRNUM)
+
+  | Rejected | Why |
+  |---|---|
+  | `GET /api/review/pending` | A second route for the same queue; `/api/reviews?action=` already covers pending reviews and pending publishes |
+  | The server returns only items the user can approve | Drops the "all pending I can read" toggle, and filters nothing read access doesn't already |
 
 ### Pending review queue at scale
 - `/api/reviews?target={target}&action={pending-review|publish-pending}&cursor={cursor}` follows prefix-shard + cursor pagination from `design-scale.md`
@@ -374,7 +382,7 @@ State lives in GitHub sub-issue close-state; this table is intent only (no statu
 | 14 | Publish-approval gate UX — PublishPanel destination rows + **their `.stories.ts` (5 states from the design-doc table) running green** | 8, 10, 13, 20 | agent | component | High |
 | 15 | Combined "Submit & approve" + "Publish-request & approve" buttons | 11, 14 | agent | component | Low |
 | 16 | Constructive errors (`409 NO_APPROVER_AVAILABLE`; boot config validation; helpful 403s) | 7, 13 | agent | api-first | Low |
-| 17 | Pending review queue (cross-content "what's waiting for me"; `GET /api/review/pending`; paginated) | 7 | agent | api+component | Medium |
+| 17 | Pending review queue (cross-content "what's waiting for me"; `GET /api/reviews?action=pending-review`; paginated) | 7 | agent | api+component | Medium |
 | 18 | Hook integration (10 review-lifecycle phases per `design-hooks.md`) | 4, 12 | agent | api-first | Medium |
 | 19 | Docs (`docs/review-workflow.md` 5 archetypes) + consolidation (retire impl doc → this design doc; ROADMAP; CLAUDE.md) | all | agent | (docs) | Low |
 | 20 | **Agent B visual self-check + PR screenshot embed** — `bots/_lib` screenshot helper (Playwright, reuse `tools/mcp-dev` logic) + Storybook built and served from bot code (`bots/_lib/storybook-server.ts`; no workflow edit, since bots can't push `.github/workflows/**`, #840) + reviewer-prompt contract (screenshot each new/changed story → visual verdict vs design-doc state table → factor into APPROVE/REJECT) + **upload screenshots as Release assets (`gh release upload`, tag `bot-screenshots`), embed inline via the public `…/releases/download/…` URLs, and prune merged/closed PRs' assets at the start of each feature-bot run (best-effort; PR opens without images on failure)** | 10 | agent | (bot infra) | Medium |

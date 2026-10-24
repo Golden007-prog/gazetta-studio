@@ -257,7 +257,7 @@ Sequenced data-shape-first (state machine + storage + capabilities), then admin-
 
 **Files added:**
 - `apps/admin/src/client/components/PendingReviewQueue.vue` — list view; filter by kind/age; reviewer's "what's waiting for me" surface
-- New admin API: `GET /api/review/pending` — paginated list of items in `pending-review` state visible to the principal
+- New admin API: `GET /api/reviews?action=pending-review` — paginated list of items in `pending-review` state the principal can read, each with `canApprove` (`design-review-workflow.md`, "Visibility filtering")
 
 **Tests:**
 - Reviewer with `review:approve` sees the queue
@@ -323,7 +323,7 @@ Per `design-hooks-implementation.md` Phase 4 (when hooks foundation ships): wire
 1. **State-machine atomicity.** Per-approver sidecar write + state-write is two operations. Per design's "concurrent approval race tolerance": writes are idempotent; last-write-wins on `state: approved`. Verify in cut 4 with concurrent test.
 2. ~~**`invalidateOnSave: 'content-diff'` hash basis.**~~ **RESOLVED 2026-10-03** — locked to `computeSaveEtag` (content-only) in [`design-review-workflow.md`](design-review-workflow.md) "Locked invariants". The publish-state `.{8hex}.hash` substitutes template + fragment hashes, so it would revoke approval on unrelated dep-tree changes. Cut 5 (#519) consumes the lock; it no longer carries the decision.
 3. **Self-approval edge case.** When `allowSelfApproval: false` AND submitter is the only role-mapped approver: deadlock. Cut 12's `409 NO_APPROVER_AVAILABLE` covers this; verify the error fires at submit time, not approve time (UX: don't let them submit then fail mid-flow).
-4. **Pending queue visibility filter.** Reviewer sees items they can approve. RBAC filter at query time, not client-side, to avoid leaking pending items the reviewer doesn't have capability for. Lock at cut 13.
+4. ~~**Pending queue visibility filter.**~~ **Resolved 2026-10-24:** the queue returns pending items the reviewer can read, each with `canApprove`; read access is the RBAC filter, applied at query time (`design-review-workflow.md`, "Visibility filtering").
 
 ## Estimates
 
