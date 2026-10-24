@@ -179,6 +179,12 @@ Operator-facing features for mature production deployments:
 - [#1170](https://github.com/gazetta-studio/gazetta-studio/issues/1170) bulk edits; also a use case in the MCP design pass
 - [#1169](https://github.com/gazetta-studio/gazetta-studio/issues/1169) template schema changes: starts when publish undo refuses content on a real site, or a template developer reports the problem (scenario TD3 in [`docs/actor-scenarios.md`](docs/actor-scenarios.md)). Until then undo stays correct by refusing.
 
+### Docs
+
+- [#1205](https://github.com/gazetta-studio/gazetta-studio/issues/1205) self-hosting behind a CDN: after a publish the CDN serves the previous page for up to `cache.edge` unless it's purged
+
+Decided: maintainer, 2026-10-24 (#1243)
+
 ### Tier 3 strategic bets (parallel tracks)
 
 These can run alongside Phase 2 since they don't block foundations:
