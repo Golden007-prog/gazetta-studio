@@ -177,7 +177,7 @@ Each archetype gets a copy-paste-ready `site.config.ts` snippet + role mapping +
 - Approver visibility of OWN submissions: yes (need to see them to approve when self-approval allowed)
 - The route is `GET /api/reviews?action=pending-review` (the one below; cut 17). Each item carries `canApprove`: the user has `review:approve`, and the item isn't their own submission when `allowSelfApproval` is `false`. The admin's "actionable for you" default filters on it. Read access stays the boundary, so the route returns nothing the user couldn't already read.
 
-  Decided: maintainer, 2026-10-24 (#PRNUM)
+  Decided: maintainer, 2026-10-24 (#1407)
 
   | Rejected | Why |
   |---|---|
