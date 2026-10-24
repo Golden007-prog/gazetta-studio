@@ -59,7 +59,7 @@ variables are configured. Skipped when `CI=true`.
 - `browser: 86400` → `max-age=86400` (browser caches 24h)
 - `edge: 86400` → `s-maxage=86400` (CDN caches 24h)
 
-Static targets (the default type) always get `Cache-Control: public, max-age=0, must-revalidate` with an ETag, whatever `cache` says: browsers and CDNs revalidate every request, so a publish shows at once with no purge step. This is intended.
+Pages on static targets (the default type) always get `Cache-Control: public, max-age=0, must-revalidate` with an ETag, whatever `cache` says: browsers and CDNs revalidate every request, so a publish shows at once with no purge step. This is intended.
 
 Decided: maintainer, 2026-10-24 (#1243)
 
