@@ -6,7 +6,7 @@
  *   archive list [--kind=page|fragment]
  *   archive purge <name> [--kind=page|fragment] [--force]
  *   archive restore <name> [--kind=page|fragment]
- *   archive rename <oldname> <newname> [--kind=page|fragment] [--no-keep-alias]
+ *   archive rename <oldname> <newname> [--kind=page|fragment] [--no-keep-alias] [--force]
  *
  * Implementation strategy: the CLI invokes the same admin-api routes
  * the admin UI uses, via `app.request()` against an in-process
@@ -103,7 +103,9 @@ export async function runArchiveSubcommand(input: ArchiveSubcommandInput): Promi
     case 'rename': {
       const [oldName, newName] = positional
       if (!oldName || !newName) {
-        sink.error('Usage: gazetta archive rename <oldname> <newname> [--kind=page|fragment] [--no-keep-alias]')
+        sink.error(
+          'Usage: gazetta archive rename <oldname> <newname> [--kind=page|fragment] [--no-keep-alias] [--force]',
+        )
         exit(1)
         return
       }
@@ -114,6 +116,7 @@ export async function runArchiveSubcommand(input: ArchiveSubcommandInput): Promi
         newName,
         kind: flags.kind,
         keepAlias: flags.keepAlias,
+        force: flags.force,
         sink,
         exit,
       })
@@ -132,7 +135,7 @@ function printUsage(sink: OutputSink): void {
   sink.error('  purge <name> [--kind=...] [--force]                        — permanently delete an archive')
   sink.error('  restore <name> [--kind=...]                                — unarchive (back to live)')
   sink.error(
-    '  rename <oldname> <newname> [--kind=...] [--no-keep-alias]  — rename live item; keeps redirect by default',
+    '  rename <oldname> <newname> [--kind=...] [--no-keep-alias] [--force]  — rename live item; keeps redirect by default',
   )
 }
 
@@ -295,6 +298,7 @@ async function runRename(opts: {
   newName: string
   kind?: ItemKind
   keepAlias: boolean
+  force: boolean
   sink: OutputSink
   exit: (code: number) => void
 }): Promise<void> {
@@ -309,7 +313,7 @@ async function runRename(opts: {
     return
   }
   const { app } = await buildApp(opts.siteDir, opts.targetName)
-  const res = await app.request(`/api/${kind}s/${opts.oldName}/rename`, {
+  const res = await app.request(`/api/${kind}s/${opts.oldName}/rename${opts.force ? '?force=true' : ''}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ to: opts.newName, keepAlias: opts.keepAlias }),
@@ -320,8 +324,13 @@ async function runRename(opts: {
     return
   }
   if (res.status === 409) {
-    const body = (await res.json()) as { code?: string }
+    const body = (await res.json()) as { code?: string; liveRefs?: Array<{ kind: string; name: string }> }
     sink.error(`Rename blocked: ${kind} ${opts.oldName} → ${opts.newName} (${body.code ?? 'conflict'})`)
+    if (body.liveRefs && body.liveRefs.length > 0) {
+      sink.error(
+        `  Still used by ${body.liveRefs.map(r => `${r.kind}s/${r.name}`).join(', ')}. Keep the alias, or pass --force.`,
+      )
+    }
     opts.exit(1)
     return
   }

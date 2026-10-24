@@ -244,7 +244,7 @@ The `gazetta archive` subcommand lets you script archive operations against any 
 gazetta archive list [--kind=page|fragment]                              List archived items
 gazetta archive purge <name> [--kind=...] [--force]                      Permanently delete an archive
 gazetta archive restore <name> [--kind=...]                              Unarchive
-gazetta archive rename <oldname> <newname> [--kind=...] [--no-keep-alias] Rename a live item
+gazetta archive rename <oldname> <newname> [--kind=...] [--no-keep-alias] [--force] Rename a live item
 ```
 
 Exit code is non-zero on failure (validation, capability, blocked purge). Output is one line per archive in `list`; one line per result in the rest. Cron-friendly.
