@@ -566,6 +566,26 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
       }
     }
 
+    // Strict audit mode (#1393, design-audit.md "Strict mode
+    // opt-in"): record the upload event BEFORE ingest writes
+    // anything; a failed recording refuses the upload. The upload
+    // has no always-on audit event today (that is #1392's scope);
+    // this record exists only when strict mode requires it.
+    const strictPreRecord = c.var.audit?.strict === true
+    if (strictPreRecord) {
+      const preResult = await c.var.audit.record({
+        action: 'upload',
+        outcome: 'success',
+        scope: { kind: 'asset', name: initialAsset.name },
+      })
+      if (preResult.failed > 0) {
+        return c.json(
+          { code: 'AUDIT_FAILED' as const, message: 'Audit recording failed; upload refused (strict mode)' },
+          500,
+        )
+      }
+    }
+
     try {
       const result = await ingestAsset({
         storage: source.storage,
@@ -603,6 +623,15 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
       }
       return c.json({ manifest: result.manifest, bytesPath: result.bytesPath }, 201)
     } catch (err) {
+      // Under strict mode the pre-write event already claims the
+      // upload; a second event records the failure (#1393).
+      if (strictPreRecord) {
+        await c.var.audit.record({
+          action: 'upload',
+          outcome: 'write-failed',
+          scope: { kind: 'asset', name: initialAsset.name },
+        })
+      }
       const res = respondWithAssetError(c, err)
       if (res) return res
       throw err
