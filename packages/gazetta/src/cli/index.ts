@@ -23,6 +23,7 @@ import { parseValidateFlags } from './validate-flags.js'
 import { logDefaultedPublicTargets } from '../validation/validators/public-storage-config.js'
 import { parseArgs } from './args.js'
 import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
+import { devNotFound } from './dev-not-found.js'
 import { viteCacheDir } from './vite-cache-dir.js'
 import { trimTrailingSlashes } from '../url.js'
 
@@ -1885,13 +1886,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   }
 
   // ---- 404 ----
-  app.notFound(c => {
-    const routes = [...site.pages.entries()].map(([n, p]) => `  ${p.route} → ${n}`).join('\n')
-    return c.html(
-      `<pre style="padding:2rem">Page not found: ${c.req.path}\n\nAvailable:\n${routes}\n  /admin → CMS editor</pre>`,
-      404,
-    )
-  })
+  app.notFound(devNotFound(site.pages))
 
   // ---- Start server ----
   const startTime = performance.now()
