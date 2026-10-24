@@ -118,6 +118,8 @@ Decided: maintainer, 2026-10-24 (#1416)
 
 **Revisit** when the first issues from people outside the project arrive after Stage 1 opens, and when users (not contributors) answer #1277.
 
+Decided: maintainer, 2026-10-24 (#1416)
+
 ### Channels by stage
 
 "The fleet" means the work becomes ordinary issues for the bots; "you" means it needs the maintainer's decision or words.
