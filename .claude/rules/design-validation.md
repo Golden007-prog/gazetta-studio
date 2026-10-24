@@ -136,7 +136,7 @@ export interface Issue {
 
 - **background**: Admin server runs a long-lived scanner. Initial scan on admin boot. Incremental rescan when file watcher detects manifest/template/asset changes. Per-page validation run cached by content hash; only re-runs when something material changed. Issues stored in a Pinia store, surfaced in the UI.
 
-- **pre-publish**: Publish dialog gains a "Run audit" affordance (or always-runs for opted-in targets). Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
+- **pre-publish**: The admin runs the audit on every Publish, and the server runs it again before publishing. Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
 
 - **cli**: `gazetta validate` runs all validators in non-interactive mode. Exit non-zero on any error. Useful for CI gating before deploy.
 
@@ -157,6 +157,14 @@ export interface Issue {
 | `broken-links` (internal links) | — | ✓ warn | ✓ warn | ✓ warn (`--include-quality`) |
 | `orphaned-locale-file` | — | ✓ warn | — | ✓ warn |
 | `unused-fragment` | — | ✓ info | — | ✓ info |
+
+`broken-links` runs for every page in the background scan and on every Publish from the admin; [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost.
+
+Decided: maintainer, 2026-10-24 (#1295)
+
+| Rejected | Why |
+|---|---|
+| Make it opt-in in code, as these docs said before | Sites that don't opt in would get no broken-link warnings, and #1294's fix brings the cost to about 3 ms a page |
 
 **Why save-delta has so few entries:** the save handler should be fast and narrow. Reference-existence checks run; everything else is the background scanner's job.
 
@@ -262,11 +270,25 @@ The architectural call: use real tools for the actual analysis. Each tool plugs 
 | Accessibility | `axe-core` | Run via `jsdom` in admin process; ~50-100ms per page. Battle-tested by every major a11y product. |
 | HTML validity | `html-validate` | Fast, configurable, widely used in CI. |
 | CSS lint | `stylelint` | Industry standard. |
-| Broken links | `jsdom` | Checks the links in rendered output that point at the site's own pages, and accepts any `/assets/` path without checking that the file exists. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
+| Broken links | Gazetta's own route matching (`jsdom` parses the HTML) | Every internal `href` or `src` in rendered output (on `a`, `link`, `img`, `source`, `video`, `audio` and `script`) must match a page route, including `:param` routes, or start with `/assets/`; anything else is reported, such as the scaffold's `/admin` link ([#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183)). `/assets/` paths aren't checked yet. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
 
 The broken-links check covers internal links only. Outbound link checking (`linkinator`) and #anchor targets are deferred (`design-validation-implementation.md`, "What's deferred from this plan").
 
 Decided: maintainer, 2026-10-24 (#1295)
+
+| Rejected | Why |
+|---|---|
+| Change the code: add outbound and #anchor checks now | Outbound checks need a request to every external URL in each check, and a new dependency (`linkinator` is in no package today); #1272 can pull anchor checks in when the docs site needs them |
+| File an issue and decide later | The docs would keep describing a check that doesn't exist |
+
+Links to `/assets/` paths will be checked too: [#1301](https://github.com/gazetta-studio/gazetta-studio/issues/1301) reports at least the `__missing__` placeholder a page renders when it references an asset that doesn't exist. Until it lands, any `/assets/` path passes.
+
+Decided: maintainer, 2026-10-24 (#1295)
+
+| Rejected | Why |
+|---|---|
+| Defer it, like outbound links and #anchors | `/assets/` links written into content would stay unchecked, and until [#1302](https://github.com/gazetta-studio/gazetta-studio/issues/1302) is fixed nothing at publish reports a missing asset reference |
+| Leave it as documented, with no deferred row | The same gap, with no record of it |
 
 Lighthouse was originally specced for the "Performance / SEO score" slot but is deferred indefinitely (see `design-validation-implementation.md` deferred-items table). Reasoning: accessibility is covered better by direct axe-core; SEO by `seo-plan.md`'s primitives; the remaining performance + best-practices value doesn't justify the ~200MB Chromium + Lighthouse deps, the 5-15s per-page runtime, and the maintenance burden of tracking scoring methodology changes. Operators wanting publish-time perf budgets use CI-side Lighthouse. The pre-publish audit framework supports adding the validator later if concrete demand surfaces.
 
@@ -329,7 +351,7 @@ Validation is itself foundational dimension #9 of 13. This section answers how e
 
 - **Multi-instance check** (discipline) — save-delta runs on the instance receiving the save request; no cross-instance coordination. Background scanner (Cut 2) per-page cache is per-admin-instance (each instance scans + caches independently); the multi-instance pattern is "every instance reads source-of-truth from storage on demand, caches results in-process, no cross-instance cache sharing." Per-page content-hash cache key ensures different instances arrive at the same cached result without coordination. Suppression state (when shipped) lives in storage, not in-memory.
 
-- **Scale check** — save-delta is O(diff) per save; only checks refs introduced by THIS save, not the full site. Background scanner (Cut 2) caches per-page validation results by content hash; only re-validates when something material changed. Cut 4's broken-links check fetches no URLs: it matches internal links against the loaded site's routes ([#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks a per-link cost that grows with site size). The framework scales because phase-separation matches detection cost to author commitment level. Gates: Cut 2 must reuse the existing sidecar dependency tracking (`findDependentsFromSidecars`) so a fragment edit only invalidates pages that use that fragment.
+- **Scale check** — save-delta is O(diff) per save; only checks refs introduced by THIS save, not the full site. Background scanner (Cut 2) caches per-page validation results by content hash; only re-validates when something material changed. Cut 4's broken-links check runs for every page in the background scan and on every Publish from the admin. It fetches no URLs: it matches internal links against the loaded site's routes ([#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks a per-link cost that grows with site size). Decided: maintainer, 2026-10-24 (#1295). The framework scales because phase-separation matches detection cost to author commitment level. Gates: Cut 2 must reuse the existing sidecar dependency tracking (`findDependentsFromSidecars`) so a fragment edit only invalidates pages that use that fragment.
 
 - **Theme check** — validation runs against rendered output for quality validators (Cut 3 axe-core, html-validate). Render-for-analysis composes with the active theme: when themes ship per [`design-themes.md`](design-themes.md), render-for-analysis renders per-(content, locale, theme) tuple, and validators see theme-specific output. Cache key includes theme. v1 (single-theme world): no impact.
 

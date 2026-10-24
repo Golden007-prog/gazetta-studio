@@ -153,7 +153,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
   - Per issue: "Fix" / "Ignore once" / "Promote to error"
   - Block publish on remaining errors
 - Per-target audit config: `targets.production.publishAudit: { strict: boolean }`
-- One new validator, `broken-links`: checks the links in rendered output that point at the site's own pages (JSDOM), and accepts any `/assets/` path without checking that the file exists. External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`.
+- One new validator, `broken-links`: every internal `href` or `src` in rendered output must match a page route or start with `/assets/`, and anything else is reported (JSDOM parses the HTML). `/assets/` paths aren't checked until [#1301](https://github.com/gazetta-studio/gazetta-studio/issues/1301) lands. External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`. Decided: maintainer, 2026-10-24 (#1295).
 - Admin UI: pre-publish modal in `PublishPanel.vue`
 
 **Tests:**
@@ -163,7 +163,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
 
 **Risk:** low. The check adds no dependency (JSDOM already ships for Cut 3's accessibility validator); the heavy work (pre-publish framework) is the same machinery Cut 3 already exercises.
 
-**Why this is last:** these validators are valuable but not critical for daily editor UX. They earn their place at the operator's commitment moment.
+**Why this is last:** these validators are valuable but not critical for daily editor UX. The publish gate earns its place at the operator's commitment moment; `broken-links` also runs in the background scan, so its warnings show in Site health before a publish.
 
 **Lighthouse not in scope.** Originally listed alongside linkinator as a Cut 4 validator; deferred indefinitely (see "What's deferred from this plan" below). Reason: accessibility is covered better by direct axe-core; SEO is covered by `seo-plan.md`'s primitives; the remaining performance + best-practices value doesn't justify the ~200MB Chromium + Lighthouse deps, the 5-15s per-page runtime, or the maintenance burden of tracking Lighthouse's evolving scoring methodology. Operators wanting performance budgets at publish use CI-side Lighthouse (`treosh/lighthouse-ci-action`) or PageSpeed Insights. The pre-publish audit framework supports adding a `lighthouse` validator later if concrete operator demand surfaces — it's one more validator slotting into the existing framework.
 
@@ -276,6 +276,8 @@ the existing site-health drawer (no Cut 6 dependency).
 | `template-deps` reverse-dep sidecar relation (peer to `fragment-deps` / `asset-refs`) | Concrete demand for incremental invalidation on template edits — from validation scanner OR publish flow's "items affected by template change". v1 falls back to full-site rescan; template edits are rare relative to content edits. Mechanical to add when needed (one new `DepRelation` binding + save/publish writers + reindex CLI handler). |
 | **Target-side validation** (validate published HTML on a target, not just source) | Concrete operator demand from drift scenarios — direct-to-prod edits via `editable: true`, multi-region targets diverging, "is what's actually live OK?" dashboards. v1 validates source: render-for-analysis re-renders source content + scans the result. Target-side validation is a different surface (forensic, operator-facing, not author-facing). Trigger: 3+ operator reports of drift surprise OR a compliance ask for "validate live content." Likely shape: peer scanner reading published HTML directly from target storage, surfaced in a separate "Target health" drawer alongside source's "Site health". Cut 4's publish gate already provides pre-publish coverage at the most common moment authors want it. |
 
+Outbound link checking and #anchor targets: Decided: maintainer, 2026-10-24 (#1295). Their triggers follow from that decision.
+
 ## Open implementation questions
 
 1. **Sidecar machinery integration — locked.** Pre-flight against the shipped code (2026-05) confirmed: fragment-edit invalidation reuses `findDependentsFromSidecars(sourceRoot, { fragment })` from [publish.ts](../../packages/gazetta/src/publish.ts); asset-edit invalidation uses `readRefsForAsset(contentRoot, name)` from [assets/asset-deps.ts](../../packages/gazetta/src/assets/asset-deps.ts) — both ship with the right shape, no extension needed. Template-edit invalidation falls back to full-site rescan because no `template-deps` reverse-dep relation ships (only `fragment-deps` and `asset-refs` exist as `DepRelation` bindings). See "Deferred from Cut 2" below.
@@ -315,7 +317,7 @@ Each cut's SOLID posture, validated at design time:
 
 - **Cut 3**: SRP — render-for-analysis is its own module; each tool-wrapper validator is its own module. OCP — new tool wrappers add Validators without changing infrastructure. ISP — validators see only the `RenderedOutputAccess` they need.
 
-- **Cut 4**: SRP — publish gate is one orchestrator; per-target config is its own concern. OCP — new heavy validators add to the registry; opt-in is per-validator.
+- **Cut 4**: SRP — publish gate is one orchestrator; per-target config is its own concern. OCP — new heavy validators add to the registry; each declares the stages it runs at, and `gazetta validate` runs the quality ones only with `--include-quality`.
 
 - **Cut 5**: SRP — CLI runner is its own module that calls the same validator runners as the admin server.
 
