@@ -53,7 +53,6 @@ Stage 0:
 
 - GitHub README's first screen: one sentence, a status line, Contribute and Try it ([#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189))
 - GitHub topics, and always 3 or more open good first issues ([#1271](https://github.com/gazetta-studio/gazetta-studio/issues/1271))
-- GitHub Discussions, with a pinned "How did you find Gazetta?" ([#1274](https://github.com/gazetta-studio/gazetta-studio/issues/1274))
 - gazetta.studio home page: a status line, "Built and published with Gazetta", the blog link removed ([#1269](https://github.com/gazetta-studio/gazetta-studio/issues/1269))
 - A Contribute page: agents welcome, what `ready-for-agent` means, which paths the maintainer reviews personally, PR response time, the good first issues, design docs, credits; Contribute becomes the home page's main button ([#1270](https://github.com/gazetta-studio/gazetta-studio/issues/1270))
 - Docs on the site built from the repo's `docs/` instead of the hand-copied page ([#1272](https://github.com/gazetta-studio/gazetta-studio/issues/1272))
@@ -94,7 +93,9 @@ Reduce time-to-first-deploy for new operators. Moved from Now on 2026-10-23.
 - [#79](https://github.com/gazetta-studio/gazetta-studio/issues/79) Docker example for `gazetta serve`
 - Function-based adapters on the v1 contract: [#204](https://github.com/gazetta-studio/gazetta-studio/issues/204) Cloudflare Pages + Functions, [#206](https://github.com/gazetta-studio/gazetta-studio/issues/206) Vercel Edge
 - [#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177) a new site's first publish (in discovery)
-- [#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178) docs, npm and gazetta.studio describe different versions (in discovery)
+- [#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178) docs, npm and gazetta.studio describe different versions: decided 2026-10-24 on the issue; the next release follows the website plan's Stage 1 gate
+- [#1280](https://github.com/gazetta-studio/gazetta-studio/issues/1280) the npm package shows the repo's README.md, copied in at publish
+- [#1281](https://github.com/gazetta-studio/gazetta-studio/issues/1281) `gazetta init` depends on `^` its own version instead of `*`
 - Found on the 2026-10-23 onboarding walk, each waiting for a decision or a test on a real host:
   - [#1185](https://github.com/gazetta-studio/gazetta-studio/issues/1185) a site with an R2 target can't run `gazetta dev` without the R2 keys
   - [#1186](https://github.com/gazetta-studio/gazetta-studio/issues/1186) docs and code disagree on a cloud target's default environment
@@ -386,6 +387,7 @@ Closes [#40](https://github.com/gazetta-studio/gazetta-studio/issues/40).
 
 ## Other shipped
 
+- ✓ [#1274](https://github.com/gazetta-studio/gazetta-studio/issues/1274) GitHub Discussions with a pinned "How did you find Gazetta?" (closed 2026-10-24)
 - ✓ [#88](https://github.com/gazetta-studio/gazetta-studio/issues/88) nested route tree + search/filter (closed 2026-05-04)
 - ✓ [#184](https://github.com/gazetta-studio/gazetta-studio/issues/184) reload target registry on `site.config.ts` change (closed 2026-05-12)
 - ✓ [#61](https://github.com/gazetta-studio/gazetta-studio/issues/61) 301 redirects via soft-delete (closed 2026-05-12)

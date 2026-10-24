@@ -92,11 +92,11 @@ Decided: maintainer, 2026-10-24 (#1266)
 | 0 | **up-for-grabs.net** | A PR adding a YAML entry pointing at the label | Fleet | ✓ |
 | 0 | goodfirstissue.dev | Listing requirements | Fleet checks first | ✗ |
 | 0 | **PR limits, ready but off** | GitHub's open-PR cap with a bypass list; on only if PRs outpace the fleet | You decide when | ✓ |
-| 1 | **npm** | A release from `main`; README built from the same source as the site; version and "preview" in the install line | Fleet; you approve the release | ✓ (npm updates the README only on publish) |
+| 1 | **npm** | A release from `main` when the maintainer decides, after the Stage 1 gate; the repo's README.md copied into the package at publish ([#1280](https://github.com/gazetta-studio/gazetta-studio/issues/1280)); version and "preview" in the install line; `gazetta init` depends on `^` its own version ([#1281](https://github.com/gazetta-studio/gazetta-studio/issues/1281)) | You decide and approve; fleet does the rest | ✓ (npm updates the README only on publish) |
 | 1 | **Site: Use it** | Becomes the main button; a tutorial ending in a publish and an undo, run in CI | Fleet | — |
 | 1 | **Docs by version** | Default docs from the release tag; `main`'s docs at a separate "unreleased" address | Fleet | — |
 | 1 | **Demo video** | Recorded by Playwright at each release | Fleet; you approve the script once | ✓ |
-| 1 | **Release notes page** | Drafted from merged PRs | Fleet; you edit | — |
+| 1 | **Release notes page** | A GitHub Release per version, drafted from merged PRs, breaking changes first; the site's page and the npm README link to it | Fleet; you edit | — |
 | 1 | **Honest comparison** | 2–3 named alternatives, facts re-checked monthly by a bot | Fleet; you approve the wording | ✓ |
 | 1 | **Codespaces / StackBlitz button** | StackBlitz only if a one-hour test passes (`sharp`, Node 22) | Fleet | Partly |
 | 1 | **Console.dev** | Submit; requires "beta" or "preview" visible on the site | You submit | ✓ |
@@ -138,6 +138,35 @@ Decided: maintainer, 2026-10-24 (#1268)
 | Markdown by content negotiation for every Gazetta site now, as a design pass in Next | The evidence covers coding agents reading documentation; most Gazetta sites are marketing sites and blogs, whose readers' assistants fetch HTML. The worker's cache key and the templates would change before there's first-party evidence |
 | `llms.txt` and Markdown copies for every site, as one design pass in Next | Builds the half with no evidence (`llms.txt`) along with the half with some |
 | Leave it as #1266 merged it | One Deferred row with one trigger can't tell the two halves apart, and gazetta.studio would serve the files without measuring whether anything reads them |
+
+### Releases (#1178)
+
+Decided with the maintainer on 2026-10-24, answering #1178's discovery questions:
+
+- **When:** the maintainer decides when to release, using today's process (team rule 9).
+- **The next release:** after the whole Stage 1 gate, not before. 0.8.0 stays npm's `latest` until then, with no deprecation warning, although three security problems are fixed on `main` and not released: `gazetta dev` and `gazetta admin` accept connections from the network with no login (#1074), `init`'s `.gitignore` lets `.env`, history and the audit log be committed (#1075), and `gazetta serve` on a static target serves the audit log and history (#1071).
+- **Release notes:** a GitHub Release per version, drafted from the merged PRs and edited, breaking changes first; the site's release notes page and the npm README link to it. The first one also covers #1158's breaking change (a filesystem target without `editable: true` is no longer editable).
+- **The npm page:** the repo's README.md, copied into `packages/gazetta/` at publish ([#1280](https://github.com/gazetta-studio/gazetta-studio/issues/1280)).
+- **A new site's dependency:** `gazetta init` writes `^<the CLI's own version>` instead of `*` ([#1281](https://github.com/gazetta-studio/gazetta-studio/issues/1281)); for 0.x versions the caret allows only patch updates.
+
+Decided: maintainer, 2026-10-24 (#PR)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| Every merge publishes `next`; a bot proposes promoting it to `latest` weekly, the maintainer approves | One yes or no a week; `main` always installable as `@next` |
+| A release every two weeks, cut by a bot | No decisions; whatever has landed ships |
+| Every merge releases to `latest` | Fully automatic; every new site would get each merge |
+| Release 0.9.0 now | Ships the three security fixes to everyone who installs today; #1177 and the newcomer bugs in a later release |
+| Release after #1177 and #1181–#1184 | A new site's first run works end to end; weeks |
+| Warn on install with `npm deprecate gazetta@0.8.0`, plus the status line | Every install prints it, `npx gazetta init` included; reversible |
+| The status line only | People who install with npx see neither the site nor the README |
+| A 0.8.1 patch with only the three fixes | A release, and the fixes may depend on other changes on `main` |
+| CHANGELOG.md through Changesets | Notes written while the change is fresh, but one more file in every PR, the bots' included |
+| CHANGELOG.md and GitHub Releases both | Two copies |
+| A separate short README for npm | Two READMEs to keep in step |
+| An npm README generated from the site | One source, but a generator to build and keep |
+| An exact version in new sites (`"0.9.0"`) | No updates until the author upgrades, fixes included |
+| Keep `"*"` | Every install takes npm's `latest`, breaking minors included |
 
 ### How it runs
 
