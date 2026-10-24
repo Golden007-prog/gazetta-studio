@@ -190,7 +190,7 @@ Follows from "Stages and gates": Stage 1's gate is a publish on a second target 
 | `init` asks where the site will live | CI and scripted `init` need a flag for it |
 | Keep Publish on a one-target site, with a pointer to adding a target | Changes the design's rule |
 | No Publish button, plus a one-time hint | Rule 23 warns this can become a tooltip patching the UI |
-| `gazetta publish` keeps rendering the editing target into itself and says so | — |
+| `gazetta publish` keeps rendering the editing target into itself and says so | Keeps today's behaviour, with output saying what happened |
 | A general `gazetta target add` command now | Built here, ahead of #214 |
 | An admin wizard that edits `site.config.ts` | Config is code, loaded once at boot; new auth, audit and multi-instance questions |
 
