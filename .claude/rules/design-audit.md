@@ -10,7 +10,7 @@ paths:
 
 Foundational dimension #5 of 13. Pluggable audit-event recording with multiple provider implementations (history-extended at v1; external sinks reserved). Composes with auth/RBAC's `Principal` for actor identity and with the real-time event-source discipline (audit log = source of real-time events for presence + live publish status).
 
-**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). Denied write requests (the capability middleware's 401 and 403, and the production publish gate's 403) are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). External audit sinks are demand-driven.
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). Denied write requests (the capability middleware's 401 and 403, and the production publish gate's 403) are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). The 401s returned before a route is matched aren't recorded: the `GAZETTA_TOKEN` guard's, and the principal middleware's when the identity provider rejects a request (invalid credentials, an untrusted proxy, no matching role); #1192 left them out. External audit sinks are demand-driven.
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Audit check** every new feature design must answer
