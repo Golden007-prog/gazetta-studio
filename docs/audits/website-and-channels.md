@@ -168,6 +168,32 @@ Decided: maintainer, 2026-10-24 (#1282)
 | An exact version in new sites (`"0.9.0"`) | No updates until the author upgrades, fixes included |
 | Keep `"*"` | Every install takes npm's `latest`, breaking minors included |
 
+### First run (#1177)
+
+Decided with the maintainer on 2026-10-24, answering #1177's discovery questions:
+
+- **What `gazetta init` creates:** `local` plus a `staging` target shaped like the starter's (`./dist/staging`, `publicStorage: false`, `environment: 'staging'`), served by `gazetta serve staging` ([#1284](https://github.com/gazetta-studio/gazetta-studio/issues/1284)). A new user can publish with no accounts, and staging keeps history.
+- **The admin with one target:** no Publish button, as `design-editor-ux.md`'s progressive disclosure says ([#1285](https://github.com/gazetta-studio/gazetta-studio/issues/1285)).
+- **`gazetta publish` with one target:** stops with a message and a docs link, and writes nothing ([#1286](https://github.com/gazetta-studio/gazetta-studio/issues/1286)).
+- **Adding a public host:** a "Put it online" section in getting-started now; a command that writes the target comes with #214. No admin wizard.
+
+Decided: maintainer, 2026-10-24 (#1282)
+
+A new user's first live site is a local `gazetta serve` address.
+
+Follows from "Stages and gates": Stage 1's gate is a publish on a second target by someone with no accounts.
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| `init` keeps one target; the next step is in the docs | The admin's Publish leads nowhere until the user edits `site.config.ts` |
+| One target plus a commented-out cloud target | Uncommented without keys, it stops `gazetta dev` (#1185) |
+| `init` asks where the site will live | CI and scripted `init` need a flag for it |
+| Keep Publish on a one-target site, with a pointer to adding a target | Changes the design's rule |
+| No Publish button, plus a one-time hint | Rule 23 warns this can become a tooltip patching the UI |
+| `gazetta publish` keeps rendering the editing target into itself and says so | — |
+| A general `gazetta target add` command now | Built here, ahead of #214 |
+| An admin wizard that edits `site.config.ts` | Config is code, loaded once at boot; new auth, audit and multi-instance questions |
+
 ### How it runs
 
 - **One rule for every channel:** a check keeps it true (it fails when the channel drifts from the code or the release), or the maintainer writes it. Doors that need users wait until there are users.
@@ -273,6 +299,7 @@ Fourteen sites: Payload, Sanity, Strapi, Storyblok, Directus, TinaCMS, Decap, Ke
 - **How the October contributors found Gazetta, and whether any of them uses it for a site.** Ask them; the pinned Discussion is the Stage 0 way to ask everyone.
 - **Channel rules not yet checked:** goodfirstissue.dev, the newsletters, Reddit (blocks automated reading), awesome-lists, the jamstack.org CMS list, Hacktoberfest 2026. Each is checked before its channel opens.
 - **The StackBlitz test** (Node version, `sharp`, `gazetta dev` on port 3000).
+- **Stage 1 also waits on publish undo.** The tutorial ends with an undo, but undo on a publish destination doesn't yet change what visitors see; that's what publish undo fixes ([#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092), in Now).
 
 ## Fact-check ledger
 

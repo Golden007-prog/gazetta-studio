@@ -92,7 +92,10 @@ Reduce time-to-first-deploy for new operators. Moved from Now on 2026-10-23.
 - [#213](https://github.com/gazetta-studio/gazetta-studio/issues/213) container deployment guide
 - [#79](https://github.com/gazetta-studio/gazetta-studio/issues/79) Docker example for `gazetta serve`
 - Function-based adapters on the v1 contract: [#204](https://github.com/gazetta-studio/gazetta-studio/issues/204) Cloudflare Pages + Functions, [#206](https://github.com/gazetta-studio/gazetta-studio/issues/206) Vercel Edge
-- [#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177) a new site's first publish (in discovery)
+- [#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177) a new site's first publish: decided 2026-10-24 on the issue
+- [#1284](https://github.com/gazetta-studio/gazetta-studio/issues/1284) `gazetta init` adds a `staging` target, and getting-started publishes to it
+- [#1285](https://github.com/gazetta-studio/gazetta-studio/issues/1285) the admin shows no Publish button on a site with one target
+- [#1286](https://github.com/gazetta-studio/gazetta-studio/issues/1286) `gazetta publish` on a one-target site stops with a message
 - [#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178) docs, npm and gazetta.studio describe different versions: decided 2026-10-24 on the issue; the next release follows the website plan's Stage 1 gate
 - [#1280](https://github.com/gazetta-studio/gazetta-studio/issues/1280) the npm package shows the repo's README.md, copied in at publish
 - [#1281](https://github.com/gazetta-studio/gazetta-studio/issues/1281) `gazetta init` depends on `^` its own version instead of `*`
