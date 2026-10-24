@@ -2,7 +2,7 @@
 
 A public GitHub Project that shows [`ROADMAP.md`](../../ROADMAP.md) as a board of three tables: the plan (Now, Next and Later) and everything the file lists, each grouped by area, and the open issues the roadmap doesn't mention. A script generates it from the file; nobody edits it by hand.
 
-**Status**: design pass complete (2026-10-23), grilled Q1–Q15; Q14 and Q15 revised and Q12 superseded on 2026-10-24 (#PR). Cuts 1 and 2 in #1198, Q14 and Q15 in #1226 and #PR; cut 3 is #1222.
+**Status**: design pass complete (2026-10-23), grilled Q1–Q15; Q14 and Q15 revised and Q12 superseded on 2026-10-24 (#1228). Cuts 1 and 2 in #1198, Q14 and Q15 in #1226 and #1228; cut 3 is #1222.
 
 **Companion docs:**
 - [`ROADMAP.md`](../../ROADMAP.md): the source; its Process section will link the board (cut 3)
@@ -203,7 +203,7 @@ Decided: maintainer, 2026-10-23 (#1197)
 
 ### Q12 — Each bucket tab shows only its own sections (superseded)
 
-Superseded by Q14 on 2026-10-24 (#PR): there are no bucket tabs, so no columns to hide, and a new section needs no step. The decision and its alternatives are in #1197.
+Superseded by Q14 on 2026-10-24 (#1228): there are no bucket tabs, so no columns to hide, and a new section needs no step. The decision and its alternatives are in #1197.
 
 ### Q13 — The sync paces and caps its writes
 
@@ -222,7 +222,7 @@ Decided: maintainer, 2026-10-23 (#1197)
 
 The Roadmap and All views are tables grouped by Area and sorted by Status, then Section: each area lists Now's items first, then Next's and Later's, and within a bucket each initiative's items together, in the file's order. Roadmap shows Now, Next and Later; All shows everything the file lists, Deferred and Done included (Q15). There are no bucket tabs and no By area tab. The grouping and sort are set by hand.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1228)
 
 | Rejected | Why |
 |---|---|
@@ -237,7 +237,7 @@ Decided: maintainer, 2026-10-24 (#PR)
 
 The Roadmap view filters out Done (`-status:Done`), so a closed issue leaves the plan as soon as GitHub's built-in rule sets Done. All shows the closed issues ROADMAP.md still lists, sorted last in each area (Q14): they're the cleanup the merging session has to do, moving them to the Shipped appendix; the next sync then removes their cards, like any closed issue the file doesn't list (Q3). Each run also prints them.
 
-Decided: maintainer, 2026-10-23 (#1226); All shows Done: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-23 (#1226); All shows Done: maintainer, 2026-10-24 (#1228)
 
 | Rejected | Why |
 |---|---|
