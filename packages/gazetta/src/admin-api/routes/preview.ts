@@ -191,7 +191,7 @@ function applyContentOverrides(node: ResolvedComponent, content: DraftOverrides[
  * structural overrides are not yet plumbed through. Locale-variant edits
  * fall back to the default-locale structural override if any.
  */
-function withStructuralOverride(site: Site, key: ManifestKey, overrides: DraftOverrides): Site {
+export function withStructuralOverride(site: Site, key: ManifestKey, overrides: DraftOverrides): Site {
   const replacement = overrides.structural[manifestKeyToString(key)]
   if (!replacement) return site
   if (key.kind === 'page') {
