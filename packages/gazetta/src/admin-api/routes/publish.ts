@@ -887,6 +887,27 @@ export function publishRoutes(
       return c.json({ code: 'PUBLISH_AUDIT_FAILED' as const, blocked }, 409)
     }
 
+    // Strict audit mode (#1393, design-audit.md "Strict mode
+    // opt-in"): record the publish event BEFORE any target write;
+    // a failed recording refuses the publish before anything
+    // changes. The post-publish success record below is skipped
+    // when this ran.
+    const strictPreRecord = c.var.audit?.strict === true
+    if (strictPreRecord) {
+      const preResult = await c.var.audit.record({
+        action: 'publish',
+        outcome: 'success',
+        scope: { kind: 'site' },
+        metadata: { items: finalItems, targets: body.targets, source: body.source },
+      })
+      if (preResult.failed > 0) {
+        return c.json(
+          { code: 'AUDIT_FAILED' as const, message: 'Audit recording failed; publish refused (strict mode)' },
+          500,
+        )
+      }
+    }
+
     let results: PublishResult[] = []
     let fatal: PublishProgress | null = null
     for await (const ev of runPublish(finalItems, body.targets, body.source)) {
@@ -894,6 +915,17 @@ export function publishRoutes(
       else if (ev.kind === 'done') results = ev.results
     }
     if (fatal) {
+      // Under strict mode the pre-write event already claims the
+      // publish; a second event records the failure so the log
+      // stays honest (#1393).
+      if (strictPreRecord) {
+        await c.var.audit.record({
+          action: 'publish',
+          outcome: 'write-failed',
+          scope: { kind: 'site' },
+          metadata: { items: finalItems, targets: body.targets, source: body.source },
+        })
+      }
       const status = fatal.error.startsWith('Cannot publish') ? 400 : 400
       return c.json(
         { error: fatal.error, ...(fatal.invalidTemplates ? { invalidTemplates: fatal.invalidTemplates } : {}) },
@@ -904,12 +936,15 @@ export function publishRoutes(
     // Audit: one event per publish operation. metadata carries the
     // requested items + targets for forensic queries; per-item
     // events would explode volume on multi-item publishes.
-    await c.var.audit.record({
-      action: 'publish',
-      outcome: 'success',
-      scope: { kind: 'site' },
-      metadata: { items: finalItems, targets: body.targets, source: body.source },
-    })
+    // Skipped when strict mode already recorded above (#1393).
+    if (!strictPreRecord) {
+      await c.var.audit.record({
+        action: 'publish',
+        outcome: 'success',
+        scope: { kind: 'site' },
+        metadata: { items: finalItems, targets: body.targets, source: body.source },
+      })
+    }
 
     // afterPublish hooks per design-hooks.md "Publish lifecycle"
     // step 5. Observational; failures logged. One dispatch per
