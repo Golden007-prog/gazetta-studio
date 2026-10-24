@@ -37,6 +37,7 @@
  *   - DIP: depends on `capabilityGrants` pure function, not on
  *     the principal middleware's internals.
  */
+import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { capabilityGrants, UNKNOWN_ACTOR_ID } from '../../auth/index.js'
 import type { AuditAction, AuditScope } from '../../audit/index.js'
@@ -76,47 +77,58 @@ function denialScope(path: string, name: string | undefined): AuditScope {
  * Returns 401 for anonymous requests, 403 for authenticated
  * requests lacking the capability.
  */
+/**
+ * The check `requireCapability` runs, for a handler that needs a further
+ * capability in one of its code paths: answers 401/403 (and records the
+ * denial) when the principal lacks it, otherwise returns null.
+ */
+export async function denyWithoutCapability(c: Context<AuditEnv>, capability: string): Promise<Response | null> {
+  const principal = c.get('principal')
+  // Record one audit event per denied WRITE attempt (#1192). The
+  // denial response must never depend on audit availability:
+  // record() never throws, and the context itself is absent when a
+  // consumer wires requireCapability without auditMiddleware (the
+  // mutation-coverage harnesses do), so the access is guarded too.
+  const action = actionForCapability(capability)
+  const recordDenial = (outcome: 'unauthenticated' | 'forbidden') =>
+    action === null
+      ? Promise.resolve()
+      : (c.var.audit?.record({
+          action,
+          outcome,
+          scope: denialScope(c.req.path, c.req.param('name')),
+          metadata: { missingCapabilities: [capability] },
+        }) ?? Promise.resolve())
+  // Anonymous principal — no upstream identity. Translate to
+  // 401 (not 403); the request hasn't authenticated yet.
+  if (principal.id === UNKNOWN_ACTOR_ID && principal.role === 'unknown') {
+    await recordDenial('unauthenticated')
+    return c.json(
+      { code: 'UNAUTHENTICATED' as const, error: `This endpoint requires capability "${capability}"` },
+      401,
+      { 'WWW-Authenticate': 'Bearer realm="gazetta-admin"' },
+    )
+  }
+  // Authenticated principal — capability check.
+  if (!capabilityGrants(principal.capabilities, capability)) {
+    await recordDenial('forbidden')
+    return c.json(
+      {
+        code: 'FORBIDDEN' as const,
+        missing: [capability],
+        role: principal.role,
+        error: `Role "${principal.role}" does not have capability "${capability}"`,
+      },
+      403,
+    )
+  }
+  return null
+}
+
 export function requireCapability(capability: string) {
   return createMiddleware<AuditEnv>(async (c, next) => {
-    const principal = c.get('principal')
-    // Record one audit event per denied WRITE attempt (#1192). The
-    // denial response must never depend on audit availability:
-    // record() never throws, and the context itself is absent when a
-    // consumer wires requireCapability without auditMiddleware (the
-    // mutation-coverage harnesses do), so the access is guarded too.
-    const action = actionForCapability(capability)
-    const recordDenial = (outcome: 'unauthenticated' | 'forbidden') =>
-      action === null
-        ? Promise.resolve()
-        : (c.var.audit?.record({
-            action,
-            outcome,
-            scope: denialScope(c.req.path, c.req.param('name')),
-            metadata: { missingCapabilities: [capability] },
-          }) ?? Promise.resolve())
-    // Anonymous principal — no upstream identity. Translate to
-    // 401 (not 403); the request hasn't authenticated yet.
-    if (principal.id === UNKNOWN_ACTOR_ID && principal.role === 'unknown') {
-      await recordDenial('unauthenticated')
-      return c.json(
-        { code: 'UNAUTHENTICATED' as const, error: `This endpoint requires capability "${capability}"` },
-        401,
-        { 'WWW-Authenticate': 'Bearer realm="gazetta-admin"' },
-      )
-    }
-    // Authenticated principal — capability check.
-    if (!capabilityGrants(principal.capabilities, capability)) {
-      await recordDenial('forbidden')
-      return c.json(
-        {
-          code: 'FORBIDDEN' as const,
-          missing: [capability],
-          role: principal.role,
-          error: `Role "${principal.role}" does not have capability "${capability}"`,
-        },
-        403,
-      )
-    }
+    const denied = await denyWithoutCapability(c, capability)
+    if (denied) return denied
     await next()
   })
 }

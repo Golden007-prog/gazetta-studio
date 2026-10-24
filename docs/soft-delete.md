@@ -84,6 +84,8 @@ Content-Type: application/json
 
 `keepAlias: false` skips step 2 — the old name is hard-deleted instead. Use only when no external links to the old URL exist; usually you want the redirect.
 
+Capability: `edit:pages` (or `edit:fragments`). With `keepAlias: false` the old name is taken off the site, so the rename also needs `delete:pages` (or `delete:fragments`), and, like archiving without an alias, it returns `409 ARCHIVE_HAS_LIVE_REFS` while other items still use the old name, unless `?force=true`.
+
 The flatten cascade is what keeps long chains from accumulating. Rename A → B, then B → C, then C → D: every prior archive's `aliasOf` resolves directly to D. One redirect hop, never recursive.
 
 ### Restore

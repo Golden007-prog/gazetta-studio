@@ -60,11 +60,11 @@ import type { Context } from 'hono'
 import { join } from 'node:path'
 import type { SourceContextResolver } from '../source-context.js'
 import type { Site } from '../../site-loader.js'
-import { findArchivesAliasingInSite } from '../../site-users.js'
+import { findArchivesAliasingInSite, findFragmentUsersInSite } from '../../site-users.js'
 import { loadSiteFromSource } from '../source-context.js'
 import type { SourceContext } from '../source-context.js'
 import { recordWrite } from '../../history-recorder.js'
-import { requireCapability } from '../middleware/capability.js'
+import { denyWithoutCapability, requireCapability } from '../middleware/capability.js'
 import { requireEditableTarget } from '../middleware/editable-target.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
@@ -144,6 +144,15 @@ async function handleRename(c: Context<AuditEnv>, resolve: SourceContextResolver
   }
   const { to: toName, keepAlias } = parsed.data
 
+  // Dropping the old name's alias takes it off the site, like archiving
+  // without one: it needs the delete capability, and refuses while other
+  // items still use it unless `?force=true`, as the archive route does.
+  const force = c.req.query('force') === 'true'
+  if (!keepAlias) {
+    const denied = await denyWithoutCapability(c, handle.scopeKind === 'page' ? 'delete:pages' : 'delete:fragments')
+    if (denied) return denied
+  }
+
   // No-op rename — return 200 quietly so callers can retry without
   // surprise. The author intent ("rename A to A") is satisfied.
   if (fromName === toName) {
@@ -181,6 +190,14 @@ async function handleRename(c: Context<AuditEnv>, resolve: SourceContextResolver
     }
     const body: NameCollision = { code: 'NAME_COLLISION', toName, conflictKind: 'live' }
     return c.json(body, 409)
+  }
+
+  const liveRefs =
+    !keepAlias && handle.scopeKind === 'fragment'
+      ? findFragmentUsersInSite(site, fromName).map(ref => ({ kind: ref.source, name: ref.name }))
+      : []
+  if (liveRefs.length > 0 && !force) {
+    return c.json({ code: 'ARCHIVE_HAS_LIVE_REFS' as const, liveRefs }, 409)
   }
 
   // Track step progress for I1's RENAME_PARTIAL response.
@@ -223,6 +240,10 @@ async function handleRename(c: Context<AuditEnv>, resolve: SourceContextResolver
     const metadata: Record<string, unknown> = { fromName, keepAlias }
     if (flattened.length > 0) metadata.flattenedAliases = flattened
     if (localeVariants.length > 0) metadata.localeVariants = localeVariants
+    if (liveRefs.length > 0) {
+      metadata.forced = true
+      metadata.bypassedRefs = liveRefs
+    }
     await c.var.audit.record({
       action: 'rename',
       outcome: 'success',
