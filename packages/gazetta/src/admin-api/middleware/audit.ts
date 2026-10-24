@@ -60,6 +60,8 @@ export interface AuditMiddlewareOptions {
   recordSourceIp: SourceIpMode
   sourceIpSalt?: string
   trustedProxyCount?: number
+  /** The site's configured trust mode (`admin.auth.trust`); picks where the client address comes from. */
+  trustMode?: string
   recordUserAgent: UserAgentMode
   logFailure?: AuditFailureLogger
 }
@@ -80,6 +82,7 @@ export function auditMiddleware(opts: AuditMiddlewareOptions) {
       recordSourceIp: opts.recordSourceIp,
       sourceIpSalt: opts.sourceIpSalt,
       trustedProxyCount: opts.trustedProxyCount,
+      trustMode: opts.trustMode,
       recordUserAgent: opts.recordUserAgent,
       principal,
       headers,

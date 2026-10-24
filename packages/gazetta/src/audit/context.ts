@@ -81,6 +81,12 @@ export interface AuditContextOptions {
   sourceIpSalt?: string
   /** Trusted proxy count for X-Forwarded-For mode dispatch. */
   trustedProxyCount?: number
+  /**
+   * The site's configured trust mode. Picks where the client address
+   * comes from, including for requests without an identity (whose
+   * principal says `none`). Defaults to the principal's.
+   */
+  trustMode?: string
   /** User-agent recording mode. */
   recordUserAgent: UserAgentMode
   /**
@@ -115,7 +121,7 @@ export function createAuditContext(opts: AuditContextOptions): AuditContext {
       // operator's mode. Both are pure functions; either step
       // returns null → omit the field.
       const sourceIpCtx: SourceIpExtractionContext = {
-        trustMode: opts.principal.trustMode,
+        trustMode: opts.trustMode ?? opts.principal.trustMode,
         headers: opts.headers,
         peerIp: opts.peerIp,
         trustedProxyCount: opts.trustedProxyCount,

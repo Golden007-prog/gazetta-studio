@@ -402,6 +402,7 @@ export function createAdminApp(opts: AdminAppOptions): AdminApp {
       recordSourceIp,
       sourceIpSalt: process.env.GAZETTA_AUDIT_SOURCEIP_SALT,
       trustedProxyCount: auditConfig.trustedProxyCount,
+      trustMode: authProvider.trustMode,
       recordUserAgent,
     }),
   )

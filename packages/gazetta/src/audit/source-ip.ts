@@ -81,8 +81,11 @@ export function extractSourceIp(ctx: SourceIpExtractionContext): string | null {
         .map(s => s.trim())
         .filter(Boolean)
       // The Nth entry from the right was appended by the outermost
-      // trusted proxy; anything further left is client-supplied.
-      return entries[entries.length - (ctx.trustedProxyCount ?? 1)] ?? null
+      // trusted proxy; anything further left is client-supplied. With no
+      // trusted proxy, the client is the connection itself.
+      const trustedCount = ctx.trustedProxyCount ?? 1
+      if (trustedCount === 0) return ctx.peerIp ?? null
+      return entries[entries.length - trustedCount] ?? null
     }
     default:
       // Unknown trust mode (plugin-supplied future) — fall back to
