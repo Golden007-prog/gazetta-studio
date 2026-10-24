@@ -185,10 +185,29 @@ export function attachDraftPersistence(
   const sameScope = (a: DraftScope | null, b: DraftScope | null) =>
     a === b || (!!a && !!b && a.site === b.site && a.owner === b.owner && a.target === b.target)
 
+  /**
+   * The scope first becomes known while the stores already hold edits:
+   * the user worked while their identity was unreachable. Keep those
+   * edits and store them under the new scope instead of replacing them
+   * with stored drafts; drafts stored for other keys stay stored and load
+   * on the next boot.
+   */
+  async function adopt(next: DraftScope): Promise<void> {
+    current = next
+    for (const lane of lanes) written.set(lane.kind, new Map())
+    await writeChanges(current)
+  }
+
+  const holdsEdits = () => lanes.some(l => l.read().size > 0)
+
   const stopScope = watch(
     scope,
     next => {
       if (sameScope(next, current)) return
+      if (current === null && next !== null && holdsEdits()) {
+        enqueue(() => adopt(next))
+        return
+      }
       void flush() // pending writes belong to the old scope
       enqueue(() => load(next))
     },

@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, shallowRef } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import { VueQueryPlugin } from '@tanstack/vue-query'
@@ -10,7 +10,7 @@ import { createGazettaPersister } from './queries/persister.js'
 import { useConnectionState } from './stores/connectionState.js'
 import { attachDraftPersistence } from './drafts/persistence.js'
 import { selectDraftStore } from './drafts/select.js'
-import { askIdentity, resolveDraftIdentity } from './drafts/identity.js'
+import { askIdentity, resolveDraftIdentity, retryIdentity } from './drafts/identity.js'
 import { useActiveTargetStore } from './stores/activeTarget.js'
 import { configureReadThrough } from './queries/read-through.js'
 import { useServiceWorkerUpdate } from './composables/useServiceWorkerUpdate.js'
@@ -28,16 +28,22 @@ async function bootstrap(): Promise<void> {
   // Whose unsaved drafts this boot may load — decided before anything
   // hydrates (design-offline.md, "Unsaved drafts live in their own store").
   const drafts = await selectDraftStore(provider.degraded)
-  const identity = await resolveDraftIdentity(drafts, await askIdentity())
+  const answer = await askIdentity()
+  const identity = shallowRef(await resolveDraftIdentity(drafts, answer))
+  // The server didn't answer while the browser is online: keep asking, and
+  // once it does, edits made meanwhile are stored under this user.
+  if (answer.kind === 'unreachable') retryIdentity(drafts, { onKnown: id => (identity.value = id) })
   // Drafts used to live in the cache as two snapshots; drop them once.
   void provider.cache.invalidate('pending-edits:structural')
   void provider.cache.invalidate('pending-edits:dirty')
   const queryClient = createAdminQueryClient()
   const persister = createGazettaPersister(provider.cache)
   // A different admin version, site or user never reads the persisted query cache.
-  const buster = [import.meta.env.GAZETTA_VERSION ?? 'dev', identity?.site ?? '', identity?.owner ?? 'anonymous'].join(
-    ':',
-  )
+  const buster = [
+    import.meta.env.GAZETTA_VERSION ?? 'dev',
+    identity.value?.site ?? '',
+    identity.value?.owner ?? 'anonymous',
+  ].join(':')
   const persist = createGazettaClientPersister(persister, buster)
   // Keep the restore promise so reads wait for the persisted cache (it never rejects).
   let markRestored!: () => void
@@ -76,7 +82,9 @@ async function bootstrap(): Promise<void> {
   // (Cut 8b) that survived a previous session.
   const activeTarget = useActiveTargetStore()
   const draftPersistence = attachDraftPersistence(drafts, () =>
-    identity && activeTarget.activeTargetName ? { ...identity, target: activeTarget.activeTargetName } : null,
+    identity.value && activeTarget.activeTargetName
+      ? { ...identity.value, target: activeTarget.activeTargetName }
+      : null,
   )
   // Don't lose the last keystrokes when the tab closes inside the debounce.
   window.addEventListener('pagehide', () => void draftPersistence.flush())

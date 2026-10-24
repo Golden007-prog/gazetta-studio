@@ -7,17 +7,26 @@
  *
  * Rules (design-offline.md, "Unsaved drafts live in their own store"):
  *   - known   → delete other owners' drafts of this site, remember us, load ours
- *   - offline → load the last online identity's drafts (inherent to offline);
- *               only when the request failed and the browser reports offline
- *   - unknown → load nothing, delete nothing (e.g. the auth proxy answered
- *               with its login page, or the server failed or was slow while
- *               the browser is online; the user reloads)
+ *   - offline     → load the last online identity's drafts (inherent to
+ *                   offline); only when the request failed and the browser
+ *                   reports offline
+ *   - unreachable → the request failed or was slow while the browser is
+ *                   online: load nothing, delete nothing, and keep asking
+ *                   (retryIdentity) so edits made meanwhile are stored once
+ *                   the server answers
+ *   - unknown     → load nothing, delete nothing (e.g. the auth proxy
+ *                   answered with its login page; the user re-authenticates
+ *                   and reloads)
  */
 import { MeResponseSchema, SiteManifestSchema } from 'gazetta/admin-api/schemas'
 import { API_BASE } from '../api/_request.js'
 import { type DraftIdentity, type DraftStore, ownerOf } from './types.js'
 
-export type IdentityAnswer = { kind: 'known'; identity: DraftIdentity } | { kind: 'offline' } | { kind: 'unknown' }
+export type IdentityAnswer =
+  | { kind: 'known'; identity: DraftIdentity }
+  | { kind: 'offline' }
+  | { kind: 'unreachable' }
+  | { kind: 'unknown' }
 
 const DEFAULT_TIMEOUT_MS = 3000
 
@@ -62,7 +71,7 @@ export async function askIdentity(
     // A failed or slow answer counts as offline only when the browser says
     // so: online, it may be another user's boot against a slow server, and
     // offline would load the last user's drafts.
-    return (opts.online ?? browserOnline)() ? { kind: 'unknown' } : { kind: 'offline' }
+    return (opts.online ?? browserOnline)() ? { kind: 'unreachable' } : { kind: 'offline' }
   }
 }
 
@@ -77,7 +86,45 @@ export async function resolveDraftIdentity(store: DraftStore, answer: IdentityAn
       return answer.identity
     case 'offline':
       return store.lastIdentity()
+    case 'unreachable':
     case 'unknown':
       return null
+  }
+}
+
+const DEFAULT_RETRY_MS = 10_000
+
+/**
+ * After an unreachable boot, keep asking who we are until the server
+ * answers, then resolve the identity and report it once. Stops on a login
+ * page (unknown): asking again won't help until the user signs in.
+ * Returns a function that stops the retries.
+ */
+export function retryIdentity(
+  store: DraftStore,
+  opts: { ask?: () => Promise<IdentityAnswer>; intervalMs?: number; onKnown: (identity: DraftIdentity) => void },
+): () => void {
+  const ask = opts.ask ?? (() => askIdentity())
+  const intervalMs = opts.intervalMs ?? DEFAULT_RETRY_MS
+  let stopped = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const attempt = async () => {
+    timer = null
+    if (stopped) return
+    const answer = await ask()
+    if (stopped) return
+    if (answer.kind === 'known') {
+      stopped = true
+      const identity = await resolveDraftIdentity(store, answer)
+      if (identity) opts.onKnown(identity)
+      return
+    }
+    if (answer.kind === 'unknown') return
+    timer = setTimeout(attempt, intervalMs)
+  }
+  timer = setTimeout(attempt, intervalMs)
+  return () => {
+    stopped = true
+    if (timer !== null) clearTimeout(timer)
   }
 }
