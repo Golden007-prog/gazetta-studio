@@ -30,7 +30,7 @@ export default defineSite({
       environment: 'production',           // default is 'local'; opt this one into 'production' for admin UI confirmation
       storage: filesystemStorage({ path: './dist/production' }),
       siteUrl: 'https://mysite.com',
-      cache: {
+      cache: {                             // used by ESI targets (type: 'dynamic'); static targets always revalidate
         browser: 0,
         edge: 86400,
       },
