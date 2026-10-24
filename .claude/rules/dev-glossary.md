@@ -364,7 +364,8 @@ Distinct from a **cut sub-issue** (has `## Spec`) and from a legacy
 **Landed (cut)**:
 A cut that was closed by a merged PR that **names it** — `#N` in the PR
 title, a `feat/cut-N` head branch, or feature-bot's `feature-bot: issue=N`
-marker. Distinct from merely *closed*: #517 was closed as "completed" by
+marker — or by a commit such a PR brought in, as rebase merges record it.
+Distinct from merely *closed*: #517 was closed as "completed" by
 #557, an unrelated PR that only mentioned it, so the work it was meant to
 deliver never existed. feature-bot's dependency gate and cut-planner's
 "file the next cut" step both require *landed*, not closed

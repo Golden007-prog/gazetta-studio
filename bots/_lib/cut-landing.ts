@@ -14,6 +14,11 @@
  * Verified against every completed cut on record: all landed ones pass,
  * #557's closure does not.
  *
+ * A rebase merge puts the PR's own commits on main, and GitHub then records
+ * the commit carrying the closing keyword as the closer (#523, closed by
+ * #920's commit). Such a cut is checked against the merged PR that brought
+ * the commit in (#1241).
+ *
  * Shared by feature-bot and cut-planner, which must not import each other.
  */
 
@@ -28,7 +33,11 @@ export interface CloserPr {
 export interface CloseEvent {
   /** GitHub's `stateReason` for the latest close (`COMPLETED`, `NOT_PLANNED`, …), lower- or upper-case. */
   stateReason: string | null
-  /** The pull request recorded as the closer; null when closed by hand or by a commit. */
+  /**
+   * The pull request recorded as the closer, or for a commit closer the merged
+   * PR that brought the commit in; null when closed by hand, or by a commit no
+   * merged PR brought in.
+   */
   closer: CloserPr | null
 }
 
@@ -40,16 +49,21 @@ export type Landing =
   /** Closed as completed with no PR that names it — needs a human to say whether it landed. */
   | 'unverified'
 
+/** Does the PR name the cut as its own work? */
+function namesCut(pr: CloserPr, issueNumber: number): boolean {
+  const n = String(issueNumber)
+  return (
+    new RegExp(`#${n}\\b`).test(pr.title) ||
+    pr.headRefName === `feat/cut-${n}` ||
+    new RegExp(`feature-bot: issue=${n}\\b`).test(pr.body ?? '')
+  )
+}
+
 export function classifyLanding(issueNumber: number, event: CloseEvent): Landing {
   if ((event.stateReason ?? '').toLowerCase() === 'not_planned') return 'superseded'
   const pr = event.closer
   if (!pr?.merged) return 'unverified'
-  const n = String(issueNumber)
-  const names =
-    new RegExp(`#${n}\\b`).test(pr.title) ||
-    pr.headRefName === `feat/cut-${n}` ||
-    new RegExp(`feature-bot: issue=${n}\\b`).test(pr.body ?? '')
-  return names ? 'landed' : 'unverified'
+  return namesCut(pr, issueNumber) ? 'landed' : 'unverified'
 }
 
 /** Narrow GraphQL surface — `octokit.graphql` satisfies it. */
@@ -59,7 +73,16 @@ const CLOSE_EVENT_QUERY = `query($owner: String!, $repo: String!, $number: Int!)
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
       timelineItems(itemTypes: [CLOSED_EVENT], last: 1) {
-        nodes { ... on ClosedEvent { stateReason closer { __typename ... on PullRequest { number title merged headRefName body } } } }
+        nodes {
+          ... on ClosedEvent {
+            stateReason
+            closer {
+              __typename
+              ... on PullRequest { number title merged headRefName body }
+              ... on Commit { associatedPullRequests(first: 5) { nodes { number title merged headRefName body } } }
+            }
+          }
+        }
       }
     }
   }
@@ -75,13 +98,22 @@ export async function fetchCloseEvent(
     repository?: {
       issue?: {
         timelineItems?: {
-          nodes?: Array<{ stateReason?: string | null; closer?: (CloserPr & { __typename?: string }) | null }>
+          nodes?: Array<{
+            stateReason?: string | null
+            closer?: (CloserPr & { __typename?: string; associatedPullRequests?: { nodes?: CloserPr[] } }) | null
+          }>
         }
       }
     }
   }
   const node = res.repository?.issue?.timelineItems?.nodes?.at(-1)
-  const closer = node?.closer?.__typename === 'PullRequest' ? node.closer : null
+  let closer: CloserPr | null = null
+  if (node?.closer?.__typename === 'PullRequest') closer = node.closer
+  if (node?.closer?.__typename === 'Commit') {
+    // A stacked PR can carry the same commit, so prefer the merged one that names the cut.
+    const merged = (node.closer.associatedPullRequests?.nodes ?? []).filter(pr => pr.merged)
+    closer = merged.find(pr => namesCut(pr, issueNumber)) ?? merged[0] ?? null
+  }
   return {
     stateReason: node?.stateReason ?? null,
     closer: closer
