@@ -65,6 +65,7 @@ import { loadSiteFromSource } from '../source-context.js'
 import type { SourceContext } from '../source-context.js'
 import { recordWrite } from '../../history-recorder.js'
 import { requireCapability } from '../middleware/capability.js'
+import { requireEditableTarget } from '../middleware/editable-target.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import type { ItemRef } from '../../dep-sidecars.js'
@@ -104,10 +105,13 @@ const FRAGMENT_HANDLE: ItemHandle = {
 }
 
 export function renameRoutes(resolve: SourceContextResolver) {
+  const editableTarget = requireEditableTarget(resolve)
   const app = new Hono<AuditEnv>()
 
-  app.post('/api/pages/:name/rename', requireCapability('edit:pages'), c => handleRename(c, resolve, PAGE_HANDLE))
-  app.post('/api/fragments/:name/rename', requireCapability('edit:fragments'), c =>
+  app.post('/api/pages/:name/rename', requireCapability('edit:pages'), editableTarget, c =>
+    handleRename(c, resolve, PAGE_HANDLE),
+  )
+  app.post('/api/fragments/:name/rename', requireCapability('edit:fragments'), editableTarget, c =>
     handleRename(c, resolve, FRAGMENT_HANDLE),
   )
 

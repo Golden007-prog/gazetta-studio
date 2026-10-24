@@ -28,6 +28,7 @@ import { suggestAltForAsset } from '../../alt/route-handler.js'
 import { respondWithAssetError } from '../error-response.js'
 import { loadSiteFromSource, type SourceContextResolver } from '../source-context.js'
 import { requireCapability } from '../middleware/capability.js'
+import { requireEditableTarget } from '../middleware/editable-target.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import {
   buildHookContext,
@@ -79,6 +80,7 @@ function selectorFromQuery(c: { req: { query: (k: string) => string | undefined 
 const ASSETS_ROOT = 'assets'
 
 export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOptions = {}) {
+  const editableTarget = requireEditableTarget(resolve)
   const app = new Hono<AuditEnv>()
   const hooks = opts.hooks
 
@@ -141,7 +143,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
    *   404 Not Found     — asset missing
    *   500 Storage       — underlying write failed
    */
-  app.patch('/api/assets/:name', requireCapability('edit:assets'), async c => {
+  app.patch('/api/assets/:name', requireCapability('edit:assets'), editableTarget, async c => {
     const name = c.req.param('name')
     const source = await resolve(c.req.query('target'))
 
@@ -212,7 +214,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
     }
   })
 
-  app.delete('/api/assets/:name', requireCapability('delete:assets'), async c => {
+  app.delete('/api/assets/:name', requireCapability('delete:assets'), editableTarget, async c => {
     const name = c.req.param('name')
     const source = await resolve(c.req.query('target'))
     try {
@@ -265,7 +267,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
    *   409 Name Collision    — new name already taken
    *   500 Storage Failure   — underlying read/write/rm failed mid-operation
    */
-  app.post('/api/assets/:name/rename-to/:newName', requireCapability('edit:assets'), async c => {
+  app.post('/api/assets/:name/rename-to/:newName', requireCapability('edit:assets'), editableTarget, async c => {
     const oldName = c.req.param('name')
     const newName = c.req.param('newName')
     const source = await resolve(c.req.query('target'))
@@ -288,7 +290,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
     }
   })
 
-  app.post('/api/assets/:name/replace-with/:newName', requireCapability('edit:assets'), async c => {
+  app.post('/api/assets/:name/replace-with/:newName', requireCapability('edit:assets'), editableTarget, async c => {
     const oldName = c.req.param('name')
     const newName = c.req.param('newName')
     const source = await resolve(c.req.query('target'))
@@ -414,7 +416,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
    *   409 Kind Mismatch     — override MIME category differs from default
    *   500 Storage Failure   — underlying write failed
    */
-  app.post('/api/assets/:name/locale-bytes', requireCapability('edit:assets'), async c => {
+  app.post('/api/assets/:name/locale-bytes', requireCapability('edit:assets'), editableTarget, async c => {
     const name = c.req.param('name')
     const selectorOrErr = selectorFromQuery(c)
     if (selectorOrErr instanceof Response) return selectorOrErr
@@ -465,7 +467,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
    *   404 Not Found         — asset or override doesn't exist
    *   500 Storage Failure   — underlying rm failed
    */
-  app.delete('/api/assets/:name/locale-bytes', requireCapability('edit:assets'), async c => {
+  app.delete('/api/assets/:name/locale-bytes', requireCapability('edit:assets'), editableTarget, async c => {
     const name = c.req.param('name')
     const selectorOrErr = selectorFromQuery(c)
     if (selectorOrErr instanceof Response) return selectorOrErr
@@ -493,7 +495,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
     }
   })
 
-  app.post('/api/assets', requireCapability('edit:assets'), async c => {
+  app.post('/api/assets', requireCapability('edit:assets'), editableTarget, async c => {
     const source = await resolve(c.req.query('target'))
 
     // Hono's parseBody reads multipart into a { [field]: string | File } map.

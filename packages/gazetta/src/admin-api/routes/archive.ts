@@ -79,6 +79,7 @@ import type { SourceContextResolver } from '../source-context.js'
 import { loadSiteFromSource } from '../source-context.js'
 import { recordWrite } from '../../history-recorder.js'
 import { requireCapability } from '../middleware/capability.js'
+import { requireEditableTarget } from '../middleware/editable-target.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import type { ItemRef } from '../../dep-sidecars.js'
@@ -147,37 +148,38 @@ export interface ArchiveRoutesOptions {
 }
 
 export function archiveRoutes(resolve: SourceContextResolver, opts: ArchiveRoutesOptions = {}) {
+  const editableTarget = requireEditableTarget(resolve)
   const app = new Hono<AuditEnv>()
   const scanner = opts.scanner ?? null
 
   // ─── Pages ────────────────────────────────────────────────────────
-  app.post('/api/pages/:name/archive', requireCapability('delete:pages'), c =>
+  app.post('/api/pages/:name/archive', requireCapability('delete:pages'), editableTarget, c =>
     handleArchive(c, resolve, PAGE_HANDLE, scanner),
   )
-  app.post('/api/pages/:name/unarchive', requireCapability('edit:pages'), c =>
+  app.post('/api/pages/:name/unarchive', requireCapability('edit:pages'), editableTarget, c =>
     handleUnarchive(c, resolve, PAGE_HANDLE, scanner),
   )
-  app.delete('/api/pages/:name/purge', requireCapability('delete:pages'), c =>
+  app.delete('/api/pages/:name/purge', requireCapability('delete:pages'), editableTarget, c =>
     handlePurge(c, resolve, PAGE_HANDLE, scanner),
   )
   // Cut 12 — edit an archive's aliasOf (set / drop) from the
   // purge-blocked resolution modal. Capability `edit:` since this is
   // a content-state edit, not destruction (symmetric with unarchive).
-  app.patch('/api/pages/:name/alias', requireCapability('edit:pages'), c =>
+  app.patch('/api/pages/:name/alias', requireCapability('edit:pages'), editableTarget, c =>
     handleSetAlias(c, resolve, PAGE_HANDLE, scanner),
   )
 
   // ─── Fragments ────────────────────────────────────────────────────
-  app.post('/api/fragments/:name/archive', requireCapability('delete:fragments'), c =>
+  app.post('/api/fragments/:name/archive', requireCapability('delete:fragments'), editableTarget, c =>
     handleArchive(c, resolve, FRAGMENT_HANDLE, scanner),
   )
-  app.post('/api/fragments/:name/unarchive', requireCapability('edit:fragments'), c =>
+  app.post('/api/fragments/:name/unarchive', requireCapability('edit:fragments'), editableTarget, c =>
     handleUnarchive(c, resolve, FRAGMENT_HANDLE, scanner),
   )
-  app.delete('/api/fragments/:name/purge', requireCapability('delete:fragments'), c =>
+  app.delete('/api/fragments/:name/purge', requireCapability('delete:fragments'), editableTarget, c =>
     handlePurge(c, resolve, FRAGMENT_HANDLE, scanner),
   )
-  app.patch('/api/fragments/:name/alias', requireCapability('edit:fragments'), c =>
+  app.patch('/api/fragments/:name/alias', requireCapability('edit:fragments'), editableTarget, c =>
     handleSetAlias(c, resolve, FRAGMENT_HANDLE, scanner),
   )
 

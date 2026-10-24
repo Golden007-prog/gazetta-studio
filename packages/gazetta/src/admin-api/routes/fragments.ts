@@ -7,6 +7,7 @@ import { FRAGMENT_HANDLE, handleArchive, handlePurge } from './archive.js'
 import type { ValidatorRegistry } from '../../validation/registry.js'
 import { computeSaveEtag } from '../../save-etag.js'
 import { requireCapability } from '../middleware/capability.js'
+import { requireEditableTarget } from '../middleware/editable-target.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import { buildHookContext, dispatchAfterLoad, type HookRegistry } from '../../hooks/index.js'
 import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
@@ -29,6 +30,7 @@ export function fragmentRoutes(
   templatesDir?: string,
   opts: FragmentRoutesOptions = {},
 ) {
+  const editableTarget = requireEditableTarget(resolve)
   const app = new Hono<AuditEnv>()
   const hooks = opts.hooks
 
@@ -65,7 +67,7 @@ export function fragmentRoutes(
 
   // POST delegates to `fragments/create.ts` — same protocol-thin
   // shape as pages POST.
-  app.post('/api/fragments', requireCapability('edit:fragments'), async c => {
+  app.post('/api/fragments', requireCapability('edit:fragments'), editableTarget, async c => {
     const source = await resolve(c.req.query('target'))
     // Schema-validate the body — same rationale as pages.ts.
     const raw = await c.req.json()
@@ -167,7 +169,7 @@ export function fragmentRoutes(
   // `manifest-save.ts` (per Cut 2). This handler is now a protocol
   // translator: parse Hono request → call `saveFragment` → project
   // `SaveResult` to HTTP. Same response shape as before.
-  app.put('/api/fragments/:name', requireCapability('edit:fragments'), async c => {
+  app.put('/api/fragments/:name', requireCapability('edit:fragments'), editableTarget, async c => {
     const name = c.req.param('name')
     const rawLocale = c.req.query('locale')
 
@@ -225,7 +227,7 @@ export function fragmentRoutes(
   // DELETE = soft-delete (archive) by default per Cut 7 cutover.
   // `?permanent=true` invokes purge for explicit hard-delete intent.
   // See pages.ts for the full rationale; same shape applies here.
-  app.delete('/api/fragments/:name', requireCapability('delete:fragments'), async c => {
+  app.delete('/api/fragments/:name', requireCapability('delete:fragments'), editableTarget, async c => {
     const permanent = c.req.query('permanent') === 'true'
     if (permanent) return handlePurge(c, resolve, FRAGMENT_HANDLE)
     return handleArchive(c, resolve, FRAGMENT_HANDLE)

@@ -7,6 +7,7 @@ import { handleArchive, handlePurge, PAGE_HANDLE } from './archive.js'
 import type { ValidatorRegistry } from '../../validation/registry.js'
 import { computeSaveEtag } from '../../save-etag.js'
 import { requireCapability } from '../middleware/capability.js'
+import { requireEditableTarget } from '../middleware/editable-target.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import { buildHookContext, dispatchAfterLoad, type HookRegistry } from '../../hooks/index.js'
 import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
@@ -36,6 +37,7 @@ export function pageRoutes(
   templatesDir?: string,
   opts: PageRoutesOptions = {},
 ) {
+  const editableTarget = requireEditableTarget(resolve)
   const app = new Hono<AuditEnv>()
   const hooks = opts.hooks
 
@@ -94,7 +96,7 @@ export function pageRoutes(
   // resolution / fresh create) lives there. This handler is now a
   // protocol translator: parse + Zod-validate → call `createPage` →
   // project `CreatePageResult` to HTTP. Same response shape as before.
-  app.post('/api/pages', requireCapability('edit:pages'), async c => {
+  app.post('/api/pages', requireCapability('edit:pages'), editableTarget, async c => {
     const source = await resolve(c.req.query('target'))
     // Schema-validate the body so drift between client and server
     // can't silently accept malformed requests. The Zod schema is the
@@ -213,7 +215,7 @@ export function pageRoutes(
   // `manifest-save.ts` orchestrator (per Cut 2). This handler is now a
   // protocol translator: parse Hono request → call `savePage` →
   // project `SaveResult` to HTTP. Same response shape as before.
-  app.put('/api/pages/:name{.+}', requireCapability('edit:pages'), async c => {
+  app.put('/api/pages/:name{.+}', requireCapability('edit:pages'), editableTarget, async c => {
     const name = c.req.param('name')
     const rawLocale = c.req.query('locale')
 
@@ -275,7 +277,7 @@ export function pageRoutes(
   // /archive and /purge routes — DELETE without `?permanent=true` audits
   // as `action: 'archive'`, DELETE with `?permanent=true` audits as
   // `action: 'purge'`.
-  app.delete('/api/pages/:name{.+}', requireCapability('delete:pages'), async c => {
+  app.delete('/api/pages/:name{.+}', requireCapability('delete:pages'), editableTarget, async c => {
     const permanent = c.req.query('permanent') === 'true'
     if (permanent) return handlePurge(c, resolve, PAGE_HANDLE)
     return handleArchive(c, resolve, PAGE_HANDLE)

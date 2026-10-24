@@ -41,6 +41,7 @@ import type { SourceContextResolver, SourceContext } from '../source-context.js'
 import { loadSiteFromSource } from '../source-context.js'
 import { recordWrite } from '../../history-recorder.js'
 import { requireCapability } from '../middleware/capability.js'
+import { requireEditableTarget } from '../middleware/editable-target.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import { rebuildArchiveAliases } from '../../archive-aliases.js'
@@ -78,12 +79,13 @@ const FRAGMENT_BINDING: KindBinding = {
 }
 
 export function redirectRoutes(resolve: SourceContextResolver) {
+  const editableTarget = requireEditableTarget(resolve)
   const app = new Hono<AuditEnv>()
 
-  app.post('/api/page-redirects', requireCapability(PAGE_BINDING.capability), c =>
+  app.post('/api/page-redirects', requireCapability(PAGE_BINDING.capability), editableTarget, c =>
     handleCreateRedirect(c, resolve, PAGE_BINDING),
   )
-  app.post('/api/fragment-redirects', requireCapability(FRAGMENT_BINDING.capability), c =>
+  app.post('/api/fragment-redirects', requireCapability(FRAGMENT_BINDING.capability), editableTarget, c =>
     handleCreateRedirect(c, resolve, FRAGMENT_BINDING),
   )
 

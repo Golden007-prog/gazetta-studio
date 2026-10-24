@@ -10,6 +10,7 @@
  */
 
 import type { GazettaManifest, StorageProvider, SiteManifest } from '../types.js'
+import { isEditable } from '../types.js'
 import { memoryCache } from '../cache/factories.js'
 import { forSite } from '../cache/per-site.js'
 import type { AdminCache } from '../cache/types.js'
@@ -46,6 +47,13 @@ export interface SourceContext {
    * source-side read path should be used (it can backfill sidecars).
    */
   readonly targetName?: string
+  /**
+   * Whether the target accepts content edits (`isEditable` of its config).
+   * Set by the registry resolver; undefined for the static resolver, whose
+   * one source is the editing source. Content-write routes refuse `false`
+   * (`requireEditableTarget`).
+   */
+  readonly editable?: boolean
   /**
    * Optional history provider for recording revisions on save. Absent
    * when history is disabled for this target (via
@@ -196,6 +204,7 @@ export interface SourceContextFromRegistryOptions {
 export function createSourceContextFromRegistry(opts: SourceContextFromRegistryOptions): SourceContext {
   const name = opts.targetName ?? opts.registry.defaultEditable()
   const storage = opts.registry.get(name)
+  const config = opts.registry.getConfig(name)
   return {
     ...createSourceContext({
       storage,
@@ -206,6 +215,7 @@ export function createSourceContextFromRegistry(opts: SourceContextFromRegistryO
       gazettaManifest: opts.gazettaManifest,
     }),
     targetName: name,
+    editable: config ? isEditable(config) : true,
   }
 }
 
