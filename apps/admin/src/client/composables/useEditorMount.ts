@@ -1,6 +1,7 @@
 import { watch, onBeforeUnmount, type Ref } from 'vue'
 import type { EditorMount } from 'gazetta/types'
 import { openAssetPicker } from '../api/openAssetPicker.js'
+import { plainCopy } from '../drafts/types.js'
 
 export function useEditorMount(
   containerRef: Ref<HTMLElement | null>,
@@ -25,8 +26,10 @@ export function useEditorMount(
     const m = editorMount.value
     const el = containerRef.value
     m.mount(el, {
-      content: content.value,
-      schema: schema.value,
+      // Plain copies: the store's deep refs give Vue proxies, and the default
+      // form (@rjsf/core) structuredClones its data, which a proxy can't survive.
+      content: plainCopy(content.value),
+      schema: plainCopy(schema.value),
       theme: theme.value,
       onChange,
       fieldsBaseUrl: fieldsBaseUrl?.value,
