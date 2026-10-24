@@ -341,7 +341,7 @@ Cut 6 changes how schema changes are surfaced. New panel; existing flow unchange
 
 **Phased so each cut is independently valuable.** Cut 1 alone (4 days) catches the most painful "I broke something" cases. Stopping there is acceptable.
 
-**Real tools, not reimplementation.** axe-core, html-validate, linkinator. Each plugs into the validator interface. CMS owns scheduling, surfacing, and incremental scope; tools own the analysis.
+**Real tools, not reimplementation.** axe-core and html-validate; linkinator, for outbound links, is deferred. Each plugs into the validator interface. CMS owns scheduling, surfacing, and incremental scope; tools own the analysis.
 
 **Save stays fast.** Cut 1's save-delta only checks introduced refs; everything else is the background scanner. Authors aren't punished for accumulated debt.
 
