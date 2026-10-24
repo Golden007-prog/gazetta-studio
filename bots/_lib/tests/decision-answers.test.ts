@@ -101,6 +101,42 @@ const typed = (uuid: string, parentUuid: string | null, timestamp: string, text:
 
 const lines = (...entries: Entry[]): string[] => entries.map(e => JSON.stringify(e))
 
+// A message the maintainer types while a turn is still running is written
+// when it's delivered, as a queued_command attachment carrying the time it
+// was typed. Claude Code records the typing as an `enqueue` queue entry and
+// the delivery as a `remove` one naming the command (#1239).
+const queued = (
+  uuid: string,
+  parentUuid: string,
+  timestamp: string,
+  text: string,
+  origin: Entry | undefined,
+  command = `cmd-${uuid}`,
+): Entry => ({
+  type: 'attachment',
+  uuid,
+  parentUuid,
+  timestamp,
+  attachment: {
+    type: 'queued_command',
+    commandMode: 'prompt',
+    source_uuid: command,
+    prompt: [{ type: 'text', text }],
+    ...(origin ? { origin } : {}),
+  },
+})
+
+const enqueue = (timestamp: string): Entry => ({ type: 'queue-operation', operation: 'enqueue', timestamp })
+
+const removeQueued = (timestamp: string, command: string, content: string): Entry => ({
+  type: 'queue-operation',
+  operation: 'remove',
+  timestamp,
+  content,
+  reason: 'absorbed_mid_turn',
+  commandUuid: command,
+})
+
 // A session where the maintainer types a request, I recommend in two text
 // messages around a tool call, the maintainer types "agree", I ask with the
 // picker, and the maintainer picks an option.
@@ -180,6 +216,70 @@ describe('lookupAnswer — entries that are not the maintainer', () => {
 
   it('reports a timestamp with no entry as not found', () => {
     expect(lookupAnswer(indexLines(session()), '2026-10-22T11:00:00.000Z').status).toBe('not-found')
+  })
+})
+
+describe('lookupAnswer — messages typed while a turn runs (#1239)', () => {
+  const TYPED_AT = '2026-10-22T10:03:30.000Z'
+  // While I run a command, the maintainer types; the message is delivered
+  // with the command's result, after it in the file, with its typing time.
+  const midTurn = (origin: Entry | undefined, { enqueued = true, delivered = true } = {}) =>
+    lines(
+      assistantText('a5', 'u3', '2026-10-22T10:03:00.000Z', 'Building the cut now.'),
+      assistantTool('a6', 'a5', '2026-10-22T10:03:05.000Z', 'bash-2', 'Bash', { command: 'npm test' }),
+      ...(enqueued ? [enqueue('2026-10-22T10:03:30.002Z')] : []),
+      toolResult('r2', 'a6', '2026-10-22T10:03:40.000Z', 'bash-2', 'a6'),
+      queued('q1', 'r2', TYPED_AT, 'keep 20% for other work', origin),
+      ...(delivered ? [removeQueued('2026-10-22T10:03:40.050Z', 'cmd-q1', 'keep 20% for other work')] : []),
+    )
+
+  it('counts one from the maintainer as a typed answer, with what I had shown since their last input', () => {
+    const result = lookupAnswer(indexLines([...session(), ...midTurn({ kind: 'human' })]), TYPED_AT)
+    expect(result.status).toBe('ok')
+    expect(result.kind).toBe('typed')
+    expect(result.answer).toBe('keep 20% for other work')
+    expect(result.shown).toEqual(['Building the cut now.'])
+  })
+
+  it.each([
+    ['a report from a sub-agent', { kind: 'peer' }],
+    ['a background-task notice', { kind: 'task-notification' }],
+    ['one with no origin', undefined],
+  ])('rejects %s delivered the same way', (_label, origin) => {
+    const result = lookupAnswer(indexLines([...session(), ...midTurn(origin as Entry | undefined)]), TYPED_AT)
+    expect(result.status).toBe('not-your-input')
+  })
+
+  it('rejects one with no queue entry recording when it was typed, as an appended fake would have', () => {
+    const transcript = [...session(), ...midTurn({ kind: 'human' }, { enqueued: false })]
+    expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
+  })
+
+  it('rejects one whose typing was recorded only after it', () => {
+    const transcript = [...session(), ...midTurn({ kind: 'human' }, { enqueued: false }), ...lines(enqueue(TYPED_AT))]
+    expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
+  })
+
+  it('rejects one with no queue entry recording its delivery', () => {
+    const transcript = [...session(), ...midTurn({ kind: 'human' }, { delivered: false })]
+    expect(lookupAnswer(indexLines(transcript), TYPED_AT).status).toBe('broken-link')
+  })
+
+  it('is the previous input for the next answer', () => {
+    const transcript = [
+      ...session(),
+      ...midTurn({ kind: 'human' }),
+      ...lines(
+        assistantText('a7', 'q1', '2026-10-22T10:04:00.000Z', 'Done. Merge it?'),
+        typed('u5', 'a7', '2026-10-22T10:05:00.000Z', 'yes'),
+      ),
+    ]
+    expect(lookupAnswer(indexLines(transcript), '2026-10-22T10:05:00.000Z').shown).toEqual(['Done. Merge it?'])
+  })
+
+  it('is listed among the maintainer inputs', () => {
+    const inputs = listInputs(indexLines([...session(), ...midTurn({ kind: 'human' })]), '2026-10-22T10:03:00.000Z')
+    expect(inputs).toEqual([{ at: TYPED_AT, kind: 'typed', preview: 'keep 20% for other work' }])
   })
 })
 
