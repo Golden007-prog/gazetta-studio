@@ -73,9 +73,59 @@ describe('fetchCloseEvent', () => {
     expect(graphql.mock.calls[0][1]).toEqual({ owner: 'o', repo: 'r', number: 5 })
   })
 
-  it('a commit closer is not a PR closer', async () => {
+  it('a commit no merged PR brought in has no closer', async () => {
     const graphql = vi.fn(async () => reply({ __typename: 'Commit' }))
     expect((await fetchCloseEvent(graphql, repo, 5)).closer).toBeNull()
+  })
+
+  // A rebase merge puts the PR's own commits on main, and GitHub records the
+  // commit carrying the closing keyword as the closer, not the PR (#1241).
+  const commitCloser = (...prs: ReturnType<typeof pr>[]) =>
+    reply({ __typename: 'Commit', associatedPullRequests: { nodes: prs } })
+  const pr920 = pr({
+    number: 920,
+    title: 'feat: cut #523 — review-workflow Cut 9: extract <Banner> primitive + story',
+    headRefName: 'feat/cut-523',
+  })
+
+  it('#523: a commit closer counts through the merged PR that brought it in', async () => {
+    // Real closure: commit a455a0cc, brought in by #920, merged 2026-10-17.
+    const event = await fetchCloseEvent(
+      vi.fn(async () => commitCloser(pr920)),
+      repo,
+      523,
+    )
+    expect(event.closer).toEqual(pr920)
+    expect(classifyLanding(523, event)).toBe('landed')
+  })
+
+  it('a commit closer prefers the merged PR that names the cut', async () => {
+    const parent = pr({ number: 919, title: 'feat: stacked parent', headRefName: 'feat/parent' })
+    const event = await fetchCloseEvent(
+      vi.fn(async () => commitCloser(parent, pr920)),
+      repo,
+      523,
+    )
+    expect(event.closer?.number).toBe(920)
+    expect(classifyLanding(523, event)).toBe('landed')
+  })
+
+  it('a commit only an unmerged PR carries is not a landing', async () => {
+    const event = await fetchCloseEvent(
+      vi.fn(async () => commitCloser(pr({ number: 930, merged: false, title: 'feat: cut #523' }))),
+      repo,
+      523,
+    )
+    expect(classifyLanding(523, event)).toBe('unverified')
+  })
+
+  it("a commit whose PR only mentions the cut is unverified, as #557's closure of #517 was", async () => {
+    const event = await fetchCloseEvent(
+      vi.fn(async () => commitCloser(pr({ number: 557, title: 'fix(feature-bot): require Note: on REJECT' }))),
+      repo,
+      517,
+    )
+    expect(classifyLanding(517, event)).toBe('unverified')
   })
 
   it('no close event yields no closer and no reason', async () => {
