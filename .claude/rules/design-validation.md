@@ -136,22 +136,11 @@ export interface Issue {
 
 - **background**: Admin server runs a long-lived scanner. Initial scan on admin boot. Incremental rescan when file watcher detects manifest/template/asset changes. Per-page validation run cached by content hash; only re-runs when something material changed. Issues stored in a Pinia store, surfaced in the UI.
 
-- **pre-publish**: The server runs the audit before every Publish from the admin. The dialog runs it first, except after the confirmation a production destination asks for, which skips it ([#1328](https://github.com/gazetta-studio/gazetta-studio/issues/1328), a bug). Decided: maintainer, 2026-10-24 (#1295). Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
+- **pre-publish**: The admin runs the audit on every Publish, and the server runs it again before publishing. Decided: maintainer, 2026-10-24 (#1295). Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
 
 - **cli**: `gazetta validate` runs all validators in non-interactive mode. Exit non-zero on any error. Useful for CI gating before deploy.
 
-Warnings at publish (`broken-links` only ever warns):
-- When the dialog's audit finds no errors, the dialog publishes without showing its warnings; they show in Site health.
-- When it finds an error on any destination, the dialog shows every issue, and each warning must be ignored before publishing.
-- The server gate blocks only on errors. After the production confirmation, only the gate runs, so only its errors show ([#1328](https://github.com/gazetta-studio/gazetta-studio/issues/1328)).
-- A destination with `publishAudit.strict` turns its warnings into errors.
-
-Decided: maintainer, 2026-10-24 (#1295)
-
-| Rejected | Why |
-|---|---|
-| Show warning-only results in the dialog before publishing | One more click on every publish whose audit finds warnings |
-| Run `broken-links` at publish only on strict targets | It would change where the check runs (the stage matrix below), and #1294's fix brings its cost to about 3 ms a page |
+The shipped publish audit differs from this in several ways; see "Current code alignment".
 
 ### Stage × validator matrix
 
@@ -171,7 +160,7 @@ Decided: maintainer, 2026-10-24 (#1295)
 | `orphaned-locale-file` | — | ✓ warn | — | ✓ warn |
 | `unused-fragment` | — | ✓ info | — | ✓ info |
 
-`broken-links` runs for every page in the background scan and on every Publish from the admin (at publish its warnings show only on strict destinations or when the audit also finds an error, as above); [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost.
+`broken-links` runs for every page in the background scan and on every Publish from the admin; [#1294](https://github.com/gazetta-studio/gazetta-studio/issues/1294) tracks its cost. What the shipped publish dialog does with its warnings is under "Current code alignment".
 
 Decided: maintainer, 2026-10-24 (#1295)
 
@@ -381,6 +370,28 @@ Validation is itself foundational dimension #9 of 13. This section answers how e
 - **Cache check** — Cut 1 (save-delta) is uncached: each save runs validators against the incoming manifest fresh. Cut 2 (background scanner) caches per-page validation results by content hash; cache key includes content + dependency hashes per `design-cache.md`. Cut 3 render-for-analysis caches rendered HTML by content + template + transitive-dependency hash. All caching goes through `AdminCache` once the design pass formalizes the abstraction; v1 cuts use per-instance memory cache via `MemoryCache` provider.
 
 - **Offline check** — save-delta validation runs locally during offline (validators are pure functions over a manifest; no server roundtrip required). Issues surface in the standard banner. Background scanner (Cut 2) pauses while offline; resumes on reconnect with incremental rescan. Render-for-analysis (Cut 3) serves last-cached output; staleness indicator visible in surfaced issues. Per `design-offline.md`.
+
+## Current code alignment
+
+Where the shipped publish audit differs from this design, read from code on 2026-10-24: a list to reconcile or accept (`feature-design-process.md`, "Keeping design docs aligned with reality").
+
+Decided: maintainer, 2026-10-24 (#1295)
+
+| Design | Shipped code | Status |
+|---|---|---|
+| The pre-publish modal offers Fix, Ignore once and Promote to error per issue | Ignore once only, for warnings | Open |
+| The modal shows the audit's issues before publishing | When the dialog's audit finds no errors, it publishes without showing its warnings; they show in Site health. When it finds an error on any destination, it shows every destination's issues, and each warning must be ignored before publishing. The server gate blocks only on errors; `publishAudit.strict` turns a destination's warnings into errors | Kept for now (below) |
+| The admin runs the audit on every Publish | After the confirmation a production destination asks for, the dialog's audit doesn't run; only the server's gate does, so only its errors show | Bug: [#1328](https://github.com/gazetta-studio/gazetta-studio/issues/1328). Decided: maintainer, 2026-10-24 (#1295) |
+| The matrix's validators run at pre-publish | Only accessibility, html-validity and broken-links handle the pre-publish stage, and all three only warn. The other twelve that declare it return nothing there, so nothing blocks a publish to a destination without `publishAudit.strict` | Bug: [#1302](https://github.com/gazetta-studio/gazetta-studio/issues/1302) |
+| Pre-publish checks the items being published | Translations (`pages/<name>:<locale>`) are dropped, and pages are rendered in the default language only | Bug: [#1329](https://github.com/gazetta-studio/gazetta-studio/issues/1329) |
+| Not settled | The pages that use a published fragment aren't audited, although static targets republish them | Question: [#1331](https://github.com/gazetta-studio/gazetta-studio/issues/1331) |
+
+Warning-only audits publishing without showing their warnings is kept for now, with no code change. Decided: maintainer, 2026-10-24 (#1295)
+
+| Rejected | Why |
+|---|---|
+| Show warning-only results in the dialog before publishing | One more click on every publish whose audit finds warnings |
+| Run `broken-links` at publish only on strict targets | It would change where the check runs (the stage matrix), and #1294's fix brings its cost to about 3 ms a page |
 
 ## Migration
 
