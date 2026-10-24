@@ -294,6 +294,16 @@ admin: {
 
 Strict mode trades availability for compliance. A storage outage that would otherwise lose an audit record now also blocks the user's save until the issue resolves. Use it only when your compliance posture requires it.
 
+### Record-then-write order
+
+Under strict mode the handler records the event **before** writing:
+
+1. The event is recorded in its success shape (action, actor, scope, outcome `success`).
+2. If recording fails (`failed > 0` across providers), the write is refused: the response is a typed `AUDIT_FAILED` error (HTTP 500) and nothing changes on disk.
+3. If the write itself then fails after a successful recording, a **second event** with outcome `write-failed` records the failure, so the log does not claim a change that never happened.
+
+This applies to page and fragment saves, publishes, and asset uploads. With `strict: false` (the default) none of this happens: writes proceed regardless of recording failures, matching the fail-open behaviour above.
+
 ## Reading the audit log
 
 ### Admin drawer
