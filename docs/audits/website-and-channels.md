@@ -194,6 +194,57 @@ Follows from "Stages and gates": Stage 1's gate is a publish on a second target 
 | A general `gazetta target add` command now | Built here, ahead of #214 |
 | An admin wizard that edits `site.config.ts` | Config is code, loaded once at boot; new auth, audit and multi-instance questions |
 
+### Docs (#1272)
+
+Decided with the maintainer on 2026-10-24, after research on how other CMSes publish their docs, what fits Gazetta's code, and docs tooling:
+
+- **How the docs reach the site:** a generator (`npm run docs:site`) turns each published `docs/*.md` into a committed page under `sites/gazetta.studio/targets/local/pages/docs/`, plus one `docs-nav` fragment. A check in the core test suite fails when the committed pages differ from `docs/`. The suite is the one CI and the bots already run, so no workflow change is needed. A docs PR therefore also changes `sites/gazetta.studio/**`, which triggers the existing deploy ([#1272](https://github.com/gazetta-studio/gazetta-studio/issues/1272)).
+- **Which files are published:** a list in the site (`docs-nav.json`): published docs in groups, internal files, and removed slugs. The check fails on a top-level `docs/*.md` the list doesn't classify, and on any difference from AGENTS.md's "Public docs". `adr/` and `audits/` are never published.
+- **Sidebar groups:** Start (getting-started, which becomes `/docs`); Deploy (deploy, cloudflare, self-hosted, runtime-capabilities); Content and templates (content-assets, template-assets, migration, transform-adapters, soft-delete); Admin and operations (auth, audit, hooks, cache, offline).
+- **Which version, now:** `main`, with one generated line on every docs page: "These docs describe Gazetta's `main` branch. The latest release on npm, 0.8.0, is older and works differently in places, and it lacks security fixes made since. To follow these docs, run Gazetta from `main`." The version comes from `packages/gazetta/package.json`, and the security clause is tied to it, so it disappears at the next release.
+- **Which version, from Stage 1:** the release commit's docs at `/docs/<slug>`, and `main` at `/docs/unreleased/<slug>` with `noindex`.
+- **Search:** none for now (sidebar, "On this page", the browser's find). Pagefind, built at publish and served from R2, once the docs pass about 40 pages, people report they can't find things, or Stage 2 starts. That step needs a workflow edit from the maintainer.
+
+Decided: maintainer, 2026-10-24 (#PR)
+
+Two details follow from generated pages. The admin refuses saves to them, naming the doc to edit instead ([#1289](https://github.com/gazetta-studio/gazetta-studio/issues/1289)). A removed or renamed doc becomes an archived page that redirects or answers 410, because publish can't yet remove a page from a target ([#1290](https://github.com/gazetta-studio/gazetta-studio/issues/1290)).
+
+Follows from the generated-pages decision above.
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| Generate the pages at deploy, nothing committed | Two workflow edits; no docs in `gazetta dev` or the admin; render errors only at deploy |
+| A Gazetta feature for Markdown pages | Weeks of work; ROADMAP keeps it deferred |
+| Starlight or VitePress on a subdomain | The docs stop being built with Gazetta |
+| The worker fetches Markdown from GitHub per request | No target holds the content; GitHub becomes a runtime dependency |
+| Edit in the admin, export to `docs/` | Inverts the source AGENTS.md gives bots and contributors |
+| Thin pages whose template reads `docs/*.md` | A docs-only edit would never reach production (publish is incremental and the hash doesn't cover files a template reads; inferred from code) |
+| Link to GitHub instead | Reverses #1266 |
+| The generator reads AGENTS.md's list directly | Navigation tied to the prose layout of agent instructions; no room for order, groups or redirects |
+| Publish every top-level doc unless excluded; a front-matter flag; separate folders; an underscore prefix | Leaks new internal files, shows on GitHub, or breaks existing links |
+| Docs from the v0.8.0 tag; `main` with no line; both versions now | Describes code 900 commits old; contradicts what npm installs with no hint; versions a release nobody is meant to use |
+| The line without the security clause | The same line without "and it lacks security fixes made since" |
+| `main` at its own host from Stage 1; one tree held until release; a copy per release | More operations; release-held docs PRs; fixes in every copy |
+| Pagefind now; another search library or service | A worker route and a workflow edit now; DocSearch usually refuses sites that aren't production ready |
+| One flat sidebar list; the fleet proposes groups | Harder to scan; one more review |
+
+### Agent-files experiment (#1273)
+
+Decided with the maintainer on 2026-10-24, after research on how published studies measured agent traffic and how Gazetta's worker serves pages:
+
+- Everything runs in gazetta.studio's own worker middleware, with no product change; the Markdown comes from each docs page's `page.json`, already in R2.
+- Requests are logged to Workers Analytics Engine (three months' retention), with no IP addresses, cookies or full referrers stored; flags such as "IP matches the operator's published ranges" and "the maintainer's own traffic" are computed in memory and only the booleans kept.
+- The project's own traffic is excluded: probe URLs, the deploy check, the maintainer's own address, and the fleet's own fetches.
+- Steps: a one-week shakedown, four weeks with Markdown and `/llms.txt` served but linked from nowhere, then four weeks linked from the pages, the footer, the README and AGENTS.md.
+- The rule, fixed before counting: over the eight counted weeks, at least 10 organic Markdown responses on at least 5 days from at least 2 agent families moves the Deferred Markdown row to a design pass (every page of every site in scope if at least 5 Markdown requests reach non-docs pages, otherwise an opt-in); 2 or fewer keeps it Deferred; anything between gets one eight-week extension, then the same rule. `/llms.txt` fetches are reported separately, against that row's own trigger.
+
+Decided: maintainer, 2026-10-24 (#PR)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| Shorter steps (2 + 2 weeks) | Likely too few events on a small site to apply the rule |
+| Set the rule after seeing the numbers | Any result can then be read as support |
+
 ### How it runs
 
 - **One rule for every channel:** a check keeps it true (it fails when the channel drifts from the code or the release), or the maintainer writes it. Doors that need users wait until there are users.
@@ -277,15 +328,10 @@ Fourteen sites: Payload, Sanity, Strapi, Storyblok, Directus, TinaCMS, Decap, Ke
   - Claude Code received Markdown on 76% of 23,300 requests to one site that offers it ([Evil Martians](https://evilmartians.com/chronicles/which-ai-actually-reads-your-site-two-months-of-llm-traffic-measured)), and on about 98 in 100 at another ([GoodBarber](https://www.goodbarber.com/blog/do-ai-agents-read-markdown-what-two-weeks-of-our-own-server-logs-say-a1622/)). ChatGPT, Claude.ai, Perplexity and Googlebot fetched HTML.
   - All of these are vendors' or site owners' own measurements, classifying bots by user agent.
 - **Coding agents:** Claude Code's WebFetch sends "an `Accept` header that prefers Markdown over HTML so servers that support content negotiation can return Markdown directly" ([tools reference](https://code.claude.com/docs/en/tools-reference.md)). VS Code's Copilot and OpenCode ask for Markdown in their source code. No coding agent documents fetching `llms.txt` unprompted; agents read it when a page links to it.
-- **The spec:** llms.txt v2 (August 2026) puts the Markdown copy at the page's own address and links it with `rel="alternate" type="text/markdown"` and `rel="describedby"` ([llmstxt.org](https://llmstxt.org/)). No standards body handles it.
+- **The spec:** llms.txt v2 (August 2026) puts each page's Markdown copy "at the same URL as the original page, either with .md appended (page.html.md) or with the extension replaced by .md (page.md)", or `index.md` for addresses without a file name, and links it with `rel="alternate" type="text/markdown"` and `rel="describedby"` ([llmstxt.org](https://llmstxt.org/)). No standards body handles it.
 - **Cloudflare:** "Markdown for Agents" converts HTML to Markdown when asked, but its docs list Pro, Business, Enterprise and SSL for SaaS, not the Free plan, and don't say whether pages a Worker generates are converted ([docs](https://developers.cloudflare.com/fundamentals/reference/markdown-for-agents/)). AI Crawl Control, on all plans, has a Content Format chart of what AI systems request against what the origin serves ([docs](https://developers.cloudflare.com/ai-crawl-control/features/analyze-ai-traffic/)).
 - **gazetta.studio today:** `/llms.txt` answers 404, and a request asking for Markdown gets the cached HTML. The worker caches by address and publish generation, so Markdown responses would need the format in the cache key.
-- **One way to run the experiment** (the researcher's suggestion, not decided):
-  1. Serve the Markdown for two weeks with nothing linking to it.
-  2. Then add the `rel` links.
-  3. Then link `llms.txt` from the footer, README and AGENTS.md.
-
-  Compare requests per user-agent family at each step. Cloudflare's Workers Logs (`[observability] enabled = true` in `wrangler.toml`) keep 3 days on the Free plan ([docs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)).
+- **The experiment's design** is decided under "Agent-files experiment (#1273)" above.
 
 ### Docs and release sync
 
