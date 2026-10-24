@@ -30,6 +30,8 @@ import { createAdminApp } from '../src/admin-api/index.js'
 import { createSourceContext } from '../src/admin-api/source-context.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
 import { starterTemplatesDir } from './_helpers/starter.js'
+import type { Principal } from '../src/auth/index.js'
+import { requireCapability } from '../src/admin-api/middleware/capability.js'
 
 const EDITOR_HEADERS = {
   'X-Forwarded-User': 'alice',
@@ -110,10 +112,25 @@ describe('capability denial audit records (#1192)', { timeout: 30000 }, () => {
     const denied = events.filter(e => e.action === 'delete' && e.outcome === 'forbidden')
     expect(denied).toHaveLength(1)
     expect(denied[0].scope).toEqual({ kind: 'page', name: 'home' })
-    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual([
-      'delete:pages',
-    ])
+    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual(['delete:pages'])
     expect((denied[0].actor as Record<string, unknown>).id).toBe('alice')
+  })
+
+  it('keeps item scope when the app is mounted under a path prefix', async () => {
+    // The CLI serves the CMS at /admin (cli/index.ts `app.route('/admin',
+    // cmsApp)`), so c.req.path arrives as /admin/api/pages/home. Pin the
+    // item scope against that production mount shape.
+    const outer = new Hono()
+    outer.route('/admin', app)
+    const res = await outer.request('/admin/api/pages/home', { method: 'DELETE', headers: EDITOR_HEADERS })
+    expect(res.status).toBe(403)
+
+    const auditRes = await outer.request('/admin/api/audit', { headers: ADMIN_HEADERS })
+    expect(auditRes.status).toBe(200)
+    const body = (await auditRes.json()) as { events: Array<Record<string, unknown>> }
+    const denied = body.events.filter(e => e.action === 'delete' && e.outcome === 'forbidden')
+    expect(denied).toHaveLength(1)
+    expect(denied[0].scope).toEqual({ kind: 'page', name: 'home' })
   })
 
   it('records a forbidden publish event for a viewer', async () => {
@@ -127,9 +144,7 @@ describe('capability denial audit records (#1192)', { timeout: 30000 }, () => {
     const events = await auditLog(app)
     const denied = events.filter(e => e.action === 'publish' && e.outcome === 'forbidden')
     expect(denied).toHaveLength(1)
-    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual([
-      'publish:non-production',
-    ])
+    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual(['publish:non-production'])
   })
 
   it('records an unauthenticated event for an anonymous save attempt', async () => {
@@ -144,6 +159,25 @@ describe('capability denial audit records (#1192)', { timeout: 30000 }, () => {
     const denied = events.filter(e => e.action === 'save' && e.outcome === 'unauthenticated')
     expect(denied).toHaveLength(1)
     expect(denied[0].scope).toEqual({ kind: 'page', name: 'home' })
+  })
+
+  it('still denies when requireCapability is wired without auditMiddleware', async () => {
+    // Consumers (and the mutation-coverage harnesses) can wire
+    // requireCapability without auditMiddleware; the denial response
+    // must not depend on the audit context being present.
+    const bare = new Hono<{ Variables: { principal: Principal } }>()
+    bare.use('/api/*', async (c, next) => {
+      c.set('principal', {
+        id: 'alice',
+        role: 'editor',
+        capabilities: ['read:*', 'edit:*', 'publish:non-production', 'review:submit'],
+      })
+      await next()
+    })
+    bare.delete('/api/pages/:name', requireCapability('delete:pages'), c => c.json({ ok: true }))
+
+    const res = await bare.request('/api/pages/home', { method: 'DELETE' })
+    expect(res.status).toBe(403)
   })
 
   it('records nothing for a denied read', async () => {
