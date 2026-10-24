@@ -41,17 +41,27 @@ describe('askIdentity', () => {
     expect(await askIdentity({ fetch: fakeFetch(routes) })).toEqual({ kind: 'unknown' })
   })
 
-  it('is offline when the network fails', async () => {
-    const down = (() => Promise.reject(new TypeError('Failed to fetch'))) as unknown as typeof fetch
-    expect(await askIdentity({ fetch: down })).toEqual({ kind: 'offline' })
+  const down = (() => Promise.reject(new TypeError('Failed to fetch'))) as unknown as typeof fetch
+  const hang = ((_: unknown, init?: RequestInit) =>
+    new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+    })) as typeof fetch
+
+  it('is offline when the network fails and the browser is offline', async () => {
+    expect(await askIdentity({ fetch: down, online: () => false })).toEqual({ kind: 'offline' })
   })
 
-  it('is offline when the server does not answer in time', async () => {
-    const hang = ((_: unknown, init?: RequestInit) =>
-      new Promise((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
-      })) as typeof fetch
-    expect(await askIdentity({ fetch: hang, timeoutMs: 20 })).toEqual({ kind: 'offline' })
+  it('is offline when the server does not answer in time and the browser is offline', async () => {
+    expect(await askIdentity({ fetch: hang, timeoutMs: 20, online: () => false })).toEqual({ kind: 'offline' })
+  })
+
+  // A slow or failing server while the browser is online must not load the
+  // last user's drafts: on a shared browser that's someone else's work.
+  it.each([
+    ['the network fails', { fetch: down }],
+    ['the server does not answer in time', { fetch: hang, timeoutMs: 20 }],
+  ])('is unknown when %s but the browser is online', async (_, opts) => {
+    expect(await askIdentity({ ...opts, online: () => true })).toEqual({ kind: 'unknown' })
   })
 })
 
