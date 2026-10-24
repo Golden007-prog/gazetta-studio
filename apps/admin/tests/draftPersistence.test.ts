@@ -134,6 +134,28 @@ describe('draft persistence', () => {
     expect((await drafts.list(local, 'edit')).map(([k]) => k)).toEqual(['page:home::_root'])
   })
 
+  it('when the scope first becomes known mid-session, keeps the edits made meanwhile and writes them', async () => {
+    const drafts = createMemoryDraftStore()
+    await drafts.put(local, 'edit', 'page:about::_root', edit('Stored earlier'))
+    const scope = ref<DraftScope | null>(null)
+    const h = attach(drafts, () => scope.value)
+    await h.loaded()
+
+    usePersistedEditsStore().set('page:home::hero', { title: 'Typed while unknown' })
+    scope.value = local
+    await nextTick()
+    await h.loaded()
+    await h.flush()
+
+    expect(usePersistedEditsStore().get('page:home::hero')?.editedContent).toEqual({ title: 'Typed while unknown' })
+    const stored = new Map(await drafts.list(local, 'edit'))
+    expect((stored.get('page:home::hero') as { editedContent: unknown }).editedContent).toEqual({
+      title: 'Typed while unknown',
+    })
+    // Drafts already stored for other keys stay stored.
+    expect(stored.has('page:about::_root')).toBe(true)
+  })
+
   it("two tabs don't delete each other's drafts", async () => {
     const drafts = createMemoryDraftStore()
     setActivePinia(createPinia())

@@ -4,7 +4,7 @@
  * each of the three answers is pinned, plus what each does to the store.
  */
 import { describe, expect, it } from 'vitest'
-import { askIdentity, resolveDraftIdentity } from '../src/client/drafts/identity.js'
+import { askIdentity, resolveDraftIdentity, retryIdentity } from '../src/client/drafts/identity.js'
 import { createMemoryDraftStore } from '../src/client/drafts/memory-draft-store.js'
 
 const ME = { id: 'alice', role: 'editor', trustMode: 'forwarded-user' }
@@ -60,8 +60,8 @@ describe('askIdentity', () => {
   it.each([
     ['the network fails', { fetch: down }],
     ['the server does not answer in time', { fetch: hang, timeoutMs: 20 }],
-  ])('is unknown when %s but the browser is online', async (_, opts) => {
-    expect(await askIdentity({ ...opts, online: () => true })).toEqual({ kind: 'unknown' })
+  ])('is unreachable when %s but the browser is online', async (_, opts) => {
+    expect(await askIdentity({ ...opts, online: () => true })).toEqual({ kind: 'unreachable' })
   })
 })
 
@@ -108,5 +108,56 @@ describe('resolveDraftIdentity', () => {
     expect(await store.list({ ...alice, target: 'local' }, 'edit')).toHaveLength(1)
     expect(await store.list({ ...bob, target: 'local' }, 'edit')).toHaveLength(1)
     expect(await store.lastIdentity()).toEqual(bob)
+  })
+})
+
+describe('resolveDraftIdentity, unreachable', () => {
+  it('loads nothing and deletes nothing', async () => {
+    const store = createMemoryDraftStore()
+    const alice = { site: 'main', owner: 'forwarded-user:alice:editor' }
+    await store.put({ ...alice, target: 'local' }, 'edit', 'a', { v: 1 })
+    await store.setLastIdentity(alice)
+    expect(await resolveDraftIdentity(store, { kind: 'unreachable' })).toBeNull()
+    expect(await store.list({ ...alice, target: 'local' }, 'edit')).toEqual([['a', { v: 1 }]])
+  })
+})
+
+describe('retryIdentity', () => {
+  const me = { site: 'main', owner: 'forwarded-user:alice:editor' }
+  const answers = (...list: Array<Awaited<ReturnType<typeof askIdentity>>>) => {
+    let i = 0
+    return async () => list[Math.min(i++, list.length - 1)]!
+  }
+
+  it('asks again until the server answers, then reports who you are once', async () => {
+    const store = createMemoryDraftStore()
+    const known: unknown[] = []
+    const ask = answers({ kind: 'unreachable' }, { kind: 'offline' }, { kind: 'known', identity: me })
+    await new Promise<void>(resolve => {
+      retryIdentity(store, { ask, intervalMs: 1, onKnown: id => (known.push(id), resolve()) })
+    })
+    expect(known).toEqual([me])
+    expect(await store.lastIdentity()).toEqual(me)
+  })
+
+  it('stops when the answer is a login page (unknown)', async () => {
+    const store = createMemoryDraftStore()
+    let calls = 0
+    const ask = async () => (calls++, { kind: 'unknown' as const })
+    retryIdentity(store, { ask, intervalMs: 1, onKnown: () => {} })
+    await new Promise(r => setTimeout(r, 30))
+    expect(calls).toBe(1)
+  })
+
+  it('stop() ends the retries', async () => {
+    const store = createMemoryDraftStore()
+    let calls = 0
+    const ask = async () => (calls++, { kind: 'unreachable' as const })
+    const stop = retryIdentity(store, { ask, intervalMs: 1, onKnown: () => {} })
+    await new Promise(r => setTimeout(r, 10))
+    stop()
+    const after = calls
+    await new Promise(r => setTimeout(r, 20))
+    expect(calls).toBe(after)
   })
 })
