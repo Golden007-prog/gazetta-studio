@@ -192,7 +192,7 @@ const sorted = candidates.sort((a, b) => {
 3. **Starvation-free** — oldest-first means everything eventually ships.
 4. **Bot ecosystem consistency** — when Q4 was locked, it matched fix-bot's oldest-first sort. Since #1337, fix-bot takes issues labelled `priority` first; feature-bot stays oldest first, and a `priority` label on a cut has no effect. Q4 stands until feature-bot's own ordering causes a problem.
 
-   Decided: maintainer, 2026-10-24 (#<PR>)
+   Decided: maintainer, 2026-10-24 (#1352)
 
 **Edge cases handled**:
 - Same-second creation → deterministic tiebreaker by issue number ascending.
