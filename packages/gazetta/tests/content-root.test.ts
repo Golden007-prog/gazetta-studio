@@ -27,6 +27,20 @@ describe('createContentRoot', () => {
     expect(root.path('site.config.ts')).toBe('site.config.ts')
   })
 
+  it.each([['pages', '../../escaped'], ['fragments', '../../x'], ['..'], ['pages/a/../../..', 'page.json']])(
+    'refuses a path that leaves the content root: %s',
+    (...segments) => {
+      expect(() => createContentRoot(mockStorage()).path(...segments)).toThrow(/leaves the content root/)
+      expect(() => createContentRoot(mockStorage(), '/abs/sites/main').path(...segments)).toThrow(
+        /leaves the content root/,
+      )
+    },
+  )
+
+  it('allows .. that stays inside the content root', () => {
+    expect(createContentRoot(mockStorage()).path('pages', 'a/../b', 'page.json')).toBe('pages/b/page.json')
+  })
+
   it('rootPath defaults to empty string', () => {
     const root = createContentRoot(mockStorage())
     expect(root.rootPath).toBe('')
