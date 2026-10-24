@@ -115,6 +115,17 @@ describe('HistoryAuditProvider — query (Cut 2)', () => {
     expect(events[2].timestamp).toBe('2026-05-07T15:00:00Z')
   })
 
+  it('returns events recorded in the same millisecond newest-first too (#1244)', async () => {
+    // Back-to-back requests often share a millisecond: timestamps come from toISOString().
+    const fresh = createHistoryAuditProvider({ storage: memoryStorage(), instance: 'inst-1' })
+    const at = '2026-05-07T15:00:00.123Z'
+    for (const action of ['review-submit', 'review-reject', 'review-submit', 'review-withdraw'] as const) {
+      await fresh.record(event({ timestamp: at, action }))
+    }
+    const events = await fresh.query!({})
+    expect(events.map(e => e.action)).toEqual(['review-withdraw', 'review-submit', 'review-reject', 'review-submit'])
+  })
+
   it('filters by actor (substring on id or email)', async () => {
     const events = await provider.query!({ actor: 'alice' })
     expect(events).toHaveLength(2)

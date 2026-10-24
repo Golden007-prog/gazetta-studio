@@ -26,7 +26,9 @@ import { auditRoutes } from '../src/admin-api/routes/audit.js'
 import { principalMiddleware } from '../src/admin-api/middleware/principal.js'
 import { noneAuthProvider } from '../src/auth/providers/none.js'
 import type { AuditProvider } from '../src/audit/provider.js'
+import { createHistoryAuditProvider } from '../src/audit/providers/history.js'
 import type { AuditEvent, AuditQuery } from '../src/audit/types.js'
+import { memoryStorage } from './_helpers/memory-storage.js'
 
 function makeEvent(partial: Partial<AuditEvent> = {}): AuditEvent {
   return {
@@ -125,6 +127,17 @@ describe('Cut 6 — GET /api/audit', () => {
     expect(body.events[1].scope.name).toBe('c')
     expect(body.events[2].scope.name).toBe('a')
     expect(body.externalSinks).toEqual([])
+  })
+
+  it('shows events recorded in the same millisecond newest-first (#1244)', async () => {
+    const history = createHistoryAuditProvider({ storage: memoryStorage(), instance: 'inst-1' })
+    const at = '2026-05-04T10:00:00.123Z'
+    for (const action of ['review-submit', 'review-reject', 'review-withdraw'] as const) {
+      await history.record(makeEvent({ timestamp: at, action }))
+    }
+    const res = await buildApp([history]).request('/api/audit')
+    const body = await res.json()
+    expect(body.events.map((e: AuditEvent) => e.action)).toEqual(['review-withdraw', 'review-reject', 'review-submit'])
   })
 
   it('merges + dedups events across multiple queryable providers', async () => {
