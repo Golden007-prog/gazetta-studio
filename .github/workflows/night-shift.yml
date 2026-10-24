@@ -69,10 +69,13 @@ jobs:
 
           # Skip if the other schedule of this night already ran the chain.
           # Only scheduled runs count, so a manual dispatch never blocks a night.
+          # A chain counts once its lineup step started, even if it then timed
+          # out (GitHub reports that as cancelled), so a long night doesn't run
+          # twice; one stopped before that step, during setup, doesn't count.
           since=$(date -u -d '12 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           for id in $(gh run list --workflow night-shift.yml --event schedule --created ">=$since" --json databaseId --jq '.[].databaseId'); do
             [ "$id" = "$GITHUB_RUN_ID" ] && continue
-            ran=$(gh run view "$id" --json jobs --jq '[.jobs[] | select(.name == "chain" and .conclusion != "skipped" and .conclusion != "cancelled")] | length')
+            ran=$(gh run view "$id" --json jobs --jq '[.jobs[] | select(.name == "chain") | .steps[]? | select(.name == "Run the lineup" and .conclusion != null and .conclusion != "skipped")] | length')
             if [ "$ran" != 0 ]; then
               echo "::notice::Run $id already ran tonight's lineup; skipping."
               echo "lineup=" >> "$GITHUB_OUTPUT"
