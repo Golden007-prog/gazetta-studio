@@ -64,7 +64,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 
 ### Bug backlog
 
-User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor, and [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262), which waits for a design answer:
+User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
 
 - [#1068](https://github.com/gazetta-studio/gazetta-studio/issues/1068) closing the tab during a publish stops it
 - [#1146](https://github.com/gazetta-studio/gazetta-studio/issues/1146) publish and serving ignore a target's language settings

@@ -10,7 +10,7 @@ paths:
 
 Foundational dimension #5 of 13. Pluggable audit-event recording with multiple provider implementations (history-extended at v1; external sinks reserved). Composes with auth/RBAC's `Principal` for actor identity and with the real-time event-source discipline (audit log = source of real-time events for presence + live publish status).
 
-**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). Denied write requests (the capability middleware's 401 and 403, and the production publish gate's 403) are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). The 401s returned before a route is matched aren't recorded: the `GAZETTA_TOKEN` guard's, and the principal middleware's when the identity provider rejects a request (invalid credentials, an untrusted proxy, no matching role); recording them is [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262). External audit sinks are demand-driven.
+**Status**: design pass complete (2026-05); implementation shipped 2026-05 (Cuts 1–10, [`design-audit-implementation.md`](design-audit-implementation.md)). Denied write requests (the capability middleware's 401 and 403, and the production publish gate's 403) are recorded since [#1256](https://github.com/gazetta-studio/gazetta-studio/pull/1256) ([#1192](https://github.com/gazetta-studio/gazetta-studio/issues/1192)). The 401s returned before a route is matched aren't recorded: the `GAZETTA_TOKEN` guard's, and the principal middleware's when the identity provider rejects a request (invalid credentials, an untrusted proxy, no matching role); [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262) records them as `sign-in` events. External audit sinks are demand-driven.
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Audit check** every new feature design must answer
@@ -84,8 +84,9 @@ export interface AuditEvent {
     trustMode: string
   }
   /** Narrowed enum; configure-roles records role-mapping changes
-   *  in site.config.ts as a special "configuration write". */
-  action: 'save' | 'publish' | 'delete' | 'restore' | 'configure-roles'
+   *  in site.config.ts as a special "configuration write"; sign-in
+   *  records a write request refused before a route is matched. */
+  action: 'save' | 'publish' | 'delete' | 'restore' | 'configure-roles' | 'sign-in'
   /** Required. Each recording site supplies its own outcome explicitly —
    *  no implicit default. Closed enum; future ambient-log additions
    *  ('rate-limited', 'session-expired') stay closed-enum. */
@@ -258,13 +259,17 @@ Every write **attempt** — success and write-class rejection:
 | `delete` (page, fragment, or asset) | `success`, `forbidden`, `unauthenticated` |
 | `restore` (history rollback) | `success`, `forbidden`, `unauthenticated` |
 | `configure-roles` (`site.config.ts`'s `admin.auth.roleMapping` change) | `success`, `validation-failed`, `forbidden`, `unauthenticated` |
+| `sign-in` (a write request refused before a route is matched: the `GAZETTA_TOKEN` guard, or the identity provider rejecting the request) | `unauthenticated` |
+
+A `sign-in` event is recorded for write methods only (POST, PUT, PATCH, DELETE), with the request's method and path in `metadata`: no route has been matched, so there's no other action to record, and no table of routes to keep in sync. `sign-in` joins the closed action list additively, like `create-redirect`. Decided: maintainer, 2026-10-24 (#1263).
 
 **Recording sites** (the layer that produced the outcome records its own event):
 - Save/publish/delete handler success path → `success`
 - Save/publish handler validation rejection (409) → `validation-failed`
 - Capability middleware 403 path → `forbidden` (with `metadata.missingCapabilities`)
 - Production publish gate 403 (publish, publish stream, fetch) → `forbidden` (with `metadata.missingCapabilities`)
-- Capability middleware 401 path (a request with no principal) → `unauthenticated`. The 401s returned before a route is matched aren't recorded yet ([#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
+- Capability middleware 401 path (a request with no principal) → `unauthenticated`
+- `GAZETTA_TOKEN` guard 401, and principal middleware 401 when the identity provider rejects the request, for write methods → `sign-in` / `unauthenticated` (with the method and path in `metadata`; not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262))
 
 **Anti-pattern avoided**: a global "audit interceptor" that wraps every handler and infers outcome from HTTP status. That couples audit to HTTP shape (forbids non-HTTP audit sources later, like CLI commands). Each site explicitly records its own outcome.
 
@@ -565,7 +570,7 @@ How audit log composes with each of the other 12 foundational dimensions plus th
 ### Auth + RBAC (#4)
 - `actor` field is the load-bearing input from auth/RBAC. Snapshot of the principal at decision time (per Q2 lock).
 - `read:audit-log` capability gates the audit drawer entirely. Without it, the drawer is absent — no link, no events, no configuration disclosure.
-- Denied write requests are recorded: `forbidden` by the capability middleware or the production publish gate, `unauthenticated` by the capability middleware for a request with no principal. Login and role-resolution failures, which the identity layer rejects before a route is matched, aren't recorded yet ([#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
+- Denied write requests are recorded: `forbidden` by the capability middleware or the production publish gate, `unauthenticated` by the capability middleware for a request with no principal. Login and role-resolution failures, which the identity layer rejects before a route is matched, are recorded as `sign-in` events for write requests (not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
 - Audit-log read access is its own capability (`read:audit-log`) — viewers don't see audit by default.
 
 ### Review (#6)

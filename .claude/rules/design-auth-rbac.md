@@ -225,7 +225,7 @@ How auth/RBAC composes with each of the other 12 foundational dimensions plus th
 ### Audit (#5)
 - `Principal` is the load-bearing input to audit log. Every recorded event carries `actor: Principal`.
 - Audit-log read access is its own capability (`read:audit-log`) — viewers don't see audit by default.
-- Denied write requests are recorded in the audit log per `design-audit.md`. Login and role-resolution failures, which the identity layer rejects before a route is matched, aren't recorded yet ([#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
+- Denied write requests are recorded in the audit log per `design-audit.md`. Login and role-resolution failures, which the identity layer rejects before a route is matched, are recorded as `sign-in` events for write requests per `design-audit.md` (not implemented yet: [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262)).
 
 ### Review (#6)
 - Review-state transitions consume capabilities (`review:submit`, `review:approve`, `publish:request`, `publish:approve`).
