@@ -2,7 +2,7 @@
 
 Undo and rollback on a publish destination put the previous **content** back and publish it, so visitors see the previous version. Today they restore manifests only: the publish panel says "Undone on production" while the live site keeps serving the published version.
 
-**Status**: design pass complete (2026-10-21). Implementation not started.
+**Status**: design pass complete (2026-10-21). Cut 3 landed in #1082 (2026-10-21); cut 1 is next.
 
 **Companion docs:**
 - [#1084](https://github.com/gazetta-studio/gazetta-studio/issues/1084): the issue this design resolves
