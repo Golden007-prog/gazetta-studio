@@ -134,17 +134,19 @@ jobs:
               | tail -1
           }
 
-          # The share of the week the bots may have used by now, given the
-          # next weekly reset (epoch seconds). Without a reset time, the cap.
+          # Prints "<line> paced": the share of the week the bots may have
+          # used by now, given the next weekly reset in epoch seconds (as
+          # the CLI reports it). A reset time that isn't a number within the
+          # next 8 days (missing, or a changed format or unit) can't be paced
+          # against: it prints "<cap> unpaced", and the caller warns.
           pace() {
             awk -v reset="${1:-}" -v now="$(date +%s)" -v start="$PACE_START" -v per_day="$PACE_PER_DAY" -v cap="$BOT_WEEK_CAP" 'BEGIN {
-              line = cap
-              if (reset != "") {
-                days = 7 - (reset - now) / 86400
-                if (days < 0) days = 0
-                if (start + per_day * days < line) line = start + per_day * days
-              }
-              printf "%.2f", line
+              left = reset - now
+              if (reset !~ /^[0-9]+$/ || left <= 0 || left > 8 * 86400) { printf "%.2f unpaced", cap; exit }
+              line = start + per_day * (7 - left / 86400)
+              if (line < start) line = start
+              if (line > cap) line = cap
+              printf "%.2f paced", line
             }'
           }
 
@@ -181,8 +183,11 @@ jobs:
             [ "$bot" = cut-planner ] && runs=4
             for _ in $(seq 1 "$runs"); do
               read -r five seven status reset <<< "$(probe)"
-              line=$(pace "${reset:-}")
+              read -r line paced <<< "$(pace "${reset:-}")"
               echo "Before $bot: five_hour=${five:-?} seven_day=${seven:-?} status=${status:-?} pace=$line"
+              if [ -n "${seven:-}" ] && [ "$paced" = unpaced ]; then
+                echo "::warning::The CLI reported no usable weekly reset time (${reset:-none}); only the $BOT_WEEK_CAP cap applies before $bot."
+              fi
               if [ "${status:-}" = rejected ]; then
                 echo "::warning::Quota exhausted before $bot; stopping the chain."
                 break 2
