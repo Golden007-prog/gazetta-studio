@@ -802,7 +802,7 @@ export function publishRoutes(
     if (productionForbidden) {
       // #1192: record the denied production attempt with the same
       // event shape requireCapability uses for its 403s.
-      await c.var.audit.record({
+      await c.var.audit?.record({
         action: 'publish',
         outcome: 'forbidden',
         scope: { kind: 'site' },
@@ -938,7 +938,7 @@ export function publishRoutes(
     if (streamProductionForbidden) {
       // #1192: record the denied production attempt with the same
       // event shape requireCapability uses for its 403s.
-      await c.var.audit.record({
+      await c.var.audit?.record({
         action: 'publish',
         outcome: 'forbidden',
         scope: { kind: 'site' },
@@ -1098,7 +1098,7 @@ export function publishRoutes(
     if (fetchProductionForbidden) {
       // #1192: record the denied production attempt with the same
       // event shape requireCapability uses for its 403s.
-      await c.var.audit.record({
+      await c.var.audit?.record({
         action: 'publish',
         outcome: 'forbidden',
         scope: { kind: 'site' },
