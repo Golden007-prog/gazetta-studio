@@ -2,7 +2,7 @@
 
 The Stage 1 tutorial: one path a newcomer follows from `npx gazetta init` to undoing a publish on a second target, kept true by a CI check that runs its commands word for word. Also how today's `docs/getting-started.md` splits into the tutorial and six other pages.
 
-**Status**: design pass complete (2026-10-24), grilled Q1–Q13. The tester protocol is a separate round before tester round 1 (Q12). Implementation not started.
+**Status**: design pass complete (2026-10-24), grilled Q1–Q17 (Q14–Q17 added after review). The tester protocol is a separate round before tester round 1 (Q12). Implementation not started.
 
 **Companion docs:**
 - [`docs/audits/website-and-channels.md`](../../docs/audits/website-and-channels.md): the website plan. Stage 1 opens when "a release on npm matches the docs; the tutorial passes in CI; 3–5 people the maintainer watches get from install to a publish on a second target without help"
@@ -34,7 +34,7 @@ The Stage 1 tutorial: one path a newcomer follows from `npx gazetta init` to und
 - None of nine comparable first-run docs teaches undo (Astro, Payload, Strapi, Directus, Keystatic, TinaCMS, Hono, Django, Rails). Directus's Environment Sync quickstart, which runs two local instances, is the closest to `local` → `staging`.
 - Undoing a save on `local` works today (the save toast's Undo, the History panel). On a publish destination, undo restores manifests only, so the served page doesn't change (#1084): publish undo cuts 1, 2, 4 and 5 remain (#1092), and cut 4 waits on review-workflow cuts #526 and #527.
 - `main` and npm are both at 0.8.0, so a scaffold that depends on `^0.8.0` (or `*` today) installs npm's copy, not the code under test.
-- `gazetta dev`, `serve` and `admin` all default to port 3000 (`cli/index.ts:2498-2510`).
+- `gazetta dev`, `serve` and `admin` all default to port 3000 (`cli/index.ts:2493-2505`).
 - CI already packs a tarball (`pack`) and smoke-tests it (`smoke`, `scripts/smoke-publish.sh`), and `tests/e2e/scenarios/edit-publish-sync.spec.ts` covers edit, save and publish to staging. Bots can't edit `.github/workflows/**` (#840).
 - #1282 releases to npm only after the whole Stage 1 gate.
 
@@ -109,7 +109,7 @@ Decided: maintainer, 2026-10-24 (#1338)
 
 ### Q7: Testers install a release candidate
 
-A one-off `rc` release on npm (`npx gazetta@rc init`), approved by the maintainer; `latest` stays 0.8.0. The closest to what users will run. #1282 rejected publishing every merge as `next`, not a single release candidate.
+A one-off `rc` release on npm (`npx gazetta@rc init`), approved by the maintainer; `latest` stays 0.8.0. The closest to what users will run. #1282 rejected publishing every merge as `next`, not a single release candidate; this refines the website plan's "next release after the whole Stage 1 gate" (see Q16, Q17 for what it needs).
 
 Decided: maintainer, 2026-10-24 (#1338)
 
@@ -169,6 +169,47 @@ Decided: maintainer, 2026-10-24 (#1338)
 |---|---|
 | Now | Go through all 12 in this design round |
 
+### Q14: The tutorial adds an image
+
+The reader picks an image for the hero and sees it on staging. The asset picker (#1345) and serving published assets (#1330, and #1249 for static `gazetta serve`) become Stage 1 gate items, and the tutorial gets a step longer.
+
+Decided: maintainer, 2026-10-24 (#1338)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| No, but gate on images | The tutorial stays seven steps with no image. The Stage 1 gate adds "an image added in the admin shows on a published target", so the picker (#1345) and asset serving (#1330) get the priority label |
+| No image, no gate change | Media is fixed on its own schedule; Stage 1 can open with images broken on published sites |
+
+### Q15: The npm run starts with the first release candidate
+
+The weekly and after-release run targets `gazetta@rc` while an rc exists, then `latest` after the release; before the first rc it doesn't run. The per-PR run against the local registry covers main meanwhile.
+
+Decided: maintainer, 2026-10-24 (#1338)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| From the release | The npm run starts only once a normal release contains the tutorial |
+
+### Q16: The release candidate waits for #1281
+
+Tester round 1 and the rc wait for #1281 (`gazetta init` depends on `^` its own version), so `npx gazetta@rc init` installs the rc: with `"gazetta": "*"`, npm resolves to `latest`, never a prerelease.
+
+Decided: maintainer, 2026-10-24 (#1338)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| Leave as is | Testers would run 0.8.0 after init; the round would test the old release |
+
+### Q17: The publish workflow passes `--tag` for prereleases
+
+`publish.yml` publishes a prerelease version (`0.9.0-rc.1`) with `--tag rc`, keeping provenance; a maintainer workflow PR, before the rc. Normal versions still go to `latest`.
+
+Decided: maintainer, 2026-10-24 (#1338)
+
+| Rejected | Shown to the maintainer as |
+|---|---|
+| Publish the rc by hand | You run `npm publish --tag rc` locally for the one rc, without provenance; no workflow change |
+
 ## UX check
 
 Follows from Q1–Q4. Rule 23: the reader does one thing per step and sees its effect; nothing is explained before it's needed.
@@ -180,14 +221,15 @@ Follows from Q1–Q4. Rule 23: the reader does one thing per step and sees its e
 | 2 | Start the dev server | `npx gazetta dev`; open localhost:3000, then localhost:3000/admin. Leave it running |
 | 3 | Publish to staging | In the admin: Publish → staging → Publish. The first publish copies the whole site |
 | 4 | Look at staging as a visitor | Second terminal: `npx gazetta serve staging --port 3001`; open localhost:3001 |
+| 5a | Add an image (Q14) | On the hero, pick an image (upload one in the picker) and Save; localhost:3000 shows it |
 | 5 | Edit the home page | Open Home, select the hero, change its title, Save. localhost:3000 shows it; localhost:3001 doesn't: staging changes only when you publish |
-| 6 | Publish the change | Publish → staging again; reload localhost:3001 |
+| 6 | Publish the change | Publish → staging again; reload localhost:3001: the new title and the image |
 | 7 | Undo the publish | Click Undo in the publish result; reload localhost:3001 and the old title is back. The edit is still in the admin: undo changed staging, not `local` |
 | — | What you did | A target holds the whole site; Publish copies content between targets; each target keeps its own history |
 | — | Next steps | "Put it online" (cloudflare.md, self-hosted.md), then templates, customizing the editor, targets |
 | — | If something goes wrong | Unsupported Node (#1304), `init`'s npm install failed (#1300), port in use (#1184), Ctrl+C stops a server |
 
-About 900–1,100 words and five shell blocks. At least one highlighted code block, which `deploy-site.yml`'s check on `/docs` needs.
+About 900–1,100 words. Shell blocks: steps 1 (init, cd), 2 (dev) and 4 (serve); the troubleshooting section has none, or the spec's step list covers them too. At least one highlighted code block, which `deploy-site.yml`'s check on `/docs` needs.
 
 ## The CI check
 
@@ -196,8 +238,8 @@ Follows from Q5, Q6, Q8 and Q11.
 1. The `tutorial` job downloads `pack`'s tarball and starts Verdaccio with a config whose `gazetta` rule has no proxy; everything else proxies npmjs.
 2. It publishes the tarball under its own version, points npm at Verdaccio (`npm_config_registry`, an empty `npm_config_cache`) and works in a temp directory outside the repo, so `init`'s own `npm install` gets the tarball.
 3. `tests/tutorial/getting-started.spec.ts` (its own Playwright config) holds the step table: command, background or not, ready URL, checks. Its first test reads `docs/getting-started.md`, extracts the fenced shell blocks in order and fails if they differ from the table. Steps 1–6 are `test.step`s of one test, named after their headings; the servers are started once for the file, so later tests reuse them. Step 7 (undo) is a separate test in the same serial group, after it. Admin steps reuse `tests/e2e/pages/*`.
-4. Checks: init exits 0 without "npm install failed" and writes `local` and `staging`; the lockfile integrity matches the tarball; `dev` answers on 127.0.0.1:3000 and `/admin`; the publish result shows success; `serve` on 3001 shows the old title after the edit and the new one after the publish; undo brings the old one back. Until #1092 lands, only step 7's own test is marked `test.fail()` (linked to #1092): Playwright applies `test.fail()` to a whole test, so marking a test that also held steps 1–6 would hide their failures; both servers still running at teardown.
-5. The weekly and after-release run uses the same spec with no Verdaccio, installing from npmjs and reading the tutorial from the release tag: the check that a release on npm matches the docs.
+4. Checks: init exits 0 without "npm install failed" and writes `local` and `staging`; the lockfile integrity matches the tarball; `dev` answers on 127.0.0.1:3000 and `/admin`; the publish result shows success; `serve` on 3001 shows the old title after the edit and the new one after the publish; undo brings the old one back. Until #1092 lands, only step 7's own test is marked `test.fail()` (linked to #1092): Playwright applies `test.fail()` to a whole test, so marking a test that also held steps 1–6 would hide their failures; the image answers 200 from localhost:3001 after the publish (Q14); both servers still running at teardown.
+5. The weekly and after-release run uses the same spec with no Verdaccio, installing from npmjs and reading the tutorial from the release tag: the check that a release on npm matches the docs. It targets `gazetta@rc` while an rc exists, then `latest`, and doesn't run before the first rc (Q15).
 
 ## Foundational checks
 
@@ -213,9 +255,9 @@ Docs and CI, no product surface: multi-instance, scale, themes, auth, audit, rev
 | 4 | `customize-editor.md`: custom editors, custom fields, `admin/theme.css` | #1272 | docs | Low |
 | 5 | `publishing.md`: publishing from the admin and the CLI, the sync chip and dots, production confirmation, undo, rollback and history | #1272 | docs | Low |
 | 6 | `cli.md`: every command, argument and flag, default ports and `--host`, auto-detection, CI behaviour, exit codes | #1272 | docs | Low |
-| 7 | The tutorial: `docs/getting-started.md` rewritten as the UX table above; the spec, the Verdaccio config, the integrity check and an npm script that runs them | 1–4, #1284, #1300, #1304 | e2e-first | Medium |
+| 7 | The tutorial: `docs/getting-started.md` rewritten as the UX table above; the spec, the Verdaccio config, the integrity check and an npm script that runs them | 1–4, #1284, #1300, #1304, #1345, #1330, #1249 | e2e-first | Medium |
 | 8 | The `tutorial` CI job, and the weekly and after-release run (maintainer PR: workflow files) | 7 | (CI) | Low |
-| 9 | Tester round 1 on a release candidate (Q7, Q12) | 7, 8, the tester protocol round | (manual) | Medium |
+| 9 | Tester round 1 on a release candidate (Q7, Q12); before it, `publish.yml` passes `--tag rc` for prereleases (Q17, maintainer PR) | 7, 8, the tester protocol round, #1281 (Q16) | (manual) | Medium |
 | 10 | When #1092 lands: remove `test.fail()` from the undo step; tester round 2 includes undo | 9, #1092 | e2e | Low |
 
 Cuts 1–7 go to feature-bot through a planner issue. The tutorial waits for pages 1–4 so the text it drops already has a home.
