@@ -799,7 +799,17 @@ export function publishRoutes(
     const body = (await c.req.json()) as { items: string[]; targets: string[]; source?: string }
 
     const productionForbidden = productionGateFailure(c.var.principal, body.targets)
-    if (productionForbidden) return c.json(productionForbidden, 403)
+    if (productionForbidden) {
+      // #1192: record the denied production attempt with the same
+      // event shape requireCapability uses for its 403s.
+      await c.var.audit.record({
+        action: 'publish',
+        outcome: 'forbidden',
+        scope: { kind: 'site' },
+        metadata: { missingCapabilities: ['publish:production'] },
+      })
+      return c.json(productionForbidden, 403)
+    }
 
     // #1196: reject malformed or unknown items before anything reads
     // or writes a path built from them.
@@ -925,7 +935,17 @@ export function publishRoutes(
     const body = (await c.req.json()) as { items: string[]; targets: string[]; source?: string }
 
     const streamProductionForbidden = productionGateFailure(c.var.principal, body.targets)
-    if (streamProductionForbidden) return c.json(streamProductionForbidden, 403)
+    if (streamProductionForbidden) {
+      // #1192: record the denied production attempt with the same
+      // event shape requireCapability uses for its 403s.
+      await c.var.audit.record({
+        action: 'publish',
+        outcome: 'forbidden',
+        scope: { kind: 'site' },
+        metadata: { missingCapabilities: ['publish:production'] },
+      })
+      return c.json(streamProductionForbidden, 403)
+    }
 
     // #1196: reject malformed or unknown items before anything reads
     // or writes a path built from them (synchronous 400, before the
@@ -1075,7 +1095,17 @@ export function publishRoutes(
     const fetchProductionForbidden = productionGateFailure(c.var.principal, [
       destination.targetName ?? body.destination,
     ])
-    if (fetchProductionForbidden) return c.json(fetchProductionForbidden, 403)
+    if (fetchProductionForbidden) {
+      // #1192: record the denied production attempt with the same
+      // event shape requireCapability uses for its 403s.
+      await c.var.audit.record({
+        action: 'publish',
+        outcome: 'forbidden',
+        scope: { kind: 'site' },
+        metadata: { missingCapabilities: ['publish:production'] },
+      })
+      return c.json(fetchProductionForbidden, 403)
+    }
 
     let items: string[]
     if (body.items?.length) {
@@ -1257,4 +1287,4 @@ async function collectPublishedItemsForHistory(
     }
   }
   return out
-}
+              }
