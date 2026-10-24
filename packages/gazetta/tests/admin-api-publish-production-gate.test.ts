@@ -237,9 +237,7 @@ describe('publish production gate (#1191)', { timeout: 30000 }, () => {
     expect(res.status).toBe(403)
     const denied = forbiddenPublishEvents(await readAuditEvents())
     expect(denied).toHaveLength(1)
-    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual([
-      'publish:production',
-    ])
+    expect((denied[0].metadata as Record<string, unknown>).missingCapabilities).toEqual(['publish:production'])
   })
 
   it('records a forbidden event for a denied production stream publish (#1192)', async () => {
