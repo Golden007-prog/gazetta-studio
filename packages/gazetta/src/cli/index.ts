@@ -867,6 +867,14 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
 
     if (skipped > 0) console.log(`    ${c.dim(`· ${skipped} unchanged (skipped)`)}`)
 
+    // Plain hosts show a top-level 404.html for missing paths (#1152).
+    if (targetType === 'static') {
+      const { writeStatic404 } = await import('../static-404.js')
+      await writeStatic404(targetStorage, site)
+      totalFiles++
+      console.log(`    ${c.dim('· 404.html')}`)
+    }
+
     // Sitemap + robots.txt — generated from target sidecars
     const siteUrl = targetConfig?.siteUrl
     if (siteUrl) {

@@ -596,6 +596,14 @@ export function publishRoutes(
         current++
         yield { kind: 'progress', target: targetName, current, total, label: 'site manifest' }
 
+        // 3a. 404.html at the root of a static target: plain hosts show it
+        // for missing paths (#1152).
+        if (isStatic) {
+          const { writeStatic404 } = await import('../../static-404.js')
+          await writeStatic404(targetStorage, site)
+          totalFiles++
+        }
+
         // 3b. Sitemap + robots.txt
         const siteUrl = config?.siteUrl
         if (siteUrl) {

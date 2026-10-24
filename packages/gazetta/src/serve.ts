@@ -281,7 +281,12 @@ export function createServer(options: ServeOptions) {
           if (archived) return archived
           return c.html(html)
         } catch {
-          return c.html('<h1>404 — Page not found</h1>', 404)
+          // The target's own 404.html, as plain hosts show it (#1152).
+          try {
+            return c.html(await storage.readFile('404.html'), 404)
+          } catch {
+            return c.html('<h1>404 — Page not found</h1>', 404)
+          }
         }
       }
     })

@@ -9,7 +9,7 @@ Soft delete is **on by default**. Zero config: deleting from the admin UI archiv
 | Operation        | What happens                                                               | Recoverable?         |
 | ---------------- | -------------------------------------------------------------------------- | -------------------- |
 | **Archive**      | Manifest gets `archived: true`; old URL redirects (301) when `aliasOf` set | Yes, via Restore     |
-| **Archive (no alias)** | Same, but old URL emits `410 Gone` (not 404); search engines drop it | Yes, via Restore     |
+| **Archive (no alias)** | Same, but old URL emits `410 Gone` where Gazetta answers the request | Yes, via Restore     |
 | **Rename**       | Old name archived with `aliasOf: <new>`; new name created live              | Yes, restore the old |
 | **Restore**      | Strips archive fields; item is live again at its old name                  | n/a                  |
 | **Purge**        | Permanently deletes the manifest. Blocked when refs exist.                 | No (use with care)   |
@@ -21,7 +21,7 @@ Hard-delete creates broken links: every page that referenced `@old-fragment` 500
 
 1. **Renderer follows aliases** — `@oldname` transparently resolves as `@newname` when `oldname` is archived with `aliasOf: newname`.
 2. **Worker emits 301** — visitors hitting `/oldname` are redirected to `deriveRoute('newname')`. Search engines update their index automatically.
-3. **Pure soft-delete (no alias) emits 410** — search engines drop the URL from their index permanently. Better SEO than the host's natural 404.
+3. **Pure soft-delete (no alias) emits 410** — wherever Gazetta answers the request (a worker, `gazetta serve`). Google treats 404 and 410 alike and drops the URL from its index either way.
 
 The mechanism is **content-addressed** at the manifest level: the `archived` field on the manifest IS the source of truth. Workers read the first 200 bytes of `pages/{name}/index.html` at request time; an HTML comment marker (`<!-- gazetta:archived alias=X -->` or `<!-- gazetta:archived gone -->`) drives the response. No publish-time aggregate manifests; per-edge granularity scales to 5,000+ pages.
 
