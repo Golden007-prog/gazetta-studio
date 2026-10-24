@@ -54,10 +54,14 @@ variables are configured. Skipped when `CI=true`.
 **`gazetta dev`:** No caching. Every request re-renders from source. Dev server sends
 `Cache-Control: no-store` to prevent browser caching. Always fresh.
 
-**`gazetta serve`:** In-memory template cache (LRU). Cache-Control headers from target config:
-- `browser: 0` → `Cache-Control: public, max-age=0, must-revalidate` + ETag for 304
-- `browser: 86400` → `Cache-Control: public, max-age=86400` (browser caches 24h)
+**`gazetta serve`:** In-memory template cache (LRU). On ESI targets (`type: 'dynamic'`), pages get `Cache-Control: public, max-age=<browser>, s-maxage=<edge>` plus an ETag for 304, from the target's `cache` config (and per-page overrides), which publish writes into each page:
+- `browser: 0` → `max-age=0` (browser revalidates every request)
+- `browser: 86400` → `max-age=86400` (browser caches 24h)
 - `edge: 86400` → `s-maxage=86400` (CDN caches 24h)
+
+Static targets (the default type) always get `Cache-Control: public, max-age=0, must-revalidate` with an ETag, whatever `cache` says: browsers and CDNs revalidate every request, so a publish shows at once with no purge step. This is intended.
+
+Decided: maintainer, 2026-10-24 (#1243)
 
 ETag enables conditional requests — browser sends `If-None-Match`, server returns 304 if unchanged.
 
