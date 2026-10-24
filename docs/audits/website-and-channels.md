@@ -265,7 +265,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 
 Docs quality belongs to this plan: the Claude Code session that runs it also owns whether the public docs are correct, complete and well structured, along with the site, the README, getting-started and the Stage 1 tutorial. Its helper session audits one doc at a time against the code, starting with getting-started. Each finding becomes an issue for the fleet, and AGENTS.md's same-PR rule keeps the docs in step after that. Doc changes inside bot PRs stay with the PR-shepherding session.
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1307)
 
 | Rejected | Shown to the maintainer as |
 |---|---|
