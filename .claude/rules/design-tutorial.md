@@ -15,7 +15,7 @@ The Stage 1 tutorial: one path a newcomer follows from `npx gazetta init` to und
 ## Scope
 
 **In v1:**
-- A 7-step tutorial at `/docs` (`docs/getting-started.md`), no accounts
+- An 8-step tutorial at `/docs` (`docs/getting-started.md`), no accounts
 - A Playwright spec that runs the tutorial's commands against a local registry, and fails when the tutorial's commands and its own step list differ
 - A `tutorial` CI job, and a weekly and after-release run against npm
 - Six new docs pages taking over the rest of today's getting-started
@@ -212,7 +212,7 @@ Decided: maintainer, 2026-10-24 (#1338)
 
 ## UX check
 
-Follows from Q1–Q4. Rule 23: the reader does one thing per step and sees its effect; nothing is explained before it's needed.
+Follows from Q1–Q4 and Q14. Rule 23: the reader does one thing per step and sees its effect; nothing is explained before it's needed.
 
 | # | Step | What the reader does and sees |
 |---|---|---|
