@@ -22,9 +22,13 @@ import { createHistoryProvider } from '../src/history-provider.js'
 import { createHistoryAuditProvider, type AuditEvent } from '../src/audit/index.js'
 import type { SiteManifest } from '../src/types.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
+import { memoryCache } from '../src/cache/factories.js'
+import type { AdminCache } from '../src/cache/types.js'
 
 let app: Hono
 let storage: MemoryStorage
+let source: ReturnType<typeof createSourceContext>
+let cache: AdminCache
 
 interface SetupOpts {
   seed?: Record<string, string>
@@ -67,7 +71,7 @@ function setup(opts: SetupOpts = {}) {
     locales: { default: 'en', supported: ['en', 'fr'] },
     ...(opts.auth ? { admin: { auth: opts.auth } } : {}),
   }
-  const source = createSourceContext({
+  source = createSourceContext({
     storage,
     siteDir: '',
     projectSiteDir: '/test-project',
@@ -1168,5 +1172,135 @@ describe('POST /api/page-redirects — mutation-coverage backfill (issue #773)',
     const body = (await res.json()) as Record<string, unknown>
     expect(body.targetRoute).toBe('/home')
     expect(body.route).toBe('/old-aside-frag')
+  })
+})
+
+describe('POST redirects - mutation coverage (#1129)', () => {
+  beforeEach(() =>
+    setup({
+      seed: {
+        'fragments/home/fragment.json': JSON.stringify({ template: 'header-layout', content: {} }),
+      },
+    }),
+  )
+
+  it('page redirect to "home" answers targetRoute "/" (page branch of the kind ternary)', async () => {
+    const res = await app.request('/api/page-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-root', to: 'home' }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as Record<string, unknown>
+    // For 'home' targets the two branches of
+    // `binding.kind === 'page' ? deriveRoute(to) : `/${to}`` differ
+    // ('/' vs '/home'), so this pins the page branch against the
+    // EqualityOperator / ConditionalExpression mutants on that ternary.
+    expect(body.targetRoute).toBe('/')
+    expect(body.route).toBe('/old-root')
+  })
+
+  it('fragment redirect to a fragment named "home" answers targetRoute "/home" (fragment branch)', async () => {
+    const res = await app.request('/api/fragment-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-home-frag', to: 'home' }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as Record<string, unknown>
+    // The page branch would give deriveRoute('home') === '/'; the
+    // fragment branch keeps '/home'. Pins the fragment side of the
+    // same ternary.
+    expect(body.targetRoute).toBe('/home')
+    expect(body.route).toBe('/old-home-frag')
+  })
+
+  it('records the redirect manifest path in the history revision items', async () => {
+    const res = await app.request('/api/page-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-products', to: 'products/featured' }),
+    })
+    expect(res.status).toBe(201)
+    const ids = (await readHistoryRevisions()) as string[]
+    expect(ids.length).toBeGreaterThan(0)
+    const revision = JSON.parse(await storage.readFile(`.gazetta/history/revisions/${ids[ids.length - 1]}.json`)) as {
+      items?: string[]
+    }
+    // Emptying the recordWrite `items` array drops the manifest from
+    // the revision while still writing it - this assertion fails then.
+    expect(revision.items).toContain('pages/old-products/page.json')
+  })
+
+  /**
+   * Cache-invalidation tests need the route to run against a cache the
+   * test can observe. With targetConfigs set, createAdminApp resolves
+   * sources through the registry and each resolved context gets its own
+   * internal MemoryCache - so here the app is built WITHOUT
+   * targetConfigs (static resolver) over a source with an explicitly
+   * injected cache.
+   */
+  function setupWithCache() {
+    storage = memoryStorage()
+    storage.seed({
+      'pages/home/page.json': JSON.stringify({ template: 'page-default', content: {} }),
+      'pages/products/featured/page.json': JSON.stringify({ template: 'page-default', content: {} }),
+      'fragments/header/fragment.json': JSON.stringify({ template: 'header-layout', content: {} }),
+    })
+    const history = createHistoryProvider({ storage })
+    cache = memoryCache()
+    const manifest: SiteManifest = {
+      name: 'test-site',
+      targets: {
+        local: { storage, type: 'esi' as const, environment: 'local' as const, editable: true },
+      },
+      locales: { default: 'en', supported: ['en', 'fr'] },
+    }
+    source = createSourceContext({
+      storage,
+      siteDir: '',
+      projectSiteDir: '/test-project',
+      manifest,
+      history,
+      cache,
+    })
+    app = createAdminApp({
+      source,
+      siteDir: '/test-project',
+      templatesDir: '/test-project/templates',
+      disableCacheStatsLogger: true,
+    })
+  }
+
+  it('creating a page redirect invalidates pages: cache entries but not fragments:', async () => {
+    setupWithCache()
+    await source.cache.set('pages:summary', { warm: true })
+    await source.cache.set('fragments:summary', { warm: true })
+    const res = await app.request('/api/page-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-products', to: 'products/featured' }),
+    })
+    expect(res.status).toBe(201)
+    // invalidatePrefix(`${binding.kind}s:`) must clear pages: only;
+    // blanking the template string to '' would clear fragments: too.
+    expect(await source.cache.get('pages:summary')).toBeNull()
+    expect(await source.cache.get('fragments:summary')).not.toBeNull()
+  })
+
+  it('creating a fragment redirect invalidates fragments: AND pages: cache entries', async () => {
+    setupWithCache()
+    await source.cache.set('pages:summary', { warm: true })
+    await source.cache.set('fragments:summary', { warm: true })
+    const res = await app.request('/api/fragment-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-header', to: 'header' }),
+    })
+    expect(res.status).toBe(201)
+    // Fragment edits also blow pages: (page summaries reflect fragment
+    // refs) - dropping that second invalidatePrefix survives otherwise.
+    expect(await source.cache.get('fragments:summary')).toBeNull()
+    expect(await source.cache.get('pages:summary')).toBeNull()
   })
 })
