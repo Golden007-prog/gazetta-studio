@@ -35,6 +35,20 @@
  * fine because both pruners compute the same surviving set from the
  * same input bytes.
  *
+ * # In-process coordination with appends (#1414)
+ *
+ * The pruner writes the same `events-{instance}.jsonl` files the
+ * HistoryAuditProvider appends to, and both run in the admin
+ * process against the same storage object. A rewrite outside
+ * the shared append queue loses an append that landed between
+ * the pruner's read and its write — or resurrects evicted
+ * events when the append's stale read wins the last write. So
+ * the snapshot below decides WHICH events to evict, and each
+ * file's rewrite runs as one queued task that re-reads the
+ * file fresh and reapplies the plan. Cross-process pruners
+ * still converge last-write-wins per the section above — the
+ * queue only serializes within one process.
+ *
  * # Why JSONL-line pruning, not whole-file deletion
  *
  * The pruner has to handle events file-by-file because:
@@ -56,6 +70,7 @@
  *     S3, Azure Blob uniformly.
  */
 import type { StorageProvider } from '../types.js'
+import { enqueueStorageTask } from './append-queue.js'
 import type { AuditEvent } from './types.js'
 
 export interface AuditRetentionConfig {
@@ -158,18 +173,21 @@ export async function pruneAuditEvents(storage: StorageProvider, config: AuditRe
   // sort all surviving events by timestamp (oldest first), evict
   // from the head until we're under the cap. The eviction set is
   // matched back to its source file by reference identity.
-  let evictedFromCap = new Set<AuditEvent>()
+  // Eviction plan as a key multiset (serialized event -> count), not
+  // object identity: the queued rewrite re-parses the file fresh, so
+  // identity no longer refers to the same objects. Identical events
+  // (same JSON) are evicted one copy at a time via the count.
+  const evictedKeys = new Map<string, number>()
   if (hasEventsCap) {
-    const allSurviving: { file: (typeof filesInspected)[number]; event: AuditEvent }[] = []
+    const allSurviving: AuditEvent[] = []
     for (const file of filesInspected) {
-      for (const event of file.events) {
-        allSurviving.push({ file, event })
-      }
+      allSurviving.push(...file.events)
     }
-    allSurviving.sort((a, b) => a.event.timestamp.localeCompare(b.event.timestamp))
+    allSurviving.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
     const overflow = allSurviving.length - config.events!
-    if (overflow > 0) {
-      evictedFromCap = new Set(allSurviving.slice(0, overflow).map(x => x.event))
+    for (const event of allSurviving.slice(0, Math.max(0, overflow))) {
+      const key = evictionKey(event)
+      evictedKeys.set(key, (evictedKeys.get(key) ?? 0) + 1)
     }
   }
 
@@ -185,19 +203,51 @@ export async function pruneAuditEvents(storage: StorageProvider, config: AuditRe
   let filesRewritten = 0
   let eventsKeptTotal = 0
   for (const file of filesInspected) {
-    const surviving = evictedFromCap.size > 0 ? file.events.filter(e => !evictedFromCap.has(e)) : file.events
+    const surviving = applyEvictionPlan(file.events, evictedKeys)
     eventsKeptTotal += surviving.length
     const parsedDelta = file.events.length - surviving.length
     const malformedLines = file.rawLineCount - file.events.length
     if (parsedDelta === 0 && malformedLines === 0) continue
-    // Rewrite. JSONL convention: one event per line + trailing newline.
-    // Empty file (all events pruned) → write an empty string so the
-    // file remains as a marker (deleting would force concurrent
-    // appenders to mkdir; safer to keep the file with a zero-line body).
-    const rewritten = surviving.map(e => JSON.stringify(e)).join('\n')
-    const final = rewritten ? rewritten + '\n' : ''
-    await storage.writeFile(file.path, final)
-    filesRewritten++
+    // Rewrite as one task in the shared per-file queue (#1414), so it
+    // serializes with appends to this file. The task re-reads the file
+    // FRESH and reapplies the eviction plan: an append that landed
+    // between the snapshot read and this rewrite survives (it is not
+    // in the plan), and an evicted event cannot come back from a stale
+    // buffer. A rewrite that finds nothing left to do skips the write
+    // so it never clobbers a gap-append pointlessly.
+    let wrote = false
+    await enqueueStorageTask(storage, file.path, async () => {
+      let freshContent: string
+      try {
+        freshContent = await storage.readFile(file.path)
+      } catch {
+        // File vanished between snapshot and rewrite — nothing to prune.
+        return
+      }
+      const freshEvents: AuditEvent[] = []
+      let freshRaw = 0
+      for (const line of freshContent.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        freshRaw++
+        try {
+          freshEvents.push(JSON.parse(trimmed) as AuditEvent)
+        } catch {
+          // Malformed line — dropped on rewrite, same as the snapshot pass.
+        }
+      }
+      const ageFiltered = ageCutoff !== null ? freshEvents.filter(e => e.timestamp >= ageCutoff) : freshEvents
+      const freshSurviving = applyEvictionPlan(ageFiltered, evictedKeys)
+      if (freshSurviving.length === freshEvents.length && freshRaw === freshEvents.length) return
+      // JSONL convention: one event per line + trailing newline.
+      // Empty file (all events pruned) → write an empty string so the
+      // file remains as a marker (deleting would force concurrent
+      // appenders to mkdir; safer to keep the file with a zero-line body).
+      const rewritten = freshSurviving.map(e => JSON.stringify(e)).join('\n')
+      await storage.writeFile(file.path, rewritten ? rewritten + '\n' : '')
+      wrote = true
+    })
+    if (wrote) filesRewritten++
   }
 
   return {
@@ -207,6 +257,33 @@ export async function pruneAuditEvents(storage: StorageProvider, config: AuditRe
     filesRewritten,
     filesInspected: filesInspected.length,
   }
+}
+
+/**
+ * Stable identity for one event across two parses of the same file.
+ * The eviction plan is computed from the snapshot parse and applied
+ * to the fresh re-parse inside the queued rewrite; JSON.stringify of
+ * the parsed object is deterministic for identical input bytes.
+ */
+function evictionKey(event: AuditEvent): string {
+  return JSON.stringify(event)
+}
+
+/**
+ * Apply the eviction plan to a fresh event list. Clones the multiset
+ * so the plan survives both the snapshot metrics pass and each
+ * per-file rewrite task.
+ */
+function applyEvictionPlan(events: AuditEvent[], plan: Map<string, number>): AuditEvent[] {
+  if (plan.size === 0) return events
+  const remaining = new Map(plan)
+  return events.filter(event => {
+    const key = evictionKey(event)
+    const n = remaining.get(key) ?? 0
+    if (n === 0) return true
+    remaining.set(key, n - 1)
+    return false
+  })
 }
 
 /**
