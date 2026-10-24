@@ -76,6 +76,48 @@ Decided: maintainer, 2026-10-24 (#1266)
 | Two equal buttons | Every visitor has to choose before understanding what Gazetta is |
 | Stage 1 gated on CI alone | Misses steps that pass but confuse people |
 
+### Positioning
+
+Who the first screen speaks to, in what words, and which alternatives the honest comparison names. It applies to the README's first lines, the home page hero and the npm description. Evidence: a demand-research round read 24 public requests, and the most specific asked to move content between local, staging and production without copying a database; "no database, just files" came up 6 times, and nobody asked for R2 or S3 as the store. An early-users round read about 700 issues of comparable CMSs: individual developers on their own blog or site came first, and builders of client sites stayed. mangomac's answer on [#1277](https://github.com/gazetta-studio/gazetta-studio/discussions/1277) says contributors aren't necessarily users.
+
+**Audience.** The first sentence speaks to developers who run a site in more than one environment and want to move content between them, in their own words ("push it to production", "without copying a database"). The second line says content is files in your own storage, served from a Worker or any Node host.
+
+Decided: maintainer, 2026-10-24 (#PRNUM)
+
+| Rejected | Why |
+|---|---|
+| One developer's own site first | Matches the early-users evidence, but the most specific demand is moving content between environments |
+| TypeScript developers on Cloudflare first | Crowded by EmDash, and that demand was mostly "make my CMS run on Workers" |
+
+**Category word.** Plain "CMS": "An open-source CMS that …" plus what it does. "Stateless" stays the idea of the launch essay ("Why a CMS should store nothing"), and the repo keeps its `flat-file-cms` topic.
+
+Decided: maintainer, 2026-10-24 (#PRNUM)
+
+| Rejected | Why |
+|---|---|
+| "Stateless CMS" | Gazetta's own phrase: 0 GitHub repos use it, and nobody in the demand research said it |
+| "Flat-file CMS" | Accurate, but reads as PHP (Kirby, Grav) |
+
+**First sentence (draft).** Environments first: "An open-source CMS that publishes your site between local, staging and production, in either direction, without copying a database." Second line: "Content is files in your own storage (a folder, R2, S3 or Azure Blob), served from a Cloudflare Worker or any Node host." The maintainer writes the final wording; [#1189](https://github.com/gazetta-studio/gazetta-studio/issues/1189) changes the README.
+
+Decided: maintainer, 2026-10-24 (#PRNUM)
+
+| Rejected | Draft |
+|---|---|
+| Problem first | "Move content from local to staging to production without copying a database." Second line: "Gazetta is an open-source CMS that keeps your pages as files in your own storage." |
+| Files first | "An open-source CMS that keeps your site's content as files in your own storage instead of a database." Second line: publishing between environments |
+
+**Comparison.** The Stage 1 honest comparison names EmDash, Payload and TinaCMS: one per architecture a chooser weighs (Cloudflare's own CMS with its database on D1, the default self-hosted TypeScript CMS, and the Git-based family).
+
+Decided: maintainer, 2026-10-24 (#PRNUM)
+
+| Rejected | Why |
+|---|---|
+| EmDash, Payload, Strapi | Strapi's users ask most for moving content between environments, but it replaces the Git-based family |
+| EmDash, Payload, Keystatic | Keystatic as the strict "no database" peer instead of TinaCMS |
+
+**Revisit** when the first issues from people outside the project arrive after Stage 1 opens, and when users (not contributors) answer #1277.
+
 ### Channels by stage
 
 "The fleet" means the work becomes ordinary issues for the bots; "you" means it needs the maintainer's decision or words.
@@ -355,7 +397,7 @@ Fourteen sites: Payload, Sanity, Strapi, Storyblok, Directus, TinaCMS, Decap, Ke
 
 ## Open items
 
-- **How the October contributors found Gazetta, and whether any of them uses it for a site.** Ask them; the pinned Discussion is the Stage 0 way to ask everyone.
+- **How the October contributors found Gazetta, and whether any of them uses it for a site.** mangomac answered on #1277 (2026-10-24): through GitHub issue search, where the `ready-for-agent` label and the issues' acceptance criteria stood out; they contribute and don't use Gazetta for a site. The others haven't answered yet.
 - **Channel rules checked on 2026-10-24** (rows above). Reddit's are read from archived copies only, since Reddit blocks automated reading; re-check them by hand before posting.
 - **The StackBlitz test** (Node version, `sharp`, `gazetta dev` on port 3000).
 - **Stage 1 also waits on publish undo.** The tutorial ends with an undo, but undo on a publish destination doesn't yet change what visitors see; that's what publish undo fixes ([#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092), in Now).
