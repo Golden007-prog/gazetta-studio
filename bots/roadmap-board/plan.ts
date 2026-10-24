@@ -5,7 +5,7 @@
  * and returns the changes, without touching GitHub, per
  * design-roadmap-board.md "The sync":
  * - every issue the file mentions gets its bucket (Done once closed),
- *   section and area; no view shows Done, so the plan lists closed issues
+ *   section and area; only All shows Done, so the plan lists closed issues
  *   the file still lists, for the Shipped appendix (Q15);
  * - every open issue the file doesn't mention is on the board with no
  *   Status and no Section, so only the "Not in ROADMAP.md" view shows it;
@@ -62,7 +62,7 @@ export interface SyncPlan {
   notIssues: number[]
   /** Issues with more than one area label; triage gives each issue one. */
   multiArea: number[]
-  /** Closed issues the four buckets still list; no view shows them (Q15), so they belong in the Shipped appendix. */
+  /** Closed issues the four buckets still list; only All shows them (Q15), so they belong in the Shipped appendix. */
   closedListed: number[]
   /** Draft titles the file has more than once, with where each is; only the first gets a card (Q3). */
   collidingDrafts: Array<{ title: string; places: string[] }>

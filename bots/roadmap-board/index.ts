@@ -108,7 +108,7 @@ async function main(argv: string[]): Promise<number> {
     }
     const views = await ensureViews(gql, state)
     if (views.length > 0)
-      console.log(`Created views: ${views.join(', ')}. Set their columns and grouping by hand once (see the README).`)
+      console.log(`Created views: ${views.join(', ')}. Set their grouping and sort by hand once (see the README).`)
     // Keep one write for the description, so a run that finishes can always write it.
     const finished = await applyPlan(
       gql,

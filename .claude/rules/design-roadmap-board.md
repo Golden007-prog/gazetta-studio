@@ -80,7 +80,7 @@ Decided: maintainer, 2026-10-23 (#1197)
 
 ### Q3 — The project holds the plan, its items without issues, and what it misses
 
-- Every issue the four buckets (Now, Next, Later, Deferred) mention, open or closed. Closed ones are in Done, which no view shows (Q15).
+- Every issue the four buckets (Now, Next, Later, Deferred) mention, open or closed. Closed ones are in Done, which only the All view shows (Q15).
 - A draft card for each item the file lists without an issue: a table row or bullet that names no issue and has no sub-bullets. A bullet with sub-bullets ("Static hosts:") is a heading. A draft is matched by its title (a table row's first cell, a bullet's first sentence): rewording the title replaces its card, and a change to the rest of its text updates the card in place. Each run prints drafts whose titles collide: only the first gets a card.
 - Open issues the file doesn't mention, shown only in the "Not in ROADMAP.md" tab.
 
