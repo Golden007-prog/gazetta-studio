@@ -146,6 +146,18 @@ describe('extractSourceIp (Cut 4) — trust-mode dispatch', () => {
     ).toBe('203.0.113.1')
   })
 
+  it("'forwarded-user' with trustedProxyCount=0: the connection's address", () => {
+    // No trusted proxy in front, so no X-Forwarded-For entry is trusted.
+    expect(
+      extractSourceIp({
+        trustMode: 'forwarded-user',
+        headers: headerMap({ 'X-Forwarded-For': '6.6.6.6' }),
+        peerIp: '203.0.113.1',
+        trustedProxyCount: 0,
+      }),
+    ).toBe('203.0.113.1')
+  })
+
   it("'forwarded-user' default trustedProxyCount is 1", () => {
     expect(
       extractSourceIp({

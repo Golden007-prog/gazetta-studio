@@ -32,6 +32,7 @@ function appRecordingWith(provider: AuthIdentityProvider) {
       actorPseudonym: 'none',
       recordSourceIp: 'raw',
       recordUserAgent: 'none',
+      trustMode: provider.trustMode,
     }),
   )
   app.post('/save', async c => {
@@ -69,6 +70,18 @@ describe('audit records the connection address', () => {
     await app.request(
       '/save',
       { method: 'POST', headers: { 'x-forwarded-user': 'alice', 'x-forwarded-for': '6.6.6.6, 203.0.113.1' } },
+      fromConnection('10.0.0.5'),
+    )
+
+    expect(events.map(e => e.sourceIp)).toEqual(['203.0.113.1'])
+  })
+
+  it('forwarded-user: a request without an identity records the client the proxy appended', async () => {
+    const { app, events } = appRecordingWith(createForwardedUserAuthProvider({ trustedProxies: ['10.0.0.5'] }))
+
+    await app.request(
+      '/save',
+      { method: 'POST', headers: { 'x-forwarded-for': '6.6.6.6, 203.0.113.1' } },
       fromConnection('10.0.0.5'),
     )
 
