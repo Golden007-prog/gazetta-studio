@@ -108,11 +108,13 @@ describe('public-storage-config', () => {
     expect(entries[0].message).toContain('`a`: storage assumed public')
   })
 
+  // Each row compiles the config and all of src/ through jiti (no module cache):
+  // ~1s alone, over 11s on a loaded CI runner, so the default 5s is too tight.
   it.each([
     'examples/starter/sites/main/site.config.ts',
     'sites/gazetta.studio/site.config.ts',
     'tests/fixtures/sites/target-matrix/sites/main/site.config.ts',
-  ])('%s sets publicStorage on every target and validates clean', async file => {
+  ])('%s sets publicStorage on every target and validates clean', { timeout: 60_000 }, async file => {
     vi.stubEnv('R2_ACCESS_KEY_ID', 'k')
     vi.stubEnv('R2_SECRET_ACCESS_KEY', 's')
     const jiti = createJiti(import.meta.url, {
