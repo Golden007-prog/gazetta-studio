@@ -5,8 +5,8 @@
  * file. The patterns from earlier cuts (header presence → null,
  * config validation, AuthenticationError on malformed input) repeat;
  * tests pin the provider-specific shape (Azure's base64+JSON+claims
- * indirection, ALB JWT verification, Tailscale's straight-header
- * read).
+ * indirection, ALB JWT verification, Tailscale's header read, accepted
+ * only from the local Serve proxy).
  */
 import { describe, expect, it } from 'vitest'
 import { generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose'
@@ -235,15 +235,21 @@ describe('AuthConfigSchema — tailscale (Cut 5)', () => {
 })
 
 describe('createTailscaleAuthProvider (Cut 5)', () => {
+  /** A request on Tailscale Serve's connection to the admin on the same machine. */
+  const fromServe = (headers: Record<string, string> = {}): AuthRequest => ({
+    ...makeReq(headers),
+    peerAddress: '127.0.0.1',
+  })
+
   it('returns null when Tailscale-User-Login is absent', async () => {
     const provider = createTailscaleAuthProvider()
-    const principal = await provider.extractPrincipal(makeReq())
+    const principal = await provider.extractPrincipal(fromServe())
     expect(principal).toBeNull()
   })
 
   it('returns Principal with the full login as id', async () => {
     const provider = createTailscaleAuthProvider()
-    const principal = await provider.extractPrincipal(makeReq({ 'Tailscale-User-Login': 'alice@example.ts.net' }))
+    const principal = await provider.extractPrincipal(fromServe({ 'Tailscale-User-Login': 'alice@example.ts.net' }))
     expect(principal!.id).toBe('alice@example.ts.net')
     expect(principal!.email).toBe('alice@example.ts.net')
     expect(principal!.trustMode).toBe('tailscale')
@@ -251,13 +257,13 @@ describe('createTailscaleAuthProvider (Cut 5)', () => {
 
   it('respects custom defaultRole', async () => {
     const provider = createTailscaleAuthProvider({ defaultRole: 'viewer' })
-    const principal = await provider.extractPrincipal(makeReq({ 'Tailscale-User-Login': 'alice@example.ts.net' }))
+    const principal = await provider.extractPrincipal(fromServe({ 'Tailscale-User-Login': 'alice@example.ts.net' }))
     expect(principal!.role).toBe('viewer')
   })
 
   it('returns null for empty header value', async () => {
     const provider = createTailscaleAuthProvider()
-    const principal = await provider.extractPrincipal(makeReq({ 'Tailscale-User-Login': '' }))
+    const principal = await provider.extractPrincipal(fromServe({ 'Tailscale-User-Login': '' }))
     expect(principal).toBeNull()
   })
 })

@@ -45,6 +45,7 @@
  *   - DIP: depends on `AuthIdentityProvider` interface, not on
  *     specific provider classes.
  */
+import { getConnInfo } from '@hono/node-server/conninfo'
 import { createMiddleware } from 'hono/factory'
 import type { Context } from 'hono'
 import {
@@ -55,6 +56,7 @@ import {
   noneAuthProvider,
   UNKNOWN_ACTOR_ID,
 } from '../../auth/index.js'
+import { unmapIPv4 } from '../../auth/ip-match.js'
 
 /**
  * Hono context augmentation — readers see `c.var.principal` typed
@@ -104,9 +106,25 @@ function toAuthRequest(c: Context): AuthRequest {
   return {
     headers,
     sourceIp: sourceIp ?? undefined,
+    peerAddress: connectionAddress(c),
     method: c.req.method,
     url: c.req.url,
   }
+}
+
+/**
+ * The connection's remote address, from `@hono/node-server`'s socket.
+ * Undefined when the request didn't come through the Node server
+ * (`app.request()` without an env in tests).
+ */
+function connectionAddress(c: Context): string | undefined {
+  let address: string | undefined
+  try {
+    address = getConnInfo(c).remote.address
+  } catch {
+    return undefined
+  }
+  return address ? unmapIPv4(address) : undefined
 }
 
 function extractFirstXffEntry(xff: string | null): string | null {

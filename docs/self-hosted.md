@@ -77,7 +77,7 @@ For team deployments, configure upstream auth in `site.config.ts`. Common self-h
 admin: {
   auth: {
     trust: 'forwarded-user',
-    trustedProxies: ['127.0.0.1', '10.0.0.0/8'], // your reverse proxy IPs
+    trustedProxies: ['127.0.0.1', '::1', '10.0.0.0/8'], // addresses your reverse proxy connects from
   },
 }
 ```

@@ -11,8 +11,9 @@
  * real header shapes per trust mode. Confirms:
  *
  *   - none mode: no headers needed; admin role granted
- *   - forwarded-user: untrusted source → 401; trusted source +
- *     valid header → 200; missing header on trusted source → 401
+ *   - forwarded-user: connection from an untrusted address → 401;
+ *     from a trusted proxy with a valid header → 200; missing header
+ *     on a trusted connection → 401
  *   - cloudflare-access: missing JWT → 401; signed valid JWT → 200;
  *     forged JWT → 401
  *
@@ -41,6 +42,7 @@ import {
 import { principalMiddleware } from '../src/admin-api/middleware/principal.js'
 import { Hono as HonoCtor } from 'hono'
 import { tempDir } from './_helpers/temp.js'
+import { fromConnection } from './_helpers/connection.js'
 
 const realStarter = resolve(import.meta.dirname, '../../../examples/starter')
 
@@ -143,17 +145,16 @@ describe('Cut 10 — none trust mode (default)', () => {
 // --- forwarded-user --------------------------------------------
 
 describe('Cut 10 — forwarded-user trust mode', () => {
-  it('untrusted source IP → 401', async () => {
+  it('connection from an untrusted address → 401', async () => {
     const app = await buildAndTrack({
       trust: 'forwarded-user',
       trustedProxies: ['10.0.0.0/8'],
     })
-    const res = await app.request('/api/pages', {
-      headers: {
-        'X-Forwarded-User': 'alice',
-        'X-Forwarded-For': '203.0.113.1', // not in 10.0.0.0/8
-      },
-    })
+    const res = await app.request(
+      '/api/pages',
+      { headers: { 'X-Forwarded-User': 'alice' } },
+      fromConnection('203.0.113.1'), // not in 10.0.0.0/8
+    )
     expect(res.status).toBe(401)
     const body = await res.json()
     expect(body.code).toBe('UNAUTHENTICATED')
@@ -164,12 +165,11 @@ describe('Cut 10 — forwarded-user trust mode', () => {
       trust: 'forwarded-user',
       trustedProxies: ['10.0.0.0/8'],
     })
-    const res = await app.request('/api/pages', {
-      headers: {
-        'X-Forwarded-User': 'alice',
-        'X-Forwarded-For': '10.0.0.5',
-      },
-    })
+    const res = await app.request(
+      '/api/pages',
+      { headers: { 'X-Forwarded-User': 'alice' } },
+      fromConnection('10.0.0.5'),
+    )
     expect(res.status).toBe(200)
   })
 
@@ -178,13 +178,11 @@ describe('Cut 10 — forwarded-user trust mode', () => {
       trust: 'forwarded-user',
       trustedProxies: ['10.0.0.0/8'],
     })
-    const res = await app.request('/api/pages/home', {
-      method: 'DELETE',
-      headers: {
-        'X-Forwarded-User': 'alice',
-        'X-Forwarded-For': '10.0.0.5',
-      },
-    })
+    const res = await app.request(
+      '/api/pages/home',
+      { method: 'DELETE', headers: { 'X-Forwarded-User': 'alice' } },
+      fromConnection('10.0.0.5'),
+    )
     expect(res.status).toBe(403)
     const body = await res.json()
     expect(body.code).toBe('FORBIDDEN')
@@ -197,23 +195,20 @@ describe('Cut 10 — forwarded-user trust mode', () => {
       trust: 'forwarded-user',
       trustedProxies: ['10.0.0.0/8'],
     })
-    const res = await app.request('/api/pages', {
-      headers: { 'X-Forwarded-For': '10.0.0.5' },
-    })
+    const res = await app.request('/api/pages', {}, fromConnection('10.0.0.5'))
     expect(res.status).toBe(401)
   })
 
-  it('allowAnyOrigin: true bypasses source-IP check', async () => {
+  it('allowAnyOrigin: true skips the trusted-proxy check', async () => {
     const app = await buildAndTrack({
       trust: 'forwarded-user',
       allowAnyOrigin: true,
     })
-    const res = await app.request('/api/pages', {
-      headers: {
-        'X-Forwarded-User': 'alice',
-        'X-Forwarded-For': '8.8.8.8', // anywhere
-      },
-    })
+    const res = await app.request(
+      '/api/pages',
+      { headers: { 'X-Forwarded-User': 'alice' } },
+      fromConnection('8.8.8.8'), // anywhere
+    )
     expect(res.status).toBe(200)
   })
 
@@ -225,9 +220,7 @@ describe('Cut 10 — forwarded-user trust mode', () => {
     // Default role from buildAuthProvider is editor. We can't override
     // through the schema yet (defaultRole field reserved for follow-up
     // role-mapping work), so this test confirms editor reads succeed.
-    const res = await app.request('/api/pages', {
-      headers: { 'X-Forwarded-User': 'bob', 'X-Forwarded-For': '10.0.0.5' },
-    })
+    const res = await app.request('/api/pages', { headers: { 'X-Forwarded-User': 'bob' } }, fromConnection('10.0.0.5'))
     expect(res.status).toBe(200)
   })
 

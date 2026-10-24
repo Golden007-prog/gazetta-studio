@@ -2,11 +2,12 @@
  * Cut 3 tests: `forwarded-user` trust mode + IP whitelist matcher.
  *
  * The provider's contract:
- *   - Source-IP whitelist enforcement runs BEFORE header extraction
+ *   - The trusted-proxy check (on the connection's address) runs
+ *     BEFORE header extraction
  *   - Untrusted source → throws AuthenticationError (middleware → 401)
  *   - Trusted source + missing X-Forwarded-User → returns null (anonymous)
  *   - Trusted source + valid header → returns Principal with id/email/role
- *   - allowAnyOrigin: true bypasses source-IP check entirely
+ *   - allowAnyOrigin: true skips the trusted-proxy check entirely
  *   - Constructor rejects malformed trustedProxies + bad config
  *
  * The `ipMatchesAny` matcher must handle IPv4 + IPv6 + CIDR + the
@@ -23,15 +24,15 @@ import {
   parseRules,
 } from '../src/auth/index.js'
 
-function makeReq(opts: { sourceIp?: string; user?: string; email?: string; groups?: string }): {
+function makeReq(opts: { peerAddress?: string; user?: string; email?: string; groups?: string }): {
   headers: ReadonlyMap<string, string>
-  sourceIp?: string
+  peerAddress?: string
 } {
   const map = new Map<string, string>()
   if (opts.user) map.set('x-forwarded-user', opts.user)
   if (opts.email) map.set('x-forwarded-email', opts.email)
   if (opts.groups) map.set('x-forwarded-groups', opts.groups)
-  return { headers: map, sourceIp: opts.sourceIp }
+  return { headers: map, peerAddress: opts.peerAddress }
 }
 
 describe('parseRule (Cut 3)', () => {
@@ -181,21 +182,21 @@ describe('createForwardedUserAuthProvider (Cut 3)', () => {
     expect(() => createForwardedUserAuthProvider({ trustedProxies: ['not-an-ip'] })).toThrow(AuthConfigurationError)
   })
 
-  it('rejects request from untrusted source IP', async () => {
+  it('rejects a request on a connection from an untrusted address', async () => {
     const provider = createForwardedUserAuthProvider({ trustedProxies: ['10.0.0.0/8'] })
-    await expect(provider.extractPrincipal(makeReq({ sourceIp: '8.8.8.8', user: 'alice' }))).rejects.toBeInstanceOf(
+    await expect(provider.extractPrincipal(makeReq({ peerAddress: '8.8.8.8', user: 'alice' }))).rejects.toBeInstanceOf(
       AuthenticationError,
     )
   })
 
-  it('rejects request with no source IP when trustedProxies is set', async () => {
+  it('rejects a request whose connection address is unknown when trustedProxies is set', async () => {
     const provider = createForwardedUserAuthProvider({ trustedProxies: ['10.0.0.0/8'] })
     await expect(provider.extractPrincipal(makeReq({ user: 'alice' }))).rejects.toBeInstanceOf(AuthenticationError)
   })
 
   it('returns null (anonymous) when source is trusted but X-Forwarded-User is missing', async () => {
     const provider = createForwardedUserAuthProvider({ trustedProxies: ['10.0.0.0/8'] })
-    const principal = await provider.extractPrincipal(makeReq({ sourceIp: '10.0.0.1' }))
+    const principal = await provider.extractPrincipal(makeReq({ peerAddress: '10.0.0.1' }))
     expect(principal).toBeNull()
   })
 
@@ -203,7 +204,7 @@ describe('createForwardedUserAuthProvider (Cut 3)', () => {
     const provider = createForwardedUserAuthProvider({ trustedProxies: ['10.0.0.0/8'] })
     const principal = await provider.extractPrincipal(
       makeReq({
-        sourceIp: '10.0.0.1',
+        peerAddress: '10.0.0.1',
         user: 'alice',
         email: 'alice@example.com',
         groups: 'admins,editors',
@@ -222,36 +223,36 @@ describe('createForwardedUserAuthProvider (Cut 3)', () => {
       trustedProxies: ['10.0.0.0/8'],
       defaultRole: 'viewer',
     })
-    const principal = await provider.extractPrincipal(makeReq({ sourceIp: '10.0.0.1', user: 'bob' }))
+    const principal = await provider.extractPrincipal(makeReq({ peerAddress: '10.0.0.1', user: 'bob' }))
     expect(principal!.role).toBe('viewer')
   })
 
-  it('allowAnyOrigin: true bypasses source-IP check', async () => {
+  it('allowAnyOrigin: true skips the trusted-proxy check', async () => {
     const provider = createForwardedUserAuthProvider({ allowAnyOrigin: true })
-    const principal = await provider.extractPrincipal(makeReq({ sourceIp: '8.8.8.8', user: 'alice' }))
+    const principal = await provider.extractPrincipal(makeReq({ peerAddress: '8.8.8.8', user: 'alice' }))
     expect(principal).not.toBeNull()
     expect(principal!.id).toBe('alice')
   })
 
   it('allowAnyOrigin: true still returns null when X-Forwarded-User is missing', async () => {
     const provider = createForwardedUserAuthProvider({ allowAnyOrigin: true })
-    const principal = await provider.extractPrincipal(makeReq({ sourceIp: '8.8.8.8' }))
+    const principal = await provider.extractPrincipal(makeReq({ peerAddress: '8.8.8.8' }))
     expect(principal).toBeNull()
   })
 
   it('does NOT trust forged X-Forwarded-User from untrusted origin (security regression test)', async () => {
-    // The reason source-IP protection exists. Without it, an attacker
+    // The reason the trusted-proxy check exists. Without it, an attacker
     // could set X-Forwarded-User: admin in a curl request from any
     // network and impersonate the admin role.
     const provider = createForwardedUserAuthProvider({ trustedProxies: ['10.0.0.0/8'] })
     await expect(
-      provider.extractPrincipal(makeReq({ sourceIp: '203.0.113.1', user: 'admin', email: 'attacker@example.com' })),
+      provider.extractPrincipal(makeReq({ peerAddress: '203.0.113.1', user: 'admin', email: 'attacker@example.com' })),
     ).rejects.toBeInstanceOf(AuthenticationError)
   })
 
   it('handles IPv6 trusted proxies', async () => {
     const provider = createForwardedUserAuthProvider({ trustedProxies: ['fd00::/8'] })
-    const principal = await provider.extractPrincipal(makeReq({ sourceIp: 'fd12::1', user: 'alice' }))
+    const principal = await provider.extractPrincipal(makeReq({ peerAddress: 'fd12::1', user: 'alice' }))
     expect(principal!.id).toBe('alice')
   })
 
@@ -259,9 +260,9 @@ describe('createForwardedUserAuthProvider (Cut 3)', () => {
     const provider = createForwardedUserAuthProvider({
       trustedProxies: ['10.0.0.0/8', 'fd00::/8'],
     })
-    expect((await provider.extractPrincipal(makeReq({ sourceIp: '10.0.0.1', user: 'a' })))?.id).toBe('a')
-    expect((await provider.extractPrincipal(makeReq({ sourceIp: 'fd12::1', user: 'b' })))?.id).toBe('b')
-    await expect(provider.extractPrincipal(makeReq({ sourceIp: '8.8.8.8', user: 'c' }))).rejects.toBeInstanceOf(
+    expect((await provider.extractPrincipal(makeReq({ peerAddress: '10.0.0.1', user: 'a' })))?.id).toBe('a')
+    expect((await provider.extractPrincipal(makeReq({ peerAddress: 'fd12::1', user: 'b' })))?.id).toBe('b')
+    await expect(provider.extractPrincipal(makeReq({ peerAddress: '8.8.8.8', user: 'c' }))).rejects.toBeInstanceOf(
       AuthenticationError,
     )
   })

@@ -27,11 +27,14 @@ import {
 } from '../src/auth/index.js'
 import type { AuthRequest } from '../src/auth/provider.js'
 
-function reqOf(headers: Record<string, string>, sourceIp?: string): AuthRequest {
+function reqOf(headers: Record<string, string>, peerAddress?: string): AuthRequest {
   const map = new Map<string, string>()
   for (const [k, v] of Object.entries(headers)) map.set(k.toLowerCase(), v)
-  return { headers: map, sourceIp }
+  return { headers: map, peerAddress }
 }
+
+/** Tailscale Serve's connection to the admin on the same machine. */
+const LOCAL_SERVE = '127.0.0.1'
 
 // --- forwarded-user: groups from X-Forwarded-Groups -----------------
 
@@ -241,7 +244,10 @@ describe('tailscale role resolution (#414)', () => {
       roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' }, defaultRole: 'viewer' },
     })
     const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'alice@example.ts.net', 'tailscale-user-groups': 'ts-admins,ts-other' }),
+      reqOf(
+        { 'tailscale-user-login': 'alice@example.ts.net', 'tailscale-user-groups': 'ts-admins,ts-other' },
+        LOCAL_SERVE,
+      ),
     )
     expect(principal!.role).toBe('admin')
     expect(principal!.capabilities).toContain('*')
@@ -252,7 +258,7 @@ describe('tailscale role resolution (#414)', () => {
       roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' }, defaultRole: 'viewer' },
     })
     const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'bob@example.ts.net', 'tailscale-user-groups': 'unmapped' }),
+      reqOf({ 'tailscale-user-login': 'bob@example.ts.net', 'tailscale-user-groups': 'unmapped' }, LOCAL_SERVE),
     )
     expect(principal!.role).toBe('viewer')
   })
@@ -263,7 +269,7 @@ describe('tailscale role resolution (#414)', () => {
     })
     await expect(
       provider.extractPrincipal(
-        reqOf({ 'tailscale-user-login': 'bob@example.ts.net', 'tailscale-user-groups': 'unmapped' }),
+        reqOf({ 'tailscale-user-login': 'bob@example.ts.net', 'tailscale-user-groups': 'unmapped' }, LOCAL_SERVE),
       ),
     ).rejects.toBeInstanceOf(AuthenticationError)
   })
@@ -271,7 +277,7 @@ describe('tailscale role resolution (#414)', () => {
   it('without roleMapping, falls back to constructor defaultRole (back-compat)', async () => {
     const provider = createTailscaleAuthProvider({ defaultRole: 'viewer' })
     const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'carol@example.ts.net', 'tailscale-user-groups': 'ignored' }),
+      reqOf({ 'tailscale-user-login': 'carol@example.ts.net', 'tailscale-user-groups': 'ignored' }, LOCAL_SERVE),
     )
     expect(principal!.role).toBe('viewer')
   })
@@ -326,7 +332,7 @@ describe('factory threads roleMapping into the providers (#414)', () => {
       roleMapping: { claim: 'tailscale-user-groups', map: { 'ts-admins': 'admin' }, defaultRole: 'viewer' },
     })
     const principal = await provider.extractPrincipal(
-      reqOf({ 'tailscale-user-login': 'alice@example.ts.net', 'tailscale-user-groups': 'ts-admins' }),
+      reqOf({ 'tailscale-user-login': 'alice@example.ts.net', 'tailscale-user-groups': 'ts-admins' }, LOCAL_SERVE),
     )
     expect(principal!.role).toBe('admin')
   })

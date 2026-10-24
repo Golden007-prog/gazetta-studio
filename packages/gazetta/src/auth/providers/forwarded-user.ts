@@ -18,9 +18,10 @@
  *
  * Per `design-auth-rbac.md` Q1: the headers above carry NO
  * authentication on their own — anything between the client and the
- * proxy can set them. The provider rejects requests whose source IP
- * is not in `trustedProxies`, OR accepts everything when the operator
- * explicitly sets `allowAnyOrigin: true`.
+ * proxy can set them. The provider accepts them only on a connection
+ * from an address in `trustedProxies` (the address the server's socket
+ * reports, never one a header names), OR accepts everything when the
+ * operator explicitly sets `allowAnyOrigin: true`.
  *
  * Default posture is fail-closed (no `trustedProxies` AND no
  * `allowAnyOrigin` → schema refines to invalid; operator can't
@@ -45,8 +46,9 @@ import { resolveRole } from '../role-resolver.js'
 
 export interface ForwardedUserConfig {
   /**
-   * Whitelisted source IPs / CIDRs that may set the forwarded
-   * headers. Empty (or undefined) when `allowAnyOrigin: true`.
+   * Addresses / CIDRs of the proxies in front of the admin; only
+   * connections from them may set the forwarded headers. Empty (or
+   * undefined) when `allowAnyOrigin: true`.
    * Validated at config-load.
    */
   trustedProxies?: readonly string[]
@@ -122,11 +124,11 @@ export function createForwardedUserAuthProvider(config: ForwardedUserConfig): Au
       // For forwarded-user we always require auth — middleware
       // surfaces this as 401.
       if (!config.allowAnyOrigin) {
-        if (!req.sourceIp || !ipMatchesAny(req.sourceIp, parsedRules)) {
+        if (!req.peerAddress || !ipMatchesAny(req.peerAddress, parsedRules)) {
           throw new AuthenticationError(
-            req.sourceIp
-              ? `Request source IP ${req.sourceIp} is not in the configured trustedProxies whitelist`
-              : 'Request source IP is unknown; trusted-proxy verification cannot run',
+            req.peerAddress
+              ? `Request came from ${req.peerAddress}, which isn't in the configured trustedProxies`
+              : "The connection's address is unknown, so the trusted-proxy check can't run",
           )
         }
       }

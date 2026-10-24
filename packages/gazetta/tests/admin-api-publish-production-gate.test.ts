@@ -25,14 +25,13 @@ import { createAdminApp } from '../src/admin-api/index.js'
 import { createSourceContext } from '../src/admin-api/source-context.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
 import { starterTemplatesDir } from './_helpers/starter.js'
+import { fromConnection } from './_helpers/connection.js'
 
 const EDITOR_HEADERS = {
   'X-Forwarded-User': 'alice',
-  'X-Forwarded-For': '10.0.0.5',
 }
 const ADMIN_HEADERS = {
   'X-Forwarded-User': 'bob',
-  'X-Forwarded-For': '10.0.0.5',
   'X-Forwarded-Groups': 'admins',
 }
 
@@ -111,11 +110,11 @@ function buildApp(opts: { defaultEditableProduction?: boolean } = {}): {
 }
 
 function post(app: Hono, path: string, headers: Record<string, string>, body: unknown) {
-  return app.request(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-  })
+  return app.request(
+    path,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) },
+    fromConnection('10.0.0.5'),
+  )
 }
 
 describe('publish production gate (#1191)', { timeout: 30000 }, () => {

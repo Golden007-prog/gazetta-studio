@@ -1,14 +1,15 @@
 /**
- * `tailscale` trust mode — Tailscale Funnel / serve fronting the
- * admin. Tailscale terminates the connection and adds identity
- * headers from the authenticated tailnet user.
+ * `tailscale` trust mode — Tailscale Serve fronting the admin on the
+ * same machine. Serve terminates the connection, proxies it to the
+ * admin on loopback, and adds identity headers from the authenticated
+ * tailnet user (Funnel traffic carries none).
  *
- * # Why no source-IP whitelist
+ * # Only from the local Serve proxy
  *
- * Per design-auth-rbac.md "Trust-mode-driven header extraction":
- * Tailscale serves direct (no proxy chain). The trust comes from
- * the operator running their admin on a Tailscale-protected
- * tailnet — anything not on the tailnet can't reach the listener.
+ * Serve strips client-sent copies of these headers, but anyone who
+ * reaches the admin some other way could set them (Tailscale's Serve
+ * docs, "Identity headers"). So the provider accepts them only on a
+ * loopback connection, the one Serve makes.
  *
  * # Headers
  *
@@ -35,7 +36,7 @@
  *
  * # SOLID lenses
  *
- *   - SRP: header read; no verification needed (tailnet IS the trust).
+ *   - SRP: header read plus the loopback check; no token to verify.
  *   - LSP: same `AuthIdentityProvider` shape.
  */
 import type { Principal, RoleMapping } from '../types.js'
@@ -43,6 +44,7 @@ import type { AuthIdentityProvider, AuthRequest } from '../provider.js'
 import { expandRole } from '../capabilities.js'
 import { resolveRole } from '../role-resolver.js'
 import { AuthenticationError } from '../errors.js'
+import { isLoopbackAddress } from '../ip-match.js'
 
 export interface TailscaleConfig {
   /**
@@ -76,6 +78,13 @@ export function createTailscaleAuthProvider(config: TailscaleConfig = {}): AuthI
         // serve. Either the operator misconfigured, or a request
         // arrived through a different listener. Anonymous → 401.
         return null
+      }
+      if (!isLoopbackAddress(req.peerAddress)) {
+        throw new AuthenticationError(
+          req.peerAddress
+            ? `Tailscale identity headers came on a connection from ${req.peerAddress}; they're accepted only from the local Tailscale Serve proxy`
+            : "The connection's address is unknown, so the Tailscale identity headers can't be checked",
+        )
       }
 
       // Tailscale-User-Login is shaped `user@tailnet.ts.net`.

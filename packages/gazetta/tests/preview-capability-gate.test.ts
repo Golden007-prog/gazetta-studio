@@ -22,6 +22,7 @@ import { createAdminApp } from '../src/admin-api/index.js'
 import { createSourceContext } from '../src/admin-api/source-context.js'
 import { loadSiteConfig, siteConfigToManifest } from '../src/config/loader.js'
 import { tempDir } from './_helpers/temp.js'
+import { fromConnection } from './_helpers/connection.js'
 
 const realStarter = resolve(import.meta.dirname, '../../../examples/starter')
 const createdRoots: string[] = []
@@ -61,17 +62,16 @@ async function buildApp(authBlock: Record<string, unknown> | undefined): Promise
   })
 }
 
-// forwarded-user mode with a trusted proxy whitelist — a request from
+// forwarded-user mode with a trusted proxy whitelist — a connection from
 // 10.0.0.5 is trusted to set the forwarded headers; absence of
 // `X-Forwarded-User` means no authenticated identity.
 const FORWARDED_USER = { trust: 'forwarded-user', trustedProxies: ['10.0.0.0/8'] }
+const FROM_PROXY = fromConnection('10.0.0.5')
 
 describe('preview route capability gate', () => {
   it('GET /preview/* rejects an unauthenticated request under a real trust mode', async () => {
     const app = await buildApp(FORWARDED_USER)
-    const res = await app.request('/preview/about', {
-      headers: { 'X-Forwarded-For': '10.0.0.5' }, // trusted proxy, but no user
-    })
+    const res = await app.request('/preview/about', {}, FROM_PROXY) // trusted proxy, but no user
     expect(res.status).toBe(401)
     const body = await res.json()
     expect(body.code).toBe('UNAUTHENTICATED')
@@ -79,19 +79,21 @@ describe('preview route capability gate', () => {
 
   it('POST /preview/* (draft overrides) rejects an unauthenticated request', async () => {
     const app = await buildApp(FORWARDED_USER)
-    const res = await app.request('/preview/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '10.0.0.5' },
-      body: JSON.stringify({ overrides: { content: {}, structural: {} } }),
-    })
+    const res = await app.request(
+      '/preview/',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overrides: { content: {}, structural: {} } }),
+      },
+      FROM_PROXY,
+    )
     expect(res.status).toBe(401)
   })
 
   it('GET /preview/* still renders for an authenticated request', async () => {
     const app = await buildApp(FORWARDED_USER)
-    const res = await app.request('/preview/about', {
-      headers: { 'X-Forwarded-User': 'alice', 'X-Forwarded-For': '10.0.0.5' },
-    })
+    const res = await app.request('/preview/about', { headers: { 'X-Forwarded-User': 'alice' } }, FROM_PROXY)
     expect(res.status).toBe(200)
     expect(await res.text()).toContain('About Gazetta')
   })

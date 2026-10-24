@@ -115,6 +115,19 @@ export function ipMatchesAny(ip: string | undefined, rules: readonly ParsedRule[
   return false
 }
 
+/** `::ffff:10.0.0.5` (how a dual-stack server reports an IPv4 client) becomes `10.0.0.5`. */
+export function unmapIPv4(ip: string): string {
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip)
+  return mapped?.[1] ?? ip
+}
+
+const LOOPBACK_RULES = parseRules(['127.0.0.0/8', '::1/128'])
+
+/** True for 127.0.0.0/8 and ::1, including IPv4-mapped forms. False for unknown input. */
+export function isLoopbackAddress(ip: string | undefined): boolean {
+  return ip !== undefined && ipMatchesAny(unmapIPv4(ip), LOOPBACK_RULES)
+}
+
 // --- Internals ---
 
 function ipv4ToBigInt(ip: string): bigint {

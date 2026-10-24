@@ -13,11 +13,9 @@ import {
   createForwardedUserAuthProvider,
   createTailscaleAuthProvider,
 } from '../src/auth/index.js'
+import { fromConnection } from './_helpers/connection.js'
 
 const ADDRESS_HEADERS = { 'x-real-ip': '10.0.0.5', 'x-forwarded-for': '10.0.0.5', 'cf-connecting-ip': '10.0.0.5' }
-
-/** The env @hono/node-server passes to the app: the request's socket. */
-const fromConnection = (remoteAddress: string) => ({ incoming: { socket: { remoteAddress } } })
 
 function appWith(provider: AuthIdentityProvider) {
   const app = new Hono()

@@ -50,7 +50,7 @@ Generic reverse-proxy mode for deployments behind oauth2-proxy, Authelia, Caddy 
 - `X-Forwarded-Email` (optional)
 - `X-Forwarded-Groups` (optional, comma-separated; reserved for future role-mapping)
 
-**Source-IP whitelist is required.** The forwarded headers carry no signature; anything between the client and the proxy can set them. Gazetta rejects requests whose source IP is not in `trustedProxies`.
+**`trustedProxies` is required.** The forwarded headers carry no signature; anything that reaches the admin can set them. Gazetta accepts them only on a connection from an address in `trustedProxies`: the proxy's address as the admin's server sees it. Addresses named in headers such as `X-Forwarded-For` don't count. List the proxies that connect to the admin directly.
 
 ```ts
 admin: {
@@ -67,7 +67,7 @@ For dev environments or trusted private networks (Tailscale, internal VPNs):
 admin: {
   auth: {
     trust: 'forwarded-user',
-    allowAnyOrigin: true, // explicit opt-out of source-IP protection
+    allowAnyOrigin: true, // explicit opt-out of the trusted-proxy check
   },
 }
 ```
@@ -116,13 +116,13 @@ admin: {
 
 ### `tailscale`
 
-Tailscale Funnel / serve fronting the admin. Trust comes from the tailnet itself — only authenticated members can reach the listener.
+Tailscale Serve fronting the admin on the same machine. Serve passes tailnet requests to the admin on `localhost` and adds identity headers for the signed-in tailnet user. Funnel requests carry none, so they're anonymous.
 
 ```ts
 admin: { auth: { trust: 'tailscale' } }
 ```
 
-The header `Tailscale-User-Login` (e.g., `alice@example.ts.net`) carries the identity.
+The header `Tailscale-User-Login` (e.g., `alice@example.ts.net`) carries the identity. Gazetta accepts it only on a connection from the same machine (`127.0.0.1` or `::1`), which is how Serve connects; identity headers on any other connection get `401`. Run the admin where Serve runs, and start it with `--host 127.0.0.1` so it's reachable only through Serve, as Tailscale recommends.
 
 ## Roles and capabilities
 
@@ -183,7 +183,7 @@ Gazetta returns structured responses on auth failures:
 
 | Status | Body shape | When |
 |---|---|---|
-| `401 UNAUTHENTICATED` | `{ code, error }` + `WWW-Authenticate: Bearer realm="gazetta-admin"` | No identity (forwarded-user with missing header, JWT missing/expired/invalid signature, source IP not in whitelist) |
+| `401 UNAUTHENTICATED` | `{ code, error }` + `WWW-Authenticate: Bearer realm="gazetta-admin"` | No identity (forwarded-user with missing header, JWT missing/expired/invalid signature, connection not from an address in `trustedProxies`, Tailscale identity headers not from the same machine) |
 | `403 FORBIDDEN` | `{ code, missing: [cap], role, error }` | Authenticated principal lacks the capability the route requires |
 
 Authenticated users see what they can't do (the `missing` capability + their `role`). Unauthenticated requests get the generic `WWW-Authenticate` hint pointing back at the upstream layer — Gazetta doesn't issue login challenges itself.

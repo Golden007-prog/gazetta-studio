@@ -53,8 +53,19 @@ import type { Principal, TrustMode } from './types.js'
 export interface AuthRequest {
   /** Map of header name → value. Header names are lowercased per HTTP convention. */
   headers: ReadonlyMap<string, string>
-  /** Source IP after trust-mode-driven extraction. Optional. */
+  /**
+   * Client IP as request headers name it (`CF-Connecting-IP`,
+   * `X-Real-IP`, `X-Forwarded-For`). The client controls these, so
+   * it's for recording only; access decisions use `peerAddress`.
+   */
   sourceIp?: string
+  /**
+   * Address of the connection the request arrived on (the client, or
+   * the proxy in front of the admin), as the server's socket reports
+   * it. Never taken from headers. Undefined when the runtime doesn't
+   * expose it.
+   */
+  peerAddress?: string
   /** Method + URL — providers rarely need these, but available. */
   method?: string
   url?: string
