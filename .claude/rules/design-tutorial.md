@@ -171,7 +171,7 @@ Decided: maintainer, 2026-10-24 (#1338)
 
 ### Q14: The tutorial adds an image
 
-The reader picks an image for the hero and sees it on staging. The asset picker (#1345) and serving published assets (#1330, and #1249 for static `gazetta serve`) become Stage 1 gate items, and the tutorial gets a step longer.
+The reader picks an image for the hero and sees it on staging. The asset picker (#1345) and serving published assets (#1330) become Stage 1 gate items, and so does #1249 (follows from Q14: the tutorial's staging is served by static `gazetta serve`, which corrupts binary files until #1249), and the tutorial gets a step longer.
 
 Decided: maintainer, 2026-10-24 (#1338)
 
@@ -221,10 +221,10 @@ Follows from Q1–Q4 and Q14. Rule 23: the reader does one thing per step and se
 | 2 | Start the dev server | `npx gazetta dev`; open localhost:3000, then localhost:3000/admin. Leave it running |
 | 3 | Publish to staging | In the admin: Publish → staging → Publish. The first publish copies the whole site |
 | 4 | Look at staging as a visitor | Second terminal: `npx gazetta serve staging --port 3001`; open localhost:3001 |
-| 5a | Add an image (Q14) | On the hero, pick an image (upload one in the picker) and Save; localhost:3000 shows it |
-| 5 | Edit the home page | Open Home, select the hero, change its title, Save. localhost:3000 shows it; localhost:3001 doesn't: staging changes only when you publish |
-| 6 | Publish the change | Publish → staging again; reload localhost:3001: the new title and the image |
-| 7 | Undo the publish | Click Undo in the publish result; reload localhost:3001 and the old title is back. The edit is still in the admin: undo changed staging, not `local` |
+| 5 | Add an image (Q14) | On the hero, pick an image (upload one in the picker) and Save; localhost:3000 shows it |
+| 6 | Edit the home page | Open Home, select the hero, change its title, Save. localhost:3000 shows it; localhost:3001 doesn't: staging changes only when you publish |
+| 7 | Publish the change | Publish → staging again; reload localhost:3001: the new title and the image |
+| 8 | Undo the publish | Click Undo in the publish result; reload localhost:3001 and the old title is back. The edit is still in the admin: undo changed staging, not `local` |
 | — | What you did | A target holds the whole site; Publish copies content between targets; each target keeps its own history |
 | — | Next steps | "Put it online" (cloudflare.md, self-hosted.md), then templates, customizing the editor, targets |
 | — | If something goes wrong | Unsupported Node (#1304), `init`'s npm install failed (#1300), port in use (#1184), Ctrl+C stops a server |
@@ -237,8 +237,8 @@ Follows from Q5, Q6, Q8 and Q11.
 
 1. The `tutorial` job downloads `pack`'s tarball and starts Verdaccio with a config whose `gazetta` rule has no proxy; everything else proxies npmjs.
 2. It publishes the tarball under its own version, points npm at Verdaccio (`npm_config_registry`, an empty `npm_config_cache`) and works in a temp directory outside the repo, so `init`'s own `npm install` gets the tarball.
-3. `tests/tutorial/getting-started.spec.ts` (its own Playwright config) holds the step table: command, background or not, ready URL, checks. Its first test reads `docs/getting-started.md`, extracts the fenced shell blocks in order and fails if they differ from the table. Steps 1–6 are `test.step`s of one test, named after their headings; the servers are started once for the file, so later tests reuse them. Step 7 (undo) is a separate test in the same serial group, after it. Admin steps reuse `tests/e2e/pages/*`.
-4. Checks: init exits 0 without "npm install failed" and writes `local` and `staging`; the lockfile integrity matches the tarball; `dev` answers on 127.0.0.1:3000 and `/admin`; the publish result shows success; `serve` on 3001 shows the old title after the edit and the new one after the publish; undo brings the old one back. Until #1092 lands, only step 7's own test is marked `test.fail()` (linked to #1092): Playwright applies `test.fail()` to a whole test, so marking a test that also held steps 1–6 would hide their failures; the image answers 200 from localhost:3001 after the publish (Q14); both servers still running at teardown.
+3. `tests/tutorial/getting-started.spec.ts` (its own Playwright config) holds the step table: command, background or not, ready URL, checks. Its first test reads `docs/getting-started.md`, extracts the fenced shell blocks in order and fails if they differ from the table. Steps 1–7 are `test.step`s of one test, named after their headings; the servers are started once for the file, so later tests reuse them. Step 8 (undo) is a separate test in the same serial group, after it. Admin steps reuse `tests/e2e/pages/*`.
+4. Checks: init exits 0 without "npm install failed" and writes `local` and `staging`; the lockfile integrity matches the tarball; `dev` answers on 127.0.0.1:3000 and `/admin`; the publish result shows success; `serve` on 3001 shows the old title after the edit and the new one after the publish, and the image answers 200 from localhost:3001 then (Q14); undo brings the old one back. Until #1092 lands, only step 8's own test is marked `test.fail()` (linked to #1092): Playwright applies `test.fail()` to a whole test, so marking a test that also held steps 1–7 would hide their failures; both servers still running at teardown.
 5. The weekly and after-release run uses the same spec with no Verdaccio, installing from npmjs and reading the tutorial from the release tag: the check that a release on npm matches the docs. It targets `gazetta@rc` while an rc exists, then `latest`, and doesn't run before the first rc (Q15).
 
 ## Foundational checks
