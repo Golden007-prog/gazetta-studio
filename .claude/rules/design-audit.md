@@ -261,7 +261,7 @@ Every write **attempt** — success and write-class rejection:
 | `configure-roles` (`site.config.ts`'s `admin.auth.roleMapping` change) | `success`, `validation-failed`, `forbidden`, `unauthenticated` |
 | `sign-in` (a write request refused before a route is matched: the `GAZETTA_TOKEN` guard, or the identity provider rejecting the request) | `unauthenticated` |
 
-A `sign-in` event is recorded for write methods (POST, PUT, PATCH, DELETE) on `/api/*` only, with the request's method and path in `metadata`; a refused draft-preview render (`POST /preview/*`) is a read and isn't recorded: no route has been matched, so there's no other action to record, and no table of routes to keep in sync. `sign-in` joins the closed action list additively, like `create-redirect`. Decided: maintainer, 2026-10-24 (#1263).
+A `sign-in` event is recorded for write methods (POST, PUT, PATCH, DELETE) on `/api/*` only, with the request's method and path in `metadata`: no route has been matched, so there's no other action to record, and no table of routes to keep in sync. A refused draft-preview render (`POST /preview/*`) is a read, so it isn't recorded, like other reads. `sign-in` joins the closed action list additively, like `create-redirect`. Decided: maintainer, 2026-10-24 (#1263).
 
 **Recording sites** (the layer that produced the outcome records its own event):
 - Save/publish/delete handler success path → `success`
