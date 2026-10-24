@@ -153,7 +153,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
   - Per issue: "Fix" / "Ignore once" / "Promote to error"
   - Block publish on remaining errors
 - Per-target audit config: `targets.production.publishAudit: { strict: boolean }`
-- One new validator, `broken-links`: every internal `href` or `src` in rendered output must match a page route or start with `/assets/`, and anything else is reported (JSDOM parses the HTML). `/assets/` paths aren't checked until [#1301](https://github.com/gazetta-studio/gazetta-studio/issues/1301) lands. External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`. Decided: maintainer, 2026-10-24 (#1295).
+- One new validator, `broken-links`: every internal `href` or `src` in rendered output must match a page route or start with `/assets/` (or `assets/`), and anything else is reported (JSDOM parses the HTML). `/assets/` and `assets/` paths aren't checked until [#1301](https://github.com/gazetta-studio/gazetta-studio/issues/1301) lands. External links are skipped on purpose, and `?query` and `#hash` are stripped before matching, so #anchor targets aren't checked. It runs in the background scan, in the publish audit on every Publish from the admin, and in `gazetta validate --include-quality`. Decided: maintainer, 2026-10-24 (#1295).
 - Admin UI: pre-publish modal in `PublishPanel.vue`
 
 **Tests:**
@@ -163,7 +163,7 @@ Per [team-preferences.md rule 17](team-preferences.md): "Build and validate, don
 
 **Risk:** low. The check adds no dependency (JSDOM already ships for Cut 3's accessibility validator); the heavy work (pre-publish framework) is the same machinery Cut 3 already exercises.
 
-**Why this is last:** these validators are valuable but not critical for daily editor UX. The publish gate earns its place at the operator's commitment moment; `broken-links` also runs in the background scan, so its warnings show in Site health before a publish.
+**Why this is last:** these validators are valuable but not critical for daily editor UX. The publish gate earns its place at the operator's commitment moment; `broken-links` also runs in the background scan, so its warnings show in Site health before a publish ([#1303](https://github.com/gazetta-studio/gazetta-studio/issues/1303): Site health can miss a link broken by deleting the page it points at).
 
 **Lighthouse not in scope.** Originally listed alongside linkinator as a Cut 4 validator; deferred indefinitely (see "What's deferred from this plan" below). Reason: accessibility is covered better by direct axe-core; SEO is covered by `seo-plan.md`'s primitives; the remaining performance + best-practices value doesn't justify the ~200MB Chromium + Lighthouse deps, the 5-15s per-page runtime, or the maintenance burden of tracking Lighthouse's evolving scoring methodology. Operators wanting performance budgets at publish use CI-side Lighthouse (`treosh/lighthouse-ci-action`) or PageSpeed Insights. The pre-publish audit framework supports adding a `lighthouse` validator later if concrete operator demand surfaces — it's one more validator slotting into the existing framework.
 
@@ -317,7 +317,7 @@ Each cut's SOLID posture, validated at design time:
 
 - **Cut 3**: SRP — render-for-analysis is its own module; each tool-wrapper validator is its own module. OCP — new tool wrappers add Validators without changing infrastructure. ISP — validators see only the `RenderedOutputAccess` they need.
 
-- **Cut 4**: SRP — publish gate is one orchestrator; per-target config is its own concern. OCP — new heavy validators add to the registry; each declares the stages it runs at, and `gazetta validate` runs the quality ones only with `--include-quality`.
+- **Cut 4**: SRP — publish gate is one orchestrator; per-target config is its own concern. OCP — new heavy validators add to the registry; each declares the stages it runs at, and `gazetta validate` runs the quality ones only with `--include-quality`. Decided: maintainer, 2026-10-24 (#1295).
 
 - **Cut 5**: SRP — CLI runner is its own module that calls the same validator runners as the admin server.
 

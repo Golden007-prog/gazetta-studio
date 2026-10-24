@@ -136,7 +136,7 @@ export interface Issue {
 
 - **background**: Admin server runs a long-lived scanner. Initial scan on admin boot. Incremental rescan when file watcher detects manifest/template/asset changes. Per-page validation run cached by content hash; only re-runs when something material changed. Issues stored in a Pinia store, surfaced in the UI.
 
-- **pre-publish**: The admin runs the audit on every Publish, and the server runs it again before publishing. Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
+- **pre-publish**: The admin runs the audit on every Publish, and the server runs it again before publishing. Decided: maintainer, 2026-10-24 (#1295). Operator sees consolidated `Issue[]` with severity per their target's config. Fix / ignore / promote-to-error per issue. Block publish on remaining errors. (The heavy-validator slot — originally Lighthouse — is intentionally empty; see implementation-doc deferred-items table.)
 
 - **cli**: `gazetta validate` runs all validators in non-interactive mode. Exit non-zero on any error. Useful for CI gating before deploy.
 
@@ -270,7 +270,7 @@ The architectural call: use real tools for the actual analysis. Each tool plugs 
 | Accessibility | `axe-core` | Run via `jsdom` in admin process; ~50-100ms per page. Battle-tested by every major a11y product. |
 | HTML validity | `html-validate` | Fast, configurable, widely used in CI. |
 | CSS lint | `stylelint` | Industry standard. |
-| Broken links | Gazetta's own route matching (`jsdom` parses the HTML) | Every internal `href` or `src` in rendered output (on `a`, `link`, `img`, `source`, `video`, `audio` and `script`) must match a page route, including `:param` routes, or start with `/assets/`; anything else is reported, such as the scaffold's `/admin` link ([#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183)). `/assets/` paths aren't checked yet. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
+| Broken links | Gazetta's own route matching (`jsdom` parses the HTML) | Every internal `href` or `src` in rendered output (on `a`, `link`, `img`, `source`, `video`, `audio` and `script`) must match a page route, including `:param` routes, or start with `/assets/` (or `assets/`); anything else is reported, such as the scaffold's `/admin` link ([#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183)). `/assets/` and `assets/` paths aren't checked yet. External links are skipped on purpose; `?query` and `#hash` are stripped before matching. |
 
 The broken-links check covers internal links only. Outbound link checking (`linkinator`) and #anchor targets are deferred (`design-validation-implementation.md`, "What's deferred from this plan").
 
@@ -281,14 +281,14 @@ Decided: maintainer, 2026-10-24 (#1295)
 | Change the code: add outbound and #anchor checks now | Outbound checks need a request to every external URL in each check, and a new dependency (`linkinator` is in no package today); #1272 can pull anchor checks in when the docs site needs them |
 | File an issue and decide later | The docs would keep describing a check that doesn't exist |
 
-Links to `/assets/` paths will be checked too: [#1301](https://github.com/gazetta-studio/gazetta-studio/issues/1301) reports at least the `__missing__` placeholder a page renders when it references an asset that doesn't exist. Until it lands, any `/assets/` path passes.
+Links to `/assets/` paths will be checked too: [#1301](https://github.com/gazetta-studio/gazetta-studio/issues/1301) reports at least the `__missing__` placeholder a page renders when it references an asset that doesn't exist. Until it lands, any `/assets/` or `assets/` path passes.
 
 Decided: maintainer, 2026-10-24 (#1295)
 
 | Rejected | Why |
 |---|---|
 | Defer it, like outbound links and #anchors | `/assets/` links written into content would stay unchecked, and until [#1302](https://github.com/gazetta-studio/gazetta-studio/issues/1302) is fixed nothing at publish reports a missing asset reference |
-| Leave it as documented, with no deferred row | The same gap, with no record of it |
+| Leave it as documented, with no deferred row | The same gap, with no deferred row or issue to come back to it |
 
 Lighthouse was originally specced for the "Performance / SEO score" slot but is deferred indefinitely (see `design-validation-implementation.md` deferred-items table). Reasoning: accessibility is covered better by direct axe-core; SEO by `seo-plan.md`'s primitives; the remaining performance + best-practices value doesn't justify the ~200MB Chromium + Lighthouse deps, the 5-15s per-page runtime, and the maintenance burden of tracking scoring methodology changes. Operators wanting publish-time perf budgets use CI-side Lighthouse. The pre-publish audit framework supports adding the validator later if concrete demand surfaces.
 
