@@ -67,7 +67,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 
 The asset library is broken at several layers: published images return 404 on deployed servers ([#1330](https://github.com/gazetta-studio/gazetta-studio/issues/1330); static `gazetta serve` corrupts them, [#1249](https://github.com/gazetta-studio/gazetta-studio/issues/1249)), the asset picker never renders ([#1345](https://github.com/gazetta-studio/gazetta-studio/issues/1345)), a target's `transforms` setting is never read ([#1332](https://github.com/gazetta-studio/gazetta-studio/issues/1332)), asset edits and locale images never reach targets ([#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334), [#1350](https://github.com/gazetta-studio/gazetta-studio/issues/1350)), and the resolver drops an asset's own focal point ([#1346](https://github.com/gazetta-studio/gazetta-studio/issues/1346)). These are fix-bot one-shots. The rest of the editor flow (per-reference overrides, same-name uploads, per-locale alt, documents and fonts) waits on a UX design round ([#1357](https://github.com/gazetta-studio/gazetta-studio/issues/1357)). The Stage 1 tutorial adds an image, so #1330, #1249 and #1345 are Stage 1 gate items (`design-tutorial.md` Q14).
 
-Decided: maintainer, 2026-10-24 (#PR)
+Decided: maintainer, 2026-10-24 (#1358)
 
 ### Bug backlog
 
