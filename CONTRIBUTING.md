@@ -46,6 +46,18 @@ The `area:` labels say which part of the code an issue is in. Issues without
 `ready-for-agent` aren't ready yet: they still need a decision or more information.
 Ask on the issue if anything is unclear.
 
+### What a ready issue says
+
+An issue is ready for anyone to pick up when it has:
+
+1. **A state label.** `ready-for-agent` when it can be started, or `ready-for-human` / `needs-info` with the reason in a comment.
+2. **What happens, reproducibly.** The file and line, or a command or request and what it returns.
+3. **What should happen**, citing the doc that says so: a design doc (`.claude/rules/design-*.md`), `docs/`, or the decision recorded on the issue.
+4. **A recommended fix**, or a Decided section when the maintainer has chosen between options.
+5. **Acceptance criteria that name what to check:** a route and its response, a command and its output, or a test that fails on today's `main`.
+
+If an issue you want to work on is missing one of these, ask on it. Maintainers and the bots write issues to this list.
+
 New here? Tell us how you found Gazetta, and whether you use it, in
 [How did you find Gazetta?](https://github.com/gazetta-studio/gazetta-studio/discussions/1277).
 
