@@ -69,7 +69,7 @@ Failure outcomes (`forbidden`, `validation-failed`, `unauthenticated`) follow th
 - `review:approve` — approve OR reject pending reviews
 - `publish:request` — request a publish to a target
 - `publish:approve` — approve a pending publish request
-- Optional `publish:{target}-emergency` for hotfix bypass
+- ~~Optional `publish:{target}-emergency` for hotfix bypass~~ Out of v1 (2026-10-25; Future directions)
 
 ### Self-approval
 - Configurable via `reviewWorkflow.allowSelfApproval: boolean` (default `true`)
@@ -108,6 +108,30 @@ Decided: maintainer, 2026-10-22 (#1120)
 | Build the gate in `publishRun` step 7 until publish undo's cut 1, then move it | The gate gets built twice, and cut 13's approval path would change in between |
 
 **Rejected alternatives:** gating in the route (CLI bypass); re-reading content at approval time without a snapshot (approve-A-ship-B); executing under the requester's identity (the requester may since have lost the capability, and the approver is the accountable actor); a CLI `--request` flag (no principal to record).
+
+### How the gate meets the shared publish function (locked 2026-10-25)
+
+Settled when review-workflow moved to a planner issue (#1433), against the shared target-publish function publish undo cut 1 built (`publishToTarget`, `packages/gazetta/src/publish-target.ts`, #1430).
+
+1. **The approval publishes.** Lock 4 stands: the approval that meets the threshold publishes. The publish panel's row for that request then reads "Published by {approver}" and has no **Publish** button (Surface 3, `DestApproved`).
+2. **An approved publish passes the gate by its request.** The approval passes its request id to the shared function; the gate lets the publish through only if that request exists, has met its threshold and its snapshot still matches (lock 3). Nothing else skips the gate.
+3. **The caller passes the user; the gate refuses none.** The shared function takes the signed-in user. The admin passes it; the CLI passes none, and the gate refuses a gated target without a user with lock 6's message. The gate is the one place that enforces this, so a later caller can't bypass it.
+4. **One request per item string.** Lock 5's caller-expanded list is the function's `items` (dependents included): a page with its translations is one request, and a translation published alone (`pages/about:fr`) is its own request.
+5. **The publish-pending queue is its own cut, after cut 13** (cut 21). Cut 17 covers pending reviews only, as locked in #1407.
+6. **Out of v1:** the `publish:{target}-emergency` bypass capability, and queuing review actions offline for replay (Future directions). Review actions need the server, like publish.
+
+Decided: maintainer, 2026-10-25 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Approval only approves; someone clicks **Publish** later | Two steps, and the content could change between them unless re-checked |
+| A skip-gate flag for the approval path | Any caller could set it |
+| The CLI checks for gated targets before calling the shared function | Two places to keep in step |
+| One request per translation | Approvers would approve each language of a page separately |
+| Fold the publish-pending queue into cut 17 | Cut 17 would wait for cuts 12–13 too |
+| Leave the publish-pending queue out of v1 | Approvers would find publish requests only per content, in the publish panel |
+| Build the emergency capability in v1 | A bypass weakens the gate; publish undo and self-approval cover the urgent cases |
+| Build offline queue-and-replay for review actions in v1 | They check capabilities and snapshots on the server |
 
 ### Configuration
 ```ts
@@ -253,7 +277,7 @@ How review workflow composes with each of the other 12 foundational dimensions p
 - Theme variants don't yet exist for pages/fragments (per `design-themes.md` v1 — presentation-only). When pages gain theme variants, theme-variant manifests are reviewed independently per the locale pattern above.
 
 ### Auth + RBAC (#4)
-- Capability extensions: `review:submit`, `review:approve`, `publish:request`, `publish:approve` (plus optional `publish:{target}-emergency`).
+- Capability extensions: `review:submit`, `review:approve`, `publish:request`, `publish:approve`.
 - `Principal` from auth/RBAC is the actor on every review/publish-approval audit event.
 - Self-approval enforced at click-time via principal-vs-submission-actor comparison. `allowSelfApproval: false` with same actor = 403.
 - Capabilities snapshot at submit time captured in audit metadata; live-evaluated at approval time.
@@ -287,9 +311,7 @@ How review workflow composes with each of the other 12 foundational dimensions p
 - Capability-scoped: cache entries scoped to role principal at cache time; role change invalidates.
 
 ### Offline (#12)
-- Review submit / approve / reject queued offline + replayed on reconnect (per `design-offline.md`'s replay model).
-- Replay capability check at replay time — if the principal lost `review:approve` while offline, replay fails with `outcome: 'forbidden'` recorded.
-- Concurrent online approval may have already met threshold by replay time — replay sidecar write is idempotent (no-op when state is already approved); audit records the replay attempt with `metadata.replayed: true`.
+- Review actions need the server in v1; queuing them offline for replay is out of v1 (2026-10-25; Future directions).
 
 ### Collaboration (#13)
 - Reject comment lives in audit metadata as a narrow capture; broader review discussion (inline comments, mentions to reviewers, "request changes" semantics) belongs to collaboration.
@@ -353,7 +375,7 @@ Each action button has an in-flight `:loading` variant (the `archive.status === 
 | `DestNoGate` | target without `requiresPublishApproval` | normal **Publish** |
 | `DestRequestable` | gated, viewer has `publish:request`, no open request | **Request publish approval** (`publish-request`) |
 | `DestPending` | gated, request open, threshold unmet | `<StateBadge>` "Pending {N}/{required}"; **Approve**/**Reject** (`publish-approve`/`publish-reject`) inline when viewer has `publish:approve` |
-| `DestApproved` | gated, threshold met | `<StateBadge>` "Approved"; **Publish** enabled |
+| `DestApproved` | gated, threshold met (the approval published) | `<StateBadge>` "Published by {approver}"; no **Publish** button (2026-10-25) |
 | `DestNoCap` | gated, viewer lacks `publish:request` | `<StateBadge>` "Requires publish approval" (informational) |
 
 The cross-content approver queue (Cut 13) is **not** part of the gate cut — approvers acting on *this* content's publish do so inline in `PublishPanel`; finding pending requests *across all content* is the queue's job.
@@ -386,6 +408,7 @@ State lives in GitHub sub-issue close-state; this table is intent only (no statu
 | 18 | Hook integration (10 review-lifecycle phases per `design-hooks.md`) | 4, 12 | agent | api-first | Medium |
 | 19 | Docs (`docs/review-workflow.md` 5 archetypes) + consolidation (retire impl doc → this design doc; ROADMAP; CLAUDE.md) | all | agent | (docs) | Low |
 | 20 | **Agent B visual self-check + PR screenshot embed** — `bots/_lib` screenshot helper (Playwright, reuse `tools/mcp-dev` logic) + Storybook built and served from bot code (`bots/_lib/storybook-server.ts`; no workflow edit, since bots can't push `.github/workflows/**`, #840) + reviewer-prompt contract (screenshot each new/changed story → visual verdict vs design-doc state table → factor into APPROVE/REJECT) + **upload screenshots as Release assets (`gh release upload`, tag `bot-screenshots`), embed inline via the public `…/releases/download/…` URLs, and prune merged/closed PRs' assets at the start of each feature-bot run (best-effort; PR opens without images on failure)** | 10 | agent | (bot infra) | Medium |
+| 21 | Publish-pending queue (`GET /api/reviews?action=publish-pending`; paginated, same shape as cut 17) | 13, 17 | agent | api+component | Medium |
 
 **Notes on the reshape:**
 - **No separate human story-authoring cut.** Per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md) (second revision), the human spec is the locked state table in this design doc (UX-grill output); the bot **transcribes** it into `.stories.ts` *within* each component cut and implements the component to it. The story runs green under `@storybook/addon-vitest`. The independent spec is the design-doc table + each cut's `## Acceptance`, not a hand-authored story file — bounded tautology risk, accepted because the tables are locked first.
@@ -409,3 +432,5 @@ Targets without `reviewWorkflow.enabled` continue today's behavior (no review). 
 - **Approval expiry** (`requireFreshApproval` per target)
 - **Notification preferences** — subscribe to review activity; lands when hooks ship
 - **Multi-stage release pipelines** — QA → prod with distinct approvers per stage
+- **Emergency publish capability** (`publish:{target}-emergency`) to bypass approval for a hotfix. Out of v1 (2026-10-25)
+- **Offline review actions**: queue submit / approve / reject offline and replay on reconnect, re-checking capabilities and snapshots at replay. Out of v1 (2026-10-25)
