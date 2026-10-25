@@ -83,3 +83,6 @@ storybook-static/
 
 # Coverage reports (npm run test:coverage)
 coverage/
+
+# Vitest blob reports from sharded CI runs
+.vitest/
