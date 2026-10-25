@@ -116,7 +116,7 @@ admin: {
 }
 ```
 
-Every ALB in a region signs with keys from the same endpoint, so Gazetta accepts a token only when its header's `signer` is one of the `albArn` values, as AWS's documentation says to check, and only until the header's `exp`.
+Every ALB in a region signs with keys from the same endpoint, so Gazetta accepts a token only when its header's `signer` is one of the `albArn` values, as AWS's documentation says to check, and only until the header's `exp`. Downloaded public keys are cached per process in a small LRU (16 keys); an ALB key never changes for a given key id, so eviction only costs a refetch.
 
 ### `tailscale`
 
@@ -227,7 +227,7 @@ GAZETTA_TOKEN=$(openssl rand -base64 32) gazetta serve
 
 - `Principal` is per-request; nothing is cached cross-request
 - Role-mapping table loads from `site.config.ts` at boot; reread on `site.config.ts` change via the dev file watcher
-- JWT verification uses `createRemoteJWKSet` which fetches + caches keys per-instance; rotations are picked up by each instance independently
+- `cloudflare-access` JWT verification uses `createRemoteJWKSet` which fetches + caches keys per-instance; rotations are picked up by each instance independently. `aws-cognito` fetches ALB keys per key id and caches them in a bounded LRU (no expiry needed; a key never changes for its kid)
 - Source-IP whitelist parses once at boot; per-request matches are O(N) over already-parsed rules
 
 ## Operational notes
