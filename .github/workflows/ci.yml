@@ -236,7 +236,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - run: npm run test:storybook
 
   e2e:
@@ -259,15 +259,17 @@ jobs:
       - run: npm run build -w packages/gazetta
 
       # Cache Playwright browsers keyed by lockfile — version bumps
-      # invalidate automatically. `--with-deps` still runs (system libs)
-      # but browser download is skipped on cache hit.
+      # invalidate automatically. No `--with-deps`: the runner image already
+      # has Chromium's system libraries, and installing them through apt
+      # sometimes waited 5-10 min on a throttled Ubuntu mirror. If the image
+      # ever drops one, Chromium fails to start and names it.
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - run: npx playwright test --project=dev --shard=${{ matrix.shard }}/7
 
@@ -303,7 +305,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - run: npx playwright test --project=prod-admin --project=prod-static --project=prod-esi --project=matrix
       - name: Upload test-results on failure
         if: failure()
