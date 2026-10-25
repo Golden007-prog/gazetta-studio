@@ -49,7 +49,23 @@ describe('unknown custom-role capabilities at boot (#1394)', () => {
 
   it('the shared manifest resolution path runs the same check', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    resolveAuthProviderFromManifest({ trust: 'none', roles: { x: { capabilities: ['read:pagez'] } } })
+    resolveAuthProviderFromManifest({ trust: 'none', roles: { x: { capabilities: ['edit:pagez'] } } })
     expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns once per distinct issue across repeated constructions in one process', () => {
+    // The CLI resolves the provider twice per boot (validation SSE
+    // gate + createAdminApp); boot must still show one warning.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const config = { trust: 'none', roles: { x: { capabilities: ['delete:pagez'] } } } as const
+    buildAuthProvider(config)
+    buildAuthProvider(config)
+    resolveAuthProviderFromManifest(config)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0] as string).toContain('"delete:pagez"')
+    // A different unknown capability is a new issue and still warns.
+    buildAuthProvider({ trust: 'none', roles: { x: { capabilities: ['publish:pagez'] } } })
+    expect(warn).toHaveBeenCalledTimes(2)
+    expect(warn.mock.calls[1][0] as string).toContain('"publish:pagez"')
   })
 })
