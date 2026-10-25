@@ -105,6 +105,19 @@ for i in $(seq 1 60); do
   sleep 0.5
 done
 
+# ── 4b. Start banner assertion (#1317) ──────────────────────────
+# The packed install runs outside the monorepo, so `gazetta dev` serves the
+# pre-built admin and its start banner must print the /admin URL. On code
+# that prints the line only in monorepo dev mode this assertion fails.
+step "Start banner assertion"
+if ! grep -q "http://localhost:$PORT/admin" "$LOG"; then
+  echo "✗ start banner does not print the /admin URL outside the monorepo"
+  echo "--- dev log ---"
+  cat "$LOG"
+  exit 1
+fi
+echo "✓ start banner prints the /admin URL"
+
 # ── 5. Assertions ────────────────────────────────────────────────
 step "HTTP assertions"
 
