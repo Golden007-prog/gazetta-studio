@@ -123,4 +123,4 @@ async function manifestFilenamesFor(input: PlanInput, itemName: string): Promise
 
 function manifestFilenameFor(itemName: string): string {
   return itemName.startsWith('fragments/') ? 'fragment.json' : 'page.json'
-    }
+}
