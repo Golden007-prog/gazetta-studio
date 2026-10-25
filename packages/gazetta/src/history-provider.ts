@@ -28,6 +28,7 @@ import { rmIgnoreMissing } from './providers/_rm-ignore-missing.js'
 import type { StorageProvider } from './types.js'
 import type { BlobContent, HistoryProvider, Revision, RevisionInput, RevisionManifest } from './history.js'
 import { DEFAULT_HISTORY_RETENTION } from './types.js'
+import { stateFolderPath } from './state-folders.js'
 
 export interface CreateHistoryProviderOptions {
   /** Storage under which `.gazetta/history/` lives. Usually the target's storage. */
@@ -67,7 +68,7 @@ interface HistoryIndex {
  */
 export function createHistoryProvider(opts: CreateHistoryProviderOptions): HistoryProvider {
   const { storage } = opts
-  const root = opts.rootPath ?? '.gazetta/history'
+  const root = opts.rootPath ?? stateFolderPath('history')
   const retention = Math.max(1, opts.retention ?? DEFAULT_HISTORY_RETENTION)
   const indexPath = join(root, 'index.json')
 
