@@ -739,9 +739,7 @@ How offline composes with each of the other 12 foundational dimensions plus the 
 - Cancelled-before-replay edits not audited (never reached server).
 
 ### Review (#6)
-- Pending edits in offline queue can include review-state transitions (submit-for-review, approve, reject).
-- Replay applies the standard state-machine guards: capability check at replay time; conflict on replay if state changed in the meantime.
-- `If-Match` chain works on review-state hashes too (each transition produces a new hash).
+- Review actions (submit, approve, reject, withdraw) need the server in v1; they aren't queued offline (`design-review-workflow.md`, 2026-10-25). Queue-and-replay is a future direction there.
 
 ### Hooks (#7)
 - Hook firings during offline queue with the save; replayed on reconnect alongside the save.

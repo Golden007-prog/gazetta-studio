@@ -8,7 +8,7 @@ paths:
 
 Foundational dimension #6 of 13. Content review state machine + per-target publish approval. Operators with team workflows (content quality review, release management gates, compliance approvals) configure their flow per target; solo / small-team workflows bypass.
 
-**Status**: design pass complete (2026-05). Selected as the next feature-bot candidate (2026-06-07), when it was the top committed **Phase-2** feature in [`ROADMAP.md`](../../ROADMAP.md), with all foundations (AuthIdentity + Audit + Hooks) shipped. The "Tier 3" status line in earlier passes was written before those foundations landed; ROADMAP is the live prioritization artifact, and it now lists this in Now ("Review workflow — finish"). Before migration to a tracking issue + cut sub-issues, the three High-risk UX cuts (8 ReviewBanner/ReviewActions + state badges; 9 publish-approval gate; 10 per-target publish-approval UX) get a **UX-grilling pass** (Phase 2a of [`feature-design-process.md`](feature-design-process.md), which the original design pass skipped — that's *why* they're High-risk). The grilling output is **Storybook stories** (per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md)) that lock each component's states + layout + copy + `data-testid`s. The stories become the cut's executable spec; feature-bot implements components to green stories rather than inventing UX. With the UX locked in stories, all 15 cuts stay bot work.
+**Status**: design pass complete (2026-05). Selected as the next feature-bot candidate (2026-06-07), when it was the top committed **Phase-2** feature in [`ROADMAP.md`](../../ROADMAP.md), with all foundations (AuthIdentity + Audit + Hooks) shipped. The "Tier 3" status line in earlier passes was written before those foundations landed; ROADMAP is the live prioritization artifact, and it now lists this in Now ("Review workflow — finish"). Before migration to a tracking issue + cut sub-issues, the High-risk UX cuts (now cut 11, ReviewBanner + state badge, and cut 14, publish-approval gate UX) get a **UX-grilling pass** (Phase 2a of [`feature-design-process.md`](feature-design-process.md), which the original design pass skipped — that's *why* they're High-risk). The grilling output is **Storybook stories** (per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md)) that lock each component's states + layout + copy + `data-testid`s. The stories become the cut's executable spec; feature-bot implements components to green stories rather than inventing UX. With the UX locked in stories, every cut stays bot work.
 
 **Companion docs**:
 - [`feature-design-process.md`](feature-design-process.md) — defines the **Review check** every new feature design must answer
@@ -84,8 +84,9 @@ Failure outcomes (`forbidden`, `validation-failed`, `unauthenticated`) follow th
 ### Storage shape (per-edge sidecars)
 - `.gazetta/review/{kind}/{name}/state.json` — current review state + timestamps (comments live in the audit log — see "Audit event shape")
 - `.gazetta/review/{kind}/{name}/approvers/{actor}` — zero-byte per-approver sidecar
-- `{target-root}/.gazetta/publish-requests/{kind}/{name}/{request-id}.json` — publish request state
-- `{target-root}/.gazetta/publish-requests/{kind}/{name}/{request-id}/approvers/{actor}` — zero-byte per-approver sidecar
+- `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}.json` — publish request state, on the source the author publishes from (amended 2026-10-25, below)
+- `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}/approvers/{actor}` — zero-byte per-approver sidecar
+- `.gazetta/review/pending/{kind}/{name}` and `.gazetta/publish-requests/{target}/pending/{request-id}` — zero-byte pending markers the queues list (2026-10-25, below)
 - Per-edge granularity → multi-instance correct via the same pattern as asset-refs
 
 ### Publish-approval execution (locked 2026-10-04)
@@ -114,7 +115,7 @@ Decided: maintainer, 2026-10-22 (#1120)
 Settled when review-workflow moved to a planner issue (#1433), against the shared target-publish function publish undo cut 1 built (`publishToTarget`, `packages/gazetta/src/publish-target.ts`, #1430).
 
 1. **The approval publishes.** Lock 4 stands: the approval that meets the threshold publishes. The publish panel's row for that request then reads "Published by {approver}" and has no **Publish** button (Surface 3, `DestApproved`).
-2. **An approved publish passes the gate by its request.** The approval passes its request id to the shared function; the gate lets the publish through only if that request exists, has met its threshold and its snapshot still matches (lock 3). Nothing else skips the gate.
+2. **An approved publish passes the gate by its request.** The approval passes its request id to the shared function; the gate lets the publish through only if that request exists, has met its threshold and its snapshot still matches (lock 3). Nothing else skips the gate, except undoing the latest publish (below).
 3. **The caller passes the user; the gate refuses none.** The shared function takes the signed-in user. The admin passes it; the CLI passes none, and the gate refuses a gated target without a user with lock 6's message. The gate is the one place that enforces this, so a later caller can't bypass it.
 4. **One request per item string.** Lock 5's caller-expanded list is the function's `items` (dependents included): a page with its translations is one request, and a translation published alone (`pages/about:fr`) is its own request.
 5. **The publish-pending queue is its own cut, after cut 13** (cut 21). Cut 17 covers pending reviews only, as locked in #1407.
@@ -132,6 +133,35 @@ Decided: maintainer, 2026-10-25 (#1434)
 | Leave the publish-pending queue out of v1 | Approvers would find publish requests only per content, in the publish panel |
 | Build the emergency capability in v1 | A bypass weakens the gate; publish undo and self-approval cover the urgent cases |
 | Build offline queue-and-replay for review actions in v1 | They check capabilities and snapshots on the server |
+
+### Settled by the plan review (locked 2026-10-25)
+
+A read-only review of the remaining cuts against the current code and the newer designs (public storage, publish undo, target removal, scale) found these open before cut-planner files cuts 12 onwards.
+
+1. **Undoing the latest publish skips the gate.** On a target that requires publish approval, Undo after a publish runs at once, as [`design-publish-undo.md`](design-publish-undo.md) Q2 locks; it needs `restore:history` and the target's publish capability. `gazetta undo` on such a target is refused with lock 6's message. Rolling back further is a request (lock 3).
+2. **Publish requests live on the source.** `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}.json` and its approvers, on the source the author publishes from, as [`design-public-storage.md`](design-public-storage.md) Q5 records them, so a public production target can require approval. The request records its source, so the approval re-hashes the right content. `publish-requests` joins the state folder registry (`state-folders.ts`) as not safe on public targets (cut 12).
+3. **Requesting doesn't need the production capability.** On a target that requires publish approval, `POST /api/publish` doesn't refuse for a missing `publish:production`; the gate creates the request, which needs `publish:request` (lock 5). An author with only `publish:request` clicks **Publish** and sees "Approval requested".
+4. **The approval runs Publish's own steps.** The approval that meets the threshold runs the steps `POST /api/publish` runs before the shared function, for exactly the requested item: dependency expansion, `beforePublish` hooks, the validation gate and the publish audit event. They move into one helper both call, so a template changed since the request is still checked.
+5. **A failed approved publish can be retried.** If the publish fails, the request stays `publish-approved` with the failure reason. Its row reads "Approved, publish failed: {reason}" with **Retry** (`publish:approve`), which re-checks the snapshot first. Two final approvals at the same moment on two instances can both publish the same content; that's accepted and documented.
+6. **The snapshot covers every file the request publishes.** A request records one `hashManifest` per manifest it will copy (the page and each translation); any difference at approval answers `409 STALE_REQUEST`.
+7. **Review doesn't block publishing.** With review on and publish approval off (archetype B), content that isn't approved still publishes; the publish panel marks those rows "Not approved" (cut 22). Only publish approval blocks.
+8. **One review state per page.** A page and its translations are reviewed together, as `review/sidecars.ts` keys them today; a translation can't be submitted on its own in v1.
+9. **Pending markers for the queues.** Submitting writes a zero-byte `.gazetta/review/pending/{kind}/{name}`, removed on approve, reject or withdraw (cut 7); creating a publish request writes `.gazetta/publish-requests/{target}/pending/{request-id}`, removed when it publishes, is rejected or withdrawn (cut 12). Each queue is one directory listing, within the 5,000-page envelope.
+
+Decided: maintainer, 2026-10-25 (#1434)
+
+| Rejected | Why |
+|---|---|
+| Undo waits for approval like any publish | Reverses publish undo Q2: an emergency undo would wait for an approver |
+| Requests on the target | Public targets, the default for cloud storage, could never require approval |
+| Requesters need `publish:production` as well | Editors couldn't request a production publish; approval would only add a check for people who can already publish |
+| Hooks and validation only when the request is made | A template or hook changed since the request would go unchecked |
+| A failed publish closes the request | The author requests again and approvers approve again after an infrastructure failure |
+| Snapshot the default manifest only | A translation edited after the request would publish without approval |
+| Refuse to publish unapproved content when review is on | Archetype B would become a publish gate |
+| Leave unapproved rows unmarked | Authors can't see that what they publish wasn't reviewed |
+| One review state per translation | Changes the review storage, the save lock and cut 7's routes before cut 7 lands |
+| Read every item's state for the queues, cached | Up to 5,000 reads on cloud storage, past the 5-second admin limit |
 
 ### Configuration
 ```ts
@@ -160,6 +190,8 @@ export default defineSite({
   },
 })
 ```
+
+The content-review policy that applies is the one for the editable target the author saves to, or the site-level block (`resolveSaveReviewPolicy`, `review/save-gate.ts`); cut 7's routes resolve it the same way. A `reviewWorkflow` block on a publish-only target such as `staging` above has no effect on content review.
 
 ### Workflow archetypes (5 documented recipes)
 - **A. Solo** — review off, publish gate off; one actor does everything
@@ -209,7 +241,7 @@ Each archetype gets a copy-paste-ready `site.config.ts` snippet + role mapping +
   | The server returns only items the user can approve | Drops the "all pending I can read" toggle, and filters nothing read access doesn't already |
 
 ### Pending review queue at scale
-- `/api/reviews?target={target}&action={pending-review|publish-pending}&cursor={cursor}` follows prefix-shard + cursor pagination from `design-scale.md`
+- `/api/reviews?target={target}&action={pending-review|publish-pending}&cursor={cursor}` lists the pending markers (one directory listing; 2026-10-25, above) with cursor pagination from `design-scale.md`
 - AdminCache key includes filter params; per-instance cache via `MemoryCache`
 
 ### Configuration changes mid-flight
@@ -263,14 +295,14 @@ How review workflow composes with each of the other 12 foundational dimensions p
 - Pending review queue (`/api/reviews`) reads from storage on demand per request — no shared in-memory queue.
 
 ### Scale (#1)
-- Review queue paginated via prefix-shard + cursor pagination per `design-scale.md`.
+- Review queues list the pending markers (one directory listing) with cursor pagination per `design-scale.md`.
 - Per-content review state lookup is O(1) (`.gazetta/review/{kind}/{name}/state.json` is one file).
 - Approver count check is O(N-approvers) via `readDir` (typically 1-3 approvers, never large).
 - AdminCache key includes filter params; per-instance cache via `MemoryCache`.
 
 ### Locale (#2)
-- Review state is on the content (the manifest). Per-locale manifests (`page.fr.json`) have their own review state — translators submit French content for review separately from default-locale content.
-- Cross-locale review composition: a future "review default + auto-mark locale variants pending" mode is reserved for the per-field translation work; v1 reviews each manifest variant independently.
+- One review state per page or fragment, covering all its translations (2026-10-25, above): a translation can't be submitted on its own in v1.
+- Per-translation review is reserved for the per-field translation work.
 - RTL admin: review drawer / publish-request modal inherit document `dir` from the active locale; CSS logical properties handle the flip.
 
 ### Themes (#3)
@@ -293,7 +325,7 @@ How review workflow composes with each of the other 12 foundational dimensions p
 - `before*` hooks can fail/cancel transitions; `after*` are observational.
 
 ### Render (#8)
-- Review state doesn't affect render output directly. Approved content publishes as normal; pending-review content can preview but can't publish (per the publish-request gate when enabled).
+- Review state doesn't affect render output directly. Content publishes whatever its review state; the publish panel marks rows that aren't approved, and only publish approval blocks (2026-10-25, above).
 - Render-time SSR with `Principal`: a future "show this only to approvers" template hint isn't in v1 review-workflow scope (would belong to RBAC capability checks at render time).
 
 ### Validation (#9)
@@ -341,9 +373,9 @@ Each UX cut then **transcribes its slice of the locked design-doc state table** 
 
 Three surfaces were grilled into locked story specs. Each named story = one Storybook story = one bot spec variant.
 
-**Surface 1 — `ReviewBanner.vue`** (= `<Banner>` + inline `<Button>` actions; mounts above the editor à la `ArchiveBanner`; renders only when the active target has `reviewWorkflow.enabled` — absence-as-state otherwise). **`ReviewActions` is folded in** — no separate component. The design doc's earlier two-component naming was unjustified enumeration (rule 25); every POV (discoverability, SRP, bot-risk, Krug) favored fusion, matching the `ArchiveBanner` precedent where the banner hosts its own actions. The 9 stories below *are* the action spec (each names its buttons); a separate `ReviewActions.vue` would only add a coordination bug class (banner/actions out of sync) that fusion eliminates by construction.
+**Surface 1 — `ReviewBanner.vue`** (= `<Banner>` + inline `<Button>` actions; mounts above the editor à la `ArchiveBanner`; renders only when the active target has `reviewWorkflow.enabled` — absence-as-state otherwise). **`ReviewActions` is folded in** — no separate component. The design doc's earlier two-component naming was unjustified enumeration (rule 25); every POV (discoverability, SRP, bot-risk, Krug) favored fusion, matching the `ArchiveBanner` precedent where the banner hosts its own actions. The 10 stories below *are* the action spec (each names its buttons); a separate `ReviewActions.vue` would only add a coordination bug class (banner/actions out of sync) that fusion eliminates by construction.
 
-Root testid `review-banner` with `data-state` (the `OfflineBanner` pattern). The 9 stories enumerate content-state × actor-capability × config; **draft has two visible variants** — clean (fresh/withdrawn, no message) vs. with-note (rejected or auto-invalidated, shows the reason). The rejected variant is load-bearing: without it the author never sees *why* content bounced (the hole the first-draft matrix missed).
+Root testid `review-banner` with `data-state` (the `OfflineBanner` pattern). The 10 stories enumerate content-state × actor-capability × config; **draft has two visible variants** — clean (fresh/withdrawn, no message) vs. with-note (rejected or auto-invalidated, shows the reason). The rejected variant is load-bearing: without it the author never sees *why* content bounced (the hole the first-draft matrix missed).
 
 | Story | Content state | Viewer | Severity / copy | Buttons (testid) |
 |---|---|---|---|---|
@@ -378,11 +410,11 @@ Each action button has an in-flight `:loading` variant (the `archive.status === 
 | `DestApproved` | gated, threshold met (the approval published) | `<StateBadge>` "Published by {approver}"; no **Publish** button (2026-10-25) |
 | `DestNoCap` | gated, viewer lacks `publish:request` | `<StateBadge>` "Requires publish approval" (informational) |
 
-The cross-content approver queue (Cut 13) is **not** part of the gate cut — approvers acting on *this* content's publish do so inline in `PublishPanel`; finding pending requests *across all content* is the queue's job.
+The cross-content approver queues (cuts 17 and 21) are **not** part of the gate cut — approvers acting on *this* content's publish do so inline in `PublishPanel`; finding pending requests *across all content* is the queue's job.
 
 ## Cut sequence
 
-Reshaped from the retired impl doc's 15-cut sequence during the migration to the tracking-issue + cut-sub-issue model (2026-06-07), integrating the UX-grilling decisions. Three changes from the original 15: (1) two additive UI-primitive cuts (`<StateBadge>`, `<Banner>`, each with its `.stories.ts`) prepend the UX work; (2) one cut wires the story runner (`@storybook/addon-vitest`) into CI so stories execute green — the gate every UX cut relies on; per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md) (second revision) there is **no** separate human story-authoring cut — the human spec is the locked state table in this doc, which the bot transcribes into `.stories.ts` within each UX cut; (3) UX cuts reshaped per the locked story specs (ReviewActions folded into ReviewBanner; publish-gate as PublishPanel destination rows). 19 cuts total, all bot work.
+Reshaped from the retired impl doc's 15-cut sequence during the migration to the tracking-issue + cut-sub-issue model (2026-06-07), integrating the UX-grilling decisions. Three changes from the original 15: (1) two additive UI-primitive cuts (`<StateBadge>`, `<Banner>`, each with its `.stories.ts`) prepend the UX work; (2) one cut wires the story runner (`@storybook/addon-vitest`) into CI so stories execute green — the gate every UX cut relies on; per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md) (second revision) there is **no** separate human story-authoring cut — the human spec is the locked state table in this doc, which the bot transcribes into `.stories.ts` within each UX cut; (3) UX cuts reshaped per the locked story specs (ReviewActions folded into ReviewBanner; publish-gate as PublishPanel destination rows). 22 cuts total, all bot work.
 
 State lives in GitHub sub-issue close-state; this table is intent only (no status column). `agent` = feature-bot; `human` = maintainer-authored (story authoring is design, not bot work).
 
@@ -394,27 +426,28 @@ State lives in GitHub sub-issue close-state; this table is intent only (no statu
 | 4 | Review state machine (`draft → pending-review → approved`, explicit-action invariant) | 2, 3 | agent | unit-first | High |
 | 5 | Save-handler integration (`pending-review` 409s edits; `invalidateOnSave` policies) | 4 | agent | api-first | Medium |
 | 6 | Audit integration (4 content-review actions + outcomes) | 4 | agent | api-first | Low |
-| 7 | Admin API routes (`submit`/`approve`/`reject`/`withdraw` + `GET`) | 4, 5, 6 | agent | api-first | Medium |
+| 7 | Admin API routes (`submit`/`approve`/`reject`/`withdraw` + `GET`); pending markers (2026-10-25 item 9) | 4, 5, 6 | agent | api-first | Medium |
 | 8 | **Extract `<StateBadge>` primitive + its `.stories.ts`** (additive; SiteTree/ComponentTree may opt in via Boy-Scout later) | 10 | agent | component | Low |
 | 9 | **Extract `<Banner>` primitive + its `.stories.ts`** (additive; 4 shipped banners untouched; follow `ArchiveBanner.stories.ts`) | 10 | agent | component | Medium |
 | 10 | **Wire the story runner (`@storybook/addon-vitest`) into CI** so `.stories.ts` execute green (not view-only) — the gate every UX cut relies on | — | agent | api-first | Low |
 | 11 | ReviewBanner.vue (= `<Banner>` + `<Button>`s; ReviewActions folded in) + ReviewRejectDialog + SiteTree state badge + **their `.stories.ts` (transcribed from the design-doc state table) running green** | 7, 8, 9, 10, 20 | agent | component | High |
-| 12 | Publish-request state machine + per-edge request/approver sidecars + the gate at the start of the shared target-publish function (creates requests for `requiresPublishApproval` targets; CLI refuses; removal requests come with target removal cut 2, rollback requests with publish undo cut 4) — locks 1, 5, 6 | 4, publish undo cut 1 | agent | api-first | High |
-| 13 | Publish-approval admin API (`approve`/`reject`/`withdraw` + `GET`), snapshot check (`409 STALE_REQUEST`), execution on the threshold approval — locks 2, 3, 4 | 12 | agent | api-first | High |
+| 12 | Publish-request state machine + per-edge request/approver sidecars + the gate at the start of the shared target-publish function (creates requests for `requiresPublishApproval` targets; CLI refuses; removal requests come with target removal cut 2, rollback requests with publish undo cut 4) — locks 1, 5, 6; requests on the source, the production check giving way to the gate, per-file snapshot, pending markers (2026-10-25 items 2, 3, 6, 9) | 4, publish undo cut 1 | agent | api-first | High |
+| 13 | Publish-approval admin API (`approve`/`reject`/`withdraw` + `GET`), snapshot check (`409 STALE_REQUEST`), execution on the threshold approval with Publish's own steps, Retry after a failed publish — locks 2, 3, 4; 2026-10-25 items 4, 5 | 12 | agent | api-first | High |
 | 14 | Publish-approval gate UX — PublishPanel destination rows + **their `.stories.ts` (5 states from the design-doc table) running green** | 8, 10, 13, 20 | agent | component | High |
 | 15 | Combined "Submit & approve" + "Publish-request & approve" buttons | 11, 14 | agent | component | Low |
 | 16 | Constructive errors (`409 NO_APPROVER_AVAILABLE`; boot config validation; helpful 403s) | 7, 13 | agent | api-first | Low |
 | 17 | Pending review queue (cross-content "what's waiting for me"; `GET /api/reviews?action=pending-review`; paginated) | 7 | agent | api+component | Medium |
-| 18 | Hook integration (10 review-lifecycle phases per `design-hooks.md`) | 4, 12 | agent | api-first | Medium |
+| 18 | Hook integration (10 review-lifecycle phases per `design-hooks.md`) | 7, 13 | agent | api-first | Medium |
 | 19 | Docs (`docs/review-workflow.md` 5 archetypes) + consolidation (retire impl doc → this design doc; ROADMAP; CLAUDE.md) | all | agent | (docs) | Low |
 | 20 | **Agent B visual self-check + PR screenshot embed** — `bots/_lib` screenshot helper (Playwright, reuse `tools/mcp-dev` logic) + Storybook built and served from bot code (`bots/_lib/storybook-server.ts`; no workflow edit, since bots can't push `.github/workflows/**`, #840) + reviewer-prompt contract (screenshot each new/changed story → visual verdict vs design-doc state table → factor into APPROVE/REJECT) + **upload screenshots as Release assets (`gh release upload`, tag `bot-screenshots`), embed inline via the public `…/releases/download/…` URLs, and prune merged/closed PRs' assets at the start of each feature-bot run (best-effort; PR opens without images on failure)** | 10 | agent | (bot infra) | Medium |
 | 21 | Publish-pending queue (`GET /api/reviews?action=publish-pending`; paginated, same shape as cut 17) | 13, 17 | agent | api+component | Medium |
+| 22 | Publish panel marks rows that aren't approved ("Not approved") when review is on (2026-10-25 item 7) | 7 | agent | component | Low |
 
 **Notes on the reshape:**
 - **No separate human story-authoring cut.** Per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md) (second revision), the human spec is the locked state table in this design doc (UX-grill output); the bot **transcribes** it into `.stories.ts` *within* each component cut and implements the component to it. The story runs green under `@storybook/addon-vitest`. The independent spec is the design-doc table + each cut's `## Acceptance`, not a hand-authored story file — bounded tautology risk, accepted because the tables are locked first.
 - **Cut 10 is the story-runner CI wiring** (`@storybook/addon-vitest`) — repurposed from the now-removed human story-authoring cut. No-dep; the gate that makes "stories run green" real. Every UX cut (8, 9, 11, 14) depends on it.
 - Cuts 8, 9 (primitives + their stories) depend only on the story-runner (10); they otherwise run in parallel with the data-shape cuts 1–7.
-- Cut 11 folds `ReviewActions.vue` into `ReviewBanner.vue` (the 9 stories encode all button logic) and adds the SiteTree badge via `<StateBadge>`; it authors `ReviewBanner.stories.ts` + `ReviewRejectDialog.stories.ts` from the design-doc state table.
+- Cut 11 folds `ReviewActions.vue` into `ReviewBanner.vue` (the 10 stories encode all button logic) and adds the SiteTree badge via `<StateBadge>`; it authors `ReviewBanner.stories.ts` + `ReviewRejectDialog.stories.ts` from the design-doc state table.
 - Cut 14 is PublishPanel destination-row states (5 stories), not a new surface.
 - Cut 17 is the cross-content queue — distinct from cut 14's per-content gate (the UX-grill walk surfaced this split).
 - Cut 20 adds **Agent B visual self-check + PR screenshot embed** (per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md) "validation stack" + "Screenshots embedded in the PR"): the reviewer screenshots each new/changed story, judges it against the design-doc state table (factoring into APPROVE/REJECT), **and embeds those screenshots in the PR body so the human reviewer sees rendered states inline.** The self-check catches *gross* visual failures (invisible element, overflow, collapsed layout) — advisory bot-loop, **not** a CI gate and **not** pixel-regression (LLM-judges-prose, no baseline; the real visual gate stays human PR review). The PR embed **uploads the screenshots as GitHub Release assets** (`gh release upload`, rolling `bot-screenshots` tag) and embeds them inline via the public `…/releases/download/…` URLs (per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md): token-only, official API, public-served raw bytes that render inline). **The bytes never touch `main`** — which is *why* this beats the feature-branch-commit option (whose commits would merge into `main`'s history under squash/rebase/merge even though the branch is deleted). **Cleanup by reconciliation:** each feature-bot run starts by deleting the assets of cuts whose PR is merged or closed (`gh release delete-asset`); a PR-close trigger would need a workflow file bots can't push (#840), so closed PRs' screenshots linger up to a week. Best-effort with a mandatory fallback: on upload failure the PR opens without images + a note, never blocked; a cleanup failure never blocks the merge. UX cuts 11 + 14 depend on it. Depends only on Cut 10 (needs `build-storybook` working). Revised 2026-10-18: everything runs from bot code, no workflow edit (#535).

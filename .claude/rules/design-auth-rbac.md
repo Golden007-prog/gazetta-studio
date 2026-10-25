@@ -32,7 +32,7 @@ Adding auth/RBAC later means auditing every endpoint consumer and adding a Princ
 - **history-recorder is the foundation for audit log.** `recordWrite()` already runs on every save and publish ([packages/gazetta/src/history-recorder.ts](../../packages/gazetta/src/history-recorder.ts)). The audit log adds an `actor` field; doesn't replace the existing primitive.
 - **Audit log is the source of real-time events.** Per the real-time event-source discipline in `feature-design-process.md`, save/publish handlers record to audit log; real-time push (presence, live publish status) observes audit log. Not bolted into save/publish handlers directly.
 - **Permission-filtered output composes here, not in a separate search design.** Filtered listings, search results, dependents queries — all filter by role via the same gate.
-- **Per-target review state.** Review workflows are scoped to the destination target (a publish to `staging` is reviewed independently from a publish to `production`), not site-wide.
+- **Per-content review, per-target publish approval.** Content is reviewed once, on the source; publish approval is opt-in per destination target (`requiresPublishApproval`). See `design-review-workflow.md`.
 
 - **No built-in authentication. Gazetta consumes upstream identity, never does auth itself.** No password storage, no magic links, no OIDC/SAML/OAuth flows, no login UI in Gazetta. Operators put Gazetta admin behind whatever auth their platform provides (Cloudflare Access, Azure App Service Easy Auth, AWS Cognito + ALB, oauth2-proxy / Authelia, Tailscale, Caddy basic auth, etc.). Gazetta reads the authenticated principal from configured request headers populated by the upstream layer.
 
@@ -229,7 +229,7 @@ How auth/RBAC composes with each of the other 12 foundational dimensions plus th
 
 ### Review (#6)
 - Review-state transitions consume capabilities (`review:submit`, `review:approve`, `publish:request`, `publish:approve`).
-- Self-approval is configurable; default deny (the same principal can't approve their own submission). Configuration lives in `site.config.ts admin.review.allowSelfApproval`.
+- Self-approval is configurable with `reviewWorkflow.allowSelfApproval`, default `true`; with `false`, the submitter can't approve their own submission (`design-review-workflow.md`).
 - The review state machine attributes each transition to a `Principal` so the history trail is reconstructable from audit log alone.
 
 ### Hooks (#7)

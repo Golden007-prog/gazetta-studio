@@ -2,7 +2,7 @@
 
 How a page or fragment deleted on the source stops being served by a target. Today nothing removes a published item: a page deleted by hand or with `git rm` stays live on every target, and the admin counts it as a difference that no action can resolve.
 
-**Status**: design pass complete (2026-10-22), grilled Q1–Q11. An independent review the same day added Q12–Q16 and corrected Discovery, Q2–Q7 and Q9. Implementation not started. The planner issue opens once publish undo cut 2 ([#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092)) and target indices cut 2 ([#1093](https://github.com/gazetta-studio/gazetta-studio/issues/1093), the plan for #1077) and review workflow cuts 12–13 ([#526](https://github.com/gazetta-studio/gazetta-studio/issues/526), [#527](https://github.com/gazetta-studio/gazetta-studio/issues/527)) have landed (Q11).
+**Status**: design pass complete (2026-10-22), grilled Q1–Q11. An independent review the same day added Q12–Q16 and corrected Discovery, Q2–Q7 and Q9. Implementation not started. The planner issue opens once publish undo cut 2 ([#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092)) and target indices cut 2 ([#1093](https://github.com/gazetta-studio/gazetta-studio/issues/1093), the plan for #1077) and review workflow cuts 12–13 (planner [#1433](https://github.com/gazetta-studio/gazetta-studio/issues/1433)) have landed (Q11).
 
 **Companion docs:**
 - [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094): the issue this design resolves
@@ -201,7 +201,7 @@ Items only on the target keep counting toward "N behind". Each now has an action
 
 ### Q11 — Cut sequence, queued after its prerequisites
 
-See "Cut sequence". The planner issue opens once #1092 cut 2, #1093 cut 2 and review workflow cuts 12–13 (#526, #527) have landed; #1092 and #1093 have a comment pointing here. The wait for review workflow cuts 12–13 was added on 2026-10-23 (Cut sequence).
+See "Cut sequence". The planner issue opens once #1092 cut 2, #1093 cut 2 and review workflow cuts 12–13 (planner #1433) have landed; #1092 and #1093 have a comment pointing here. The wait for review workflow cuts 12–13 was added on 2026-10-23 (Cut sequence).
 
 Decided: maintainer, 2026-10-23 (#1120).
 
@@ -379,7 +379,7 @@ Composition with designs in flight:
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Archive sidecars on targets (`.gone`, `.alias-<name>`, one per page): written when the archive is published (#1152's cut 2 also needs them), deleted when a live version replaces it; `listSidecars` reports them; `_redirects` built from the target's listing, with this publish's own sidecar writes merged in, in the shared post-publish function | publish undo cut 1 | unit + api | Medium |
-| 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (#526, #527) | api-first | Medium-high |
+| 2 | Removal in publish: the `remove` request field (Q16); removal through publish undo's removal step, own files only (Q3); removals last, skipping those whose relied-on items failed (Q15); the Q4 check against the target's indices, refusing unknown users (Q12); removal requests at the approval gate: lock 3's snapshot and linked requests (Q13); compare reporting per target-only row its archive state, users and whether undo can restore it (Q14); removed routes in the CDN purge; `metadata.removed`; `itemsRemoved` | 1, publish undo cut 2, #1077 cuts 1–2 (#1093), review workflow cuts 12–13 (planner #1433) | api-first | Medium-high |
 | 3 | Publish panel: rows per the UX table; "Also select the N removals"; the still-used rows; confirmation per Q14; stories transcribed from the UX table | 2 | component + e2e | Medium |
 | 4 | CLI: list items only on the target; `--remove`, running compare even with `--force` | 2 | integration | Low |
 | 5 | Docs: removals in the publishing docs; purge guidance in `docs/soft-delete.md`; `--remove` in the CLI docs; `itemsRemoved` in `docs/hooks.md`; archive sidecars in `sidecars.md` | 1–4 | docs | Low |
