@@ -121,6 +121,14 @@ export interface AdminAppOptions {
   /** Target configurations — providers are initialized lazily on first publish/fetch/compare. */
   targetConfigs?: Record<string, TargetConfig>
   /**
+   * Whether the source site has at least one archived page (#1305).
+   * The boot capability-gap warning fires only then; callers that
+   * loaded the site anyway (dev boot) pass the flag so a fresh site
+   * boots without the warning. Defaults to true (warn), preserving
+   * the previous behavior for callers that don't track archive state.
+   */
+  anyArchived?: boolean
+  /**
    * Disable the periodic cache-stats logger. Defaults to false (logger
    * runs every 5 minutes). Tests pass true to avoid background timers
    * leaking into the test runtime.
@@ -267,7 +275,11 @@ export function createAdminApp(opts: AdminAppOptions): AdminApp {
   // plain-static target can't emit 301 redirects from archive
   // operations). Non-blocking — admin starts. Operators see the
   // warning during deploy so misconfiguration surfaces early.
-  if (source.manifest) warnOnCapabilityGaps(source.manifest)
+  // #1305: only once the site has an archived page — a fresh site
+  // gets no warning (the gap still shows in the archive dialog,
+  // site health and the publish check). Callers that don't pass
+  // `anyArchived` keep the warn-always behavior.
+  if (source.manifest) warnOnCapabilityGaps(source.manifest, { anyArchived: opts.anyArchived ?? true })
 
   // Build the per-request source resolver. When target configs are
   // declared, routes honor `?target=<name>` to read from any known
