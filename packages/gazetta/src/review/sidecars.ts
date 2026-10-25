@@ -60,23 +60,24 @@
  */
 import type { ContentRoot } from '../content-root.js'
 import { encodeRefName } from '../hash.js'
+import { stateFolderPath } from '../state-folders.js'
 import type { ReviewSidecar } from './types.js'
 
 export type ReviewStateKind = 'page' | 'fragment'
 
 /** Root review-sidecar directory for one item. */
 function reviewItemDir(contentRoot: ContentRoot, kind: ReviewStateKind, name: string): string {
-  return contentRoot.path('.gazetta', 'review', kind, encodeRefName(name))
+  return contentRoot.path(stateFolderPath('review', kind, encodeRefName(name)))
 }
 
 /** Path to the state.json file for one item. */
 export function reviewStatePath(contentRoot: ContentRoot, kind: ReviewStateKind, name: string): string {
-  return contentRoot.path('.gazetta', 'review', kind, encodeRefName(name), 'state.json')
+  return contentRoot.path(stateFolderPath('review', kind, encodeRefName(name), 'state.json'))
 }
 
 /** Directory holding zero-byte per-approver sidecars for one item. */
 export function reviewApproversDir(contentRoot: ContentRoot, kind: ReviewStateKind, name: string): string {
-  return contentRoot.path('.gazetta', 'review', kind, encodeRefName(name), 'approvers')
+  return contentRoot.path(stateFolderPath('review', kind, encodeRefName(name), 'approvers'))
 }
 
 /**
@@ -91,7 +92,9 @@ export function reviewApproverPath(
   name: string,
   actorId: string,
 ): string {
-  return contentRoot.path('.gazetta', 'review', kind, encodeRefName(name), 'approvers', encodeURIComponent(actorId))
+  return contentRoot.path(
+    stateFolderPath('review', kind, encodeRefName(name), 'approvers', encodeURIComponent(actorId)),
+  )
 }
 
 /**
