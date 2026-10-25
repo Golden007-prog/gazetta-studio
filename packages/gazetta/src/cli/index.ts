@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { resolve, join, dirname, relative } from 'node:path'
+import { resolve, join, dirname, relative, sep } from 'node:path'
 import { watch, existsSync, readFileSync } from 'node:fs'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
@@ -1709,13 +1709,19 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     )
   }
 
-  // ---- Locale fallback for locales added after boot (#1353) ----
-  // Boot registers fallback routes only for the initial manifest's
-  // locales. A locale added to `supported` while dev runs has no
-  // registered routes, so resolve the same fallback per request against
-  // the live manifest. Registered last: Hono short-circuits on the first
-  // handler that returns, so existing routes win and only otherwise-404
-  // paths reach here.
+  // ---- Per-request page resolution and the site's own 404 (#1318) ----
+  // Boot registers routes for the pages and locales that existed at
+  // start-up; everything else lands here. That covers pages created while
+  // the server runs, locale-prefixed paths for locales added to
+  // `supported` after boot (#1353), and unknown URLs. Resolve against a
+  // freshly loaded site built from the live source/manifest, the same
+  // per-request loadSite the boot page handlers do, so new pages answer
+  // without a restart. When no page matches, render the site's own /404
+  // page with status 404 (the decided behavior from #1318, matching
+  // `gazetta serve` and the worker); the devNotFound route list stays
+  // only for a site with no 404 page. Registered last: Hono
+  // short-circuits on the first handler that returns, so existing routes
+  // win and only otherwise-404 paths reach here.
   const matchPageRoute = (pattern: string, path: string): Record<string, string> | null => {
     const pp = pattern.split('/').filter(Boolean)
     const sp = path.split('/').filter(Boolean)
@@ -1728,27 +1734,29 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     return params
   }
   app.all('*', async c => {
-    const segs = new URL(c.req.url).pathname.split('/').filter(Boolean)
-    const loc = segs[0]
+    const pathname = new URL(c.req.url).pathname
+    const segs = pathname.split('/').filter(Boolean)
     const liveLocales = resolveSiteLocales(live.manifest)
-    if (!loc || !liveLocales || loc === liveLocales.default || !liveLocales.supported.includes(loc)) {
-      return c.notFound()
+    let loc: string | undefined
+    let rest = pathname
+    if (segs[0] && liveLocales && segs[0] !== liveLocales.default && liveLocales.supported.includes(segs[0])) {
+      loc = segs[0]
+      rest = '/' + segs.slice(1).join('/')
     }
-    const rest = '/' + segs.slice(1).join('/')
     try {
       const freshSite = await loadSite({ contentRoot: live.source.contentRoot, templatesDir, manifest: live.manifest })
-      for (const [pageName, page] of freshSite.pages) {
-        const routeParams = matchPageRoute(page.route, rest)
-        if (!routeParams) continue
+      const renderFresh = async (pageName: string, routeParams: Record<string, string>, status: 200 | 404) => {
+        const page = freshSite.pages.get(pageName)
+        if (!page) return null
         const resolved = await resolvePage(pageName, freshSite, loc)
-        const freshPage = freshSite.pageLocales.get(pageName)?.locales.get(loc) ?? freshSite.pages.get(pageName)
+        const freshPage = (loc ? freshSite.pageLocales.get(pageName)?.locales.get(loc) : undefined) ?? page
         const html = await renderPage(resolved, {
           routeParams,
           metadata: freshPage?.metadata ?? page.metadata,
           route: freshPage?.route ?? page.route,
           seo: {
             siteName: freshSite.manifest.name,
-            locale: loc,
+            locale: loc ?? _devDefaultLocaleFor(freshSite.manifest),
             defaultOgImage: freshSite.manifest.defaultOgImage,
           },
         })
@@ -1758,9 +1766,21 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
             `${RELOAD_SCRIPT}
 </body>`,
           ),
+          status,
         )
       }
-      return c.notFound()
+      for (const [pageName, page] of freshSite.pages) {
+        const routeParams = matchPageRoute(page.route, rest)
+        if (!routeParams) continue
+        const rendered = await renderFresh(pageName, routeParams, 200)
+        if (rendered) return rendered
+      }
+      const notFoundPage = [...freshSite.pages.entries()].find(([, p]) => p.route === '/404')
+      if (notFoundPage) {
+        const rendered = await renderFresh(notFoundPage[0], {}, 404)
+        if (rendered) return rendered
+      }
+      return devNotFound(freshSite.pages)(c)
     } catch (err) {
       return c.html(renderErrorOverlay(err as Error), 500)
     }
@@ -2048,6 +2068,17 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     const norm = filename.replace(/\\/g, '/')
     if (isStatePath(norm)) return
     if (filename.endsWith('.json') || filename.endsWith('.yaml')) {
+      // Only files under the active source target's content root are
+      // content; JSON elsewhere in the site folder (scratch files, other
+      // targets' state) serves nothing, so don't log or invalidate for
+      // it (#1318). Non-filesystem storage exposes no on-disk root, and
+      // its content can't be watched anyway, so the check is skipped.
+      const sourceRoot = live.source.storage.root
+      if (sourceRoot) {
+        const changedPath = resolve(siteDir, filename)
+        const contentRootAbs = resolve(sourceRoot)
+        if (changedPath !== contentRootAbs && !changedPath.startsWith(contentRootAbs + sep)) return
+      }
       console.log(`  Manifest changed: ${filename}`)
       invalidateAllTemplates()
       // Out-of-band manifest changes (git pull, manual edit, e2e
