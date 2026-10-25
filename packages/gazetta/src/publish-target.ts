@@ -226,10 +226,34 @@ export async function publishToTarget(input: PublishToTargetInput): Promise<Publ
     onProgress,
   })
   const run = runResult.targets.find(t => t.name === targetName)
+  // A failed target stops here: the history revision and the manifest
+  // copy already landed, but no generated files, no generation bump
+  // and no purge - the callers report the failure as they did before
+  // this cut (the admin route skipped these steps on a failed target;
+  // the edge keeps serving the last good generation).
+  if (run?.failed) {
+    return {
+      run,
+      copiedFiles: copiedFiles + variantFiles,
+      generatedFiles: [],
+      deletedFiles: [],
+      purge: { kind: 'none' },
+    }
+  }
 
   // Step 4 - generated files: written or deleted, never skipped.
   const generatedFiles: string[] = []
   const deletedFiles: string[] = []
+  // 404.html at the root of a static target: plain hosts show it for
+  // missing paths (#1152). It is a generated file like the others and
+  // goes out before the generation and the purge, as both callers had
+  // it (#1430 review).
+  const targetType = targetConfig ? getType(targetConfig) : 'static'
+  if (targetType === 'static') {
+    const { writeStatic404 } = await import('./static-404.js')
+    await writeStatic404(targetStorage)
+    generatedFiles.push('404.html')
+  }
   const siteUrl = targetConfig?.siteUrl
   if (siteUrl) {
     const { listSidecars } = await import('./sidecars.js')
@@ -237,29 +261,24 @@ export async function publishToTarget(input: PublishToTargetInput): Promise<Publ
     const { generateRobotsTxt } = await import('./robots.js')
     const targetPageSidecars = await listSidecars(targetStorage, 'pages')
 
-    // Merge source-side knowledge - listSidecars may miss just-written
-    // entries on R2 due to eventual list-after-write consistency.
-    // Every page just published gets an entry even if the listing
-    // missed it.
+    // Merge source-side knowledge for the items published in THIS RUN
+    // only: listSidecars may miss just-written entries on R2 due to
+    // eventual list-after-write consistency, but a page the target
+    // never received must not reach the sitemap (a partial publish
+    // would point at 404s, #1430 review). The CLI publishes every
+    // page, so its sitemap is unchanged.
     const now = new Date().toISOString()
-    for (const [pageName, page] of site.pages) {
-      if (!targetPageSidecars.has(pageName)) {
-        targetPageSidecars.set(pageName, {
-          hash: '',
-          pub: { lastPublished: now, noindex: !!page.metadata?.robots?.includes('noindex') },
-        })
-      }
-    }
-    for (const [pageName, localeEntry] of site.pageLocales) {
-      for (const [loc, localePage] of localeEntry.locales) {
-        const key = `${pageName}:${loc}`
-        if (!targetPageSidecars.has(key)) {
-          targetPageSidecars.set(key, {
-            hash: '',
-            pub: { lastPublished: now, noindex: !!localePage.metadata?.robots?.includes('noindex') },
-          })
-        }
-      }
+    for (const ref of itemRefs) {
+      if (ref.kind !== 'page') continue
+      const key = ref.locale ? `${ref.name}:${ref.locale}` : ref.name
+      if (targetPageSidecars.has(key)) continue
+      const metadata = ref.locale
+        ? site.pageLocales.get(ref.name)?.locales.get(ref.locale)?.metadata
+        : site.pages.get(ref.name)?.metadata
+      targetPageSidecars.set(key, {
+        hash: '',
+        pub: { lastPublished: now, noindex: !!metadata?.robots?.includes('noindex') },
+      })
     }
 
     const { resolveSiteLocales, defaultLocaleFor, localeRoutePrefix } = await import('./locale.js')
@@ -333,6 +352,12 @@ export async function publishToTarget(input: PublishToTargetInput): Promise<Publ
       await targetStorage.writeFile('robots.txt', robotsTxt)
       generatedFiles.push('robots.txt')
     }
+  } else if (await targetStorage.exists('sitemap.xml')) {
+    // No site URL: there is no sitemap content, so a previously
+    // published sitemap comes down rather than staying live
+    // (design-publish-undo.md Q4: written or deleted, never skipped).
+    await targetStorage.rm('sitemap.xml')
+    deletedFiles.push('sitemap.xml')
   }
 
   // Host-format redirects file (e.g. _redirects). Per
