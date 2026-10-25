@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createHistoryProvider } from '../src/history-provider.js'
 import type { RevisionInput } from '../src/history.js'
-import { memoryStorage } from './_helpers/memory-storage.js'
+import { type MemoryStorage, memoryStorage } from './_helpers/memory-storage.js'
 
 function input(items: Record<string, string>, overrides: Partial<RevisionInput> = {}): RevisionInput {
   return {
@@ -109,6 +109,127 @@ describe('createHistoryProvider', () => {
     it('empty when no revisions exist yet', async () => {
       const h = createHistoryProvider({ storage })
       expect(await h.listRevisions()).toEqual([])
+    })
+  })
+
+  describe('readIndex cache recovery (#1254)', () => {
+    // The index.json cache is disposable: the revisions/ listing is the
+    // source of truth, and readIndex must treat a missing, corrupt or
+    // legacy cache as empty so syncIndexCache rebuilds it from the
+    // listing. These tests exercise that through the provider's public
+    // API (recordRevision / listRevisions) plus the stored index data.
+
+    const readStoredIndex = async (): Promise<{ revisions: string[] }> =>
+      JSON.parse(await storage.readFile('.gazetta/history/index.json')) as { revisions: string[] }
+
+    it('no index.json: recordRevision succeeds and writes a fresh index from the listing', async () => {
+      const h = createHistoryProvider({ storage })
+      expect(await storage.exists('.gazetta/history/index.json')).toBe(false)
+
+      const r = await h.recordRevision(input({ 'pages/home': 'a' }))
+
+      expect((await readStoredIndex()).revisions).toEqual([r.id])
+      expect((await h.listRevisions()).map(rev => rev.id)).toEqual([r.id])
+    })
+
+    it('corrupt index.json: recordRevision still succeeds and the cache is rewritten from the listing', async () => {
+      const h1 = createHistoryProvider({ storage })
+      const r1 = await h1.recordRevision(input({ 'pages/home': 'a' }))
+      // Corrupt the cache after the first write.
+      await storage.writeFile('.gazetta/history/index.json', '{not json')
+
+      const h2 = createHistoryProvider({ storage })
+      const r2 = await h2.recordRevision(input({ 'pages/about': 'b' }))
+
+      expect((await readStoredIndex()).revisions).toEqual([r1.id, r2.id])
+      expect((await h2.listRevisions()).map(rev => rev.id)).toEqual([r2.id, r1.id])
+    })
+
+    it('legacy index without a revisions field is treated as empty and rebuilt, not thrown on', async () => {
+      const h1 = createHistoryProvider({ storage })
+      const r1 = await h1.recordRevision(input({ 'pages/home': 'a' }))
+      // Legacy numeric-era shape: no `revisions` field at all.
+      await storage.writeFile('.gazetta/history/index.json', JSON.stringify({ nextId: 3 }))
+
+      const h2 = createHistoryProvider({ storage })
+      const r2 = await h2.recordRevision(input({ 'pages/about': 'b' }))
+
+      expect((await readStoredIndex()).revisions).toEqual([r1.id, r2.id])
+      expect((await h2.listRevisions()).map(rev => rev.id)).toEqual([r2.id, r1.id])
+    })
+
+    it('never reads a cache that does not exist (the exists guard short-circuits before readFile)', async () => {
+      // The guard on readIndex is load-bearing: with no index.json the
+      // provider must not touch readFile for it at all. Counting reads
+      // at the injected storage boundary (same decorator style as
+      // history-fault-injection.test.ts) observes that behavior through
+      // the provider's API.
+      const inner = memoryStorage()
+      let indexReads = 0
+      const counting: MemoryStorage = {
+        ...inner,
+        async readFile(path: string) {
+          if (path.endsWith('history/index.json')) indexReads += 1
+          return inner.readFile(path)
+        },
+      }
+      const h = createHistoryProvider({ storage: counting })
+
+      await h.recordRevision(input({ 'pages/home': 'a' }))
+
+      expect(indexReads).toBe(0)
+      // The fresh index was still written from the listing afterwards.
+      expect((await inner.readFile('.gazetta/history/index.json')).length).toBeGreaterThan(0)
+    })
+
+    it('no index + empty listing: a no-op delete triggers no spurious index write', async () => {
+      const h = createHistoryProvider({ storage })
+      // Valid id shape, nothing stored: syncIndexCache runs and must
+      // see empty-cache === empty-listing, so nothing is written.
+      await h.deleteRevision('rev-1')
+
+      expect(await storage.exists('.gazetta/history/index.json')).toBe(false)
+    })
+
+    it('corrupt index + empty listing: treated as empty, left for a future real write to rebuild', async () => {
+      await storage.writeFile('.gazetta/history/index.json', '{not json')
+      const h = createHistoryProvider({ storage })
+
+      await h.deleteRevision('rev-1')
+
+      // Empty cache === empty listing: no rewrite, the corrupt bytes are
+      // nobody's source of truth and the next real write rebuilds them.
+      expect(await storage.readFile('.gazetta/history/index.json')).toBe('{not json')
+    })
+
+    it('legacy index + empty listing: tolerated as empty, left untouched', async () => {
+      const legacy = JSON.stringify({ nextId: 3 })
+      await storage.writeFile('.gazetta/history/index.json', legacy)
+      const h = createHistoryProvider({ storage })
+
+      await h.deleteRevision('rev-1')
+
+      expect(await storage.readFile('.gazetta/history/index.json')).toBe(legacy)
+    })
+
+    it('stale index out of sync with the listing is rewritten from the listing', async () => {
+      // The cache is never the source of truth: an index naming revisions
+      // the listing does not have must be rebuilt on the next sync.
+      await storage.writeFile('.gazetta/history/index.json', JSON.stringify({ revisions: ['rev-stale'] }))
+      const h = createHistoryProvider({ storage })
+
+      await h.deleteRevision('rev-1')
+
+      expect((await readStoredIndex()).revisions).toEqual([])
+    })
+
+    it('a valid index round-trips: sequential records accumulate oldest-first', async () => {
+      const h = createHistoryProvider({ storage })
+      const r1 = await h.recordRevision(input({ 'pages/home': 'a' }))
+      const r2 = await h.recordRevision(input({ 'pages/about': 'b' }))
+      const r3 = await h.recordRevision(input({ 'pages/contact': 'c' }))
+
+      expect((await readStoredIndex()).revisions).toEqual([r1.id, r2.id, r3.id])
     })
   })
 
