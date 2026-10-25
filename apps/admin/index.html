@@ -17,23 +17,32 @@
     //   structuredClone          Chrome 98  / Firefox 94  / Safari 15.4
     //   Array.prototype.findLast Chrome 97  / Firefox 104 / Safari 15.4
     //   AbortSignal.timeout      Chrome 103 / Firefox 100 / Safari 16.0
-    //   class static block       Chrome 94  / Firefox 93  / Safari 16.4
-    // No probe matches the exact minimum versions; the message is a graceful
-    // degradation for browsers well outside the supported range, not a hard
-    // version gate.
+    //   CSS lab() color          Chrome 111 / Firefox 113 / Safari 15.4
+    //   HTMLElement inert        Chrome 102 / Firefox 112 / Safari 15.5
+    //   importmap support        Chrome 89  / Firefox 108 / Safari 16.4
+    // Chrome and Safari are probed at their exact minimum versions (lab()
+    // at Chrome 111, importmap at Safari 16.4); Firefox 114 shipped nothing
+    // a probe can detect, so its effective probe floor is 113. No probe uses
+    // eval or new Function, so a strict Content-Security-Policy cannot
+    // false-trigger the message; if CSP blocks inline scripts entirely the
+    // check simply never runs and the bundle is unaffected. This is still
+    // graceful degradation, not a hard version gate: a browser one step
+    // below the floor can pass every probe and runs whatever the bundle
+    // gives it.
     (function () {
       var ok =
         typeof window.structuredClone === 'function' &&
         typeof Array.prototype.findLast === 'function' &&
         typeof window.AbortSignal === 'function' &&
-        typeof window.AbortSignal.timeout === 'function';
-      if (ok) {
-        try {
-          ok = !!new Function('class A { static {} }');
-        } catch (e) {
-          ok = false;
-        }
-      }
+        typeof window.AbortSignal.timeout === 'function' &&
+        typeof window.HTMLElement === 'function' &&
+        'inert' in window.HTMLElement.prototype &&
+        typeof window.HTMLScriptElement === 'function' &&
+        typeof window.HTMLScriptElement.supports === 'function' &&
+        window.HTMLScriptElement.supports('importmap') &&
+        typeof window.CSS !== 'undefined' &&
+        typeof window.CSS.supports === 'function' &&
+        window.CSS.supports('color', 'lab(50% 40 60)');
       if (!ok) {
         var el = document.getElementById('browser-too-old');
         if (el) el.style.display = 'block';
