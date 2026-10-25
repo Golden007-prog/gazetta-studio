@@ -37,6 +37,7 @@ import {
 import type { SourceContext } from '../admin-api/source-context.js'
 import { rebuildAssetRefs, type ItemRef } from '../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../fragment-deps.js'
+import { isManualRedirectArchive } from '../archive-helpers.js'
 import { loadSiteFromSource } from '../admin-api/source-context.js'
 import type { PageManifest } from '../types.js'
 import type { SaveAuditRecorder, SavePrincipal } from '../manifest-save.js'
@@ -99,6 +100,8 @@ export interface CreatePageArchivedConflict {
     readonly archivedAt?: string
     readonly archivedBy?: string
     readonly aliasOf?: string
+    /** True when the archive is a Manual Redirect — restore is refused (#1343). */
+    readonly redirect?: boolean
   }
 }
 
@@ -109,11 +112,19 @@ export interface CreatePageInvalidMode {
   readonly mode: string
 }
 
+/** Restore mode targeted a Manual Redirect archive (#1343). */
+export interface CreatePageRedirectRestore {
+  readonly ok: false
+  readonly code: 'REDIRECT_RESTORE'
+  readonly name: string
+}
+
 export type CreatePageResult =
   | CreatePageOk
   | CreatePageLiveConflict
   | CreatePageArchivedConflict
   | CreatePageInvalidMode
+  | CreatePageRedirectRestore
 
 /**
  * Create a Page. Wraps the conflict-resolution decision tree + the
@@ -148,6 +159,9 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
           ...(existing?.archivedAt ? { archivedAt: existing.archivedAt } : {}),
           ...(existing?.archivedBy ? { archivedBy: existing.archivedBy } : {}),
           ...(existing?.aliasOf ? { aliasOf: existing.aliasOf } : {}),
+          // Manual Redirect archives cannot be restored (#1343) — tell
+          // the client so the prompt doesn't offer Restore.
+          ...(existing && isManualRedirectArchive(existing) ? { redirect: true } : {}),
         },
       }
     }
@@ -165,6 +179,10 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
     })
     if (result.kind === 'invalid-mode') {
       return { ok: false, code: 'INVALID_CONFLICT_MODE', mode: onConflict }
+    }
+    // Manual Redirect targeted by restore (#1343) — routes project to 409.
+    if (result.kind === 'redirect-restore') {
+      return { ok: false, code: 'REDIRECT_RESTORE', name }
     }
     // Audit one event per logical mode — mirror existing route shape.
     const action: 'unarchive' | 'archive' | 'rename' =
