@@ -310,14 +310,16 @@ async function deletePurge(kind: 'page' | 'fragment', name: string, force?: bool
         code?: string
         aliases?: PurgeBlocker[]
         liveRefs?: PurgeBlocker[]
+        error?: string
         message?: string
       } | null
       if (body?.code === 'DELETE_BLOCKED') {
         throw new PurgeBlockedError(body.aliases ?? [], body.liveRefs ?? [])
       }
-      // Other 409 (e.g., not found) → generic error with the body
-      // message if present.
-      throw new Error(`Purge ${kind} "${name}" failed (409)${body?.message ? `: ${body.message}` : ''}`)
+      // Other 409 (e.g., NOT_ARCHIVED) → generic error with the body's
+      // reason if present. The archive routes answer with `error`.
+      const reason = body?.error ?? body?.message
+      throw new Error(`Purge ${kind} "${name}" failed (409)${reason ? `: ${reason}` : ''}`)
     }
     throw await readError(res, `Purge ${kind} "${name}"`)
   }
