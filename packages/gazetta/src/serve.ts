@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto'
 import type { SiteManifest, StorageProvider, TargetType } from './types.js'
 import { assembleEsi, parseCacheComment } from './assemble.js'
 import { isPublicSitePath } from './public-site-path.js'
+import { assetServeRoutes } from './assets/serve-route.js'
 import { archiveGoneResponse, archiveResponse } from './runtime/archive-response.js'
 import { aliasTargetIssue, parseArchiveMarker } from './runtime/archive-marker.js'
 import { deriveRoute, fillRouteParams } from './runtime/derive-route.js'
@@ -320,6 +321,15 @@ export function createServer(options: ServeOptions) {
   // Hashed CSS/JS — immutable cache
   app.get('/pages/*', async c => serveAsset(c, storage, true))
   app.get('/fragments/*', async c => serveAsset(c, storage))
+
+  // Published assets (content-addressed uploads) — the same shared route
+  // `gazetta dev` mounts, so ESI serve answers the /assets/* URLs that
+  // templates emit. Registered before locale detection and the page
+  // catch-all, which would otherwise 404 or redirect them (#1330).
+  app.route(
+    '/',
+    assetServeRoutes(async () => storage),
+  )
 
   // Accept-Language detection — redirect unlocalized requests to best match
   if (detection && nonDefaultLocales.length > 0) {
