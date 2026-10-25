@@ -28,6 +28,7 @@ import { Hono } from 'hono'
 import { assembleEsi, parseCacheComment } from '../assemble.js'
 import { archiveResponse } from '../runtime/archive-response.js'
 import { fetchFragmentEntries } from '../runtime/fragment-fetch.js'
+import { stateFolderPath } from '../state-folders.js'
 
 export interface CloudflareR2WorkerOptions {
   /** R2 bucket binding name (default: 'SITE_BUCKET') */
@@ -53,7 +54,7 @@ export interface CloudflareR2WorkerOptions {
 // change cache as before until their next publish. The generation is kept
 // for 5 seconds per isolate, so a cache hit doesn't wait for an R2 read and
 // a page is stale for at most those 5 seconds after a publish.
-const GENERATION_PATH = '.gazetta/publish-generation'
+const GENERATION_PATH = stateFolderPath('publish-generation')
 const GENERATION_TTL_MS = 5000
 const NO_GENERATION_KEY_PART = 'pre-generation'
 
