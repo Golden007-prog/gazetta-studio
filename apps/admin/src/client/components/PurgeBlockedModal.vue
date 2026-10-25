@@ -99,12 +99,13 @@ async function onForcePurge() {
                 @click="onDropAlias(ref)"
               />
               <Button
+                v-if="!ref.redirect"
                 label="Restore"
                 size="small"
                 severity="secondary"
                 text
                 :data-testid="`purge-blocked-restore-${ref.name}`"
-                title="Unarchive the redirect — bring it back to live state"
+                title="Unarchive the archive — bring it back to live state"
                 @click="onRestore(ref)"
               />
             </div>
