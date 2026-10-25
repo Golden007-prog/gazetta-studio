@@ -287,7 +287,16 @@ async function runRestore(opts: {
     sink.line(`✓ Restored ${kind} ${opts.name}`)
     return
   }
-  sink.error(`Restore failed: ${kind} ${opts.name} (HTTP ${res.status})`)
+  // Surface the server's reason (e.g. the Manual Redirect restore
+  // refusal from #1343) instead of a bare status line.
+  let detail = ''
+  try {
+    const body = (await res.json()) as { error?: string }
+    if (body.error) detail = `: ${body.error}`
+  } catch {
+    // Non-JSON error body — keep the status-only message.
+  }
+  sink.error(`Restore failed: ${kind} ${opts.name} (HTTP ${res.status})${detail}`)
   opts.exit(1)
 }
 
