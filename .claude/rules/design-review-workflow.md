@@ -179,7 +179,7 @@ Decided: maintainer, 2026-10-25 (#1434)
 
 Two more, from Seer's second review:
 
-12. **A page's request waits for the fragments it relies on.** When one publish run requests a page and a fragment the page uses that isn't on the target yet, the page's request records the fragment's request. Approving the page's request first is refused: "@promo isn't on production yet: approve its request first." If the fragment's request is rejected or withdrawn, the page's request is withdrawn too, with the reason. This is the pattern [`design-target-removal.md`](design-target-removal.md) Q13 uses for removals.
+12. **A page's request waits for the fragments it relies on.** When one publish run requests a page and a fragment the page uses that isn't on the target yet, the page's request records the fragment's request. Approving the page's request first is refused: "@promo isn't on production yet: approve its request first." If the fragment's request is rejected or withdrawn, the page's request is withdrawn too, with the reason. This is the pattern [`design-target-removal.md`](design-target-removal.md) Q13 uses for removals. On a static target, where fragments are baked into pages, the page's request also waits for the requests of changed fragments it uses: "@header's change isn't approved yet." On ESI targets a changed fragment publishes separately, so only new ones matter.
 13. **Editors can request.** The built-in editor role gains `publish:request`, so an editor clicking **Publish** to a gated target sees "Approval requested". `POST /api/publish` checks `publish:non-production` only for destinations that don't require approval and `publish:request` for those that do (cut 12, with `docs/auth.md`).
 
 Decided: maintainer, 2026-10-25 (#1434)
@@ -187,6 +187,7 @@ Decided: maintainer, 2026-10-25 (#1434)
 | Rejected | Why |
 |---|---|
 | Publish in any order and document it | Production can serve a page without its new fragment until the fragment's request runs |
+| On static targets, approving a page also approves the changed fragments baked into it | A fragment change whose own request is pending would reach production inside the page |
 | One request per publish run on a gated target | Reverses lock 5: approvers could no longer approve items separately |
 | Grant `publish:request` only through custom roles | Out of the box, nobody but an admin could request a publish to a gated target |
 
