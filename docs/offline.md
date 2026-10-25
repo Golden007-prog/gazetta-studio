@@ -208,20 +208,19 @@ you find out the next time you open the affected page (via the
 
 ### Browser support
 
-Hard requirements for the offline experience to work at all:
+The admin bundle needs modern JavaScript: Chrome or Edge 111+, Firefox
+114+ or Safari 16.4+. The bundle targets Vite's default
+"baseline widely available" browser set, so anything older cannot parse
+it at all. `index.html` runs a small check before the bundle loads and
+shows "This browser is too old for the Gazetta admin" with the minimum
+versions instead of leaving a broken page.
 
-| Browser | IndexedDB | BroadcastChannel | Service Worker | Status |
-|---|---|---|---|---|
-| Chrome 80+ | ✓ | ✓ | ✓ | Fully supported |
-| Edge (Chromium) 80+ | ✓ | ✓ | ✓ | Fully supported |
-| Firefox 78+ | ✓ | ✓ | ✓ | Fully supported |
-| Safari 15.4+ | ✓ | ✓ | ✓ | Fully supported |
-| Safari < 15.4 | partial | partial | ✓ | Degrades gracefully |
-| Private / incognito modes | usually disabled | varies | varies | Falls back to in-memory |
-
-When IndexedDB is unavailable, the admin warns once via console and
-falls back to in-memory storage — works for the tab session, lost on
-reload. Authors using private browsing should expect the warning.
+Every browser at or above that floor already ships IndexedDB,
+BroadcastChannel and Service Worker, so the offline features need no
+extra version matrix. When IndexedDB is unavailable (private or
+incognito modes), the admin warns once via console and falls back to
+in-memory storage: works for the tab session, lost on reload. Authors
+using private browsing should expect the warning.
 
 ### HTTPS requirement
 
