@@ -186,7 +186,9 @@ export default defineSite({
 | Production (`NODE_ENV !== 'development'`) | Load once at boot; restart to apply changes |
 | Dev (`NODE_ENV === 'development'`, `gazetta dev`) | File watcher on `gazetta.config.ts` + `sites/*/site.config.ts`; reload on save |
 
-**Dev reload and plugins**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle ([ADR-0009](../../docs/adr/0009-no-plugin-runtime-factory-contributions.md)). A reload re-evaluates the config ([#1353](https://github.com/gazetta-studio/gazetta-studio/issues/1353)); which config-built state it rebuilds is not decided here. Follows from ADR-0009.
+**Dev reload and plugins**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle. A reload re-evaluates the config ([#1353](https://github.com/gazetta-studio/gazetta-studio/issues/1353)); which config-built state it rebuilds is not decided here, including the `admin.hooks`/`admin.validators`/`admin.routes` contributions ([`design-plugins.md`](design-plugins.md) Future directions: plugin hot-reload needs an admin restart).
+
+Follows from ADR-0009 (no lifecycle) and #1353, decided 2026-10-24 (reload on save).
 
 Production never reloads; a process restart releases everything.
 
@@ -264,52 +266,25 @@ Operator runs once per site. Generated TS preserves comments via TS comments; pr
 
 ## Plugin authoring
 
-Plugin authors export typed factory functions:
+There is no plugin runtime ([ADR-0009](../../docs/adr/0009-no-plugin-runtime-factory-contributions.md)): a package exports one factory per extension surface, and the operator invokes each in the right typed array, inline in `defineSite()`:
 
 ```ts
-// In @gazetta/slack-notify
-import type { Plugin, PluginAPI } from 'gazetta'
-
-interface SlackOptions {
-  webhookUrl: string
-  channel?: string
-  transform?: (event: PublishEvent) => string
-}
-
-export default function slackNotify(options: SlackOptions): Plugin {
-  return {
-    name: '@gazetta/slack-notify',
-    init(api: PluginAPI) {
-      api.registerHook('afterPublish', async (target, result, ctx) => {
-        const message = options.transform?.(result) ?? `Published ${result.items.length} items`
-        await fetch(options.webhookUrl, { method: 'POST', body: message })
-      })
-    },
-  }
-}
-```
-
-Operator imports and invokes:
-
-```ts
-import slackNotify from '@gazetta/slack-notify'
+import autoSlugify from './admin/hooks/auto-slugify'
+import { slackHook, slackRoute } from '@example/slack-notify'
+import linkChecker from '@example/link-checker'
 
 export default defineSite({
-  // ...
   admin: {
-    plugins: [
-      slackNotify({
-        webhookUrl: process.env.SLACK_WEBHOOK_URL!,
-        transform: (event) => `🚀 Published ${event.items.length} items by ${event.actor.email}`,
-      }),
-    ],
+    hooks:      [autoSlugify(), slackHook({ webhookUrl: process.env.SLACK_WEBHOOK_URL! })],
+    validators: [linkChecker({ excludePatterns: [/* ... */] })],
+    routes:     [slackRoute({ webhookUrl: process.env.SLACK_WEBHOOK_URL! })],
   },
 })
 ```
 
-Callbacks-as-config is the motivating advantage of TS over YAML.
+Callbacks-as-config is the motivating advantage of TS over YAML. The contribution shapes (`HookContribution`, `Validator`, `RouteContribution`) are in ADR-0009 and [`design-plugins.md`](design-plugins.md).
 
-The exact `Plugin` and `PluginAPI` shapes are the concern of `design-plugins.md` (sequenced after this config doc). This reference doc commits only that plugin invocation happens inline in `defineSite()` via factory functions.
+Follows from ADR-0009.
 
 ## Future directions
 
