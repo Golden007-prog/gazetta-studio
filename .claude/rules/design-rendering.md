@@ -431,7 +431,7 @@ How rendering composes with each of the other 12 foundational dimensions plus th
 - `ctx.requestId` correlates with audit events for the request.
 
 ### Review (#6)
-- Pages in `pending-review` state can preview but can't publish to non-source targets (publish gate per `design-review-workflow.md`).
+- Review state doesn't block publishing: only publish approval does, on targets that require it; the publish panel marks rows that aren't approved (`design-review-workflow.md`, 2026-10-25 item 7).
 - Dynamic targets: pending-review pages can render at request time on the source target only; other targets can't fetch them.
 - Render-for-analysis runs against any state (validates draft + pending-review + approved).
 
