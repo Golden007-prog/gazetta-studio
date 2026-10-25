@@ -1105,6 +1105,9 @@ async function runAdmin(siteDir: string, port: number, hostFlag?: string) {
     targetConfigs,
     hookContributions,
     manifest,
+    // #1305: no site is loaded at admin boot, so defer the capability
+    // warning to the first request that loads one.
+    'defer',
   )
 
   // SPA fallback for non-API admin routes
@@ -2290,7 +2293,7 @@ async function setupProductionMode(
   targetConfigs: Record<string, import('../types.js').TargetConfig> | undefined,
   contributions: ReadonlyArray<import('../hooks/index.js').HookContribution> | undefined,
   manifest: SiteManifest | null,
-  anyArchived?: boolean,
+  anyArchived?: boolean | 'defer',
 ) {
   // Same shape as dev mode — `gazetta serve` reads `admin.hooks`
   // factory contributions from the same site config.
