@@ -7,10 +7,13 @@ import { createMemoryCache, type MemoryCacheOptions } from './memory.js'
  * value IS the constructed `AdminCache` instance (Path X — see
  * `design-provider-config.md`).
  *
- * `gazetta.config.ts defaults.cache` is the documented Exception A: it
- * accepts raw options (not a constructed instance) so each inheriting
- * site builds its own per-site instance from the same defaults — required
- * by `design-cache.md` Gap 3 (per-site cache isolation).
+ * `gazetta.config.ts defaults.cache` follows the same rule: its value
+ * IS the constructed `AdminCache` instance (call `memoryCache({...})`
+ * inline there too). Inheriting sites share that instance per process
+ * (single-Site-per-process invariant — each process re-evaluates
+ * `gazetta.config.ts` and gets its own fresh instance), and the
+ * per-site wrapper still isolates keys by site name (`design-cache.md`
+ * Gap 3).
  */
 
 /** In-process LRU cache. Default 10K entries / 50MB approximate cap. */
