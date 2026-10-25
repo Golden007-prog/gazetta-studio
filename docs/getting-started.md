@@ -27,7 +27,7 @@ npx gazetta dev
 - **http://localhost:3000** — your site
 - **http://localhost:3000/admin** — CMS editor
 
-The server watches for changes and reloads automatically.
+The server watches for changes and reloads automatically. `site.config.ts` edits apply on save: content, locales and targets take effect without a restart, and the admin picks up edited targets too. Two cases still need a restart of `gazetta dev`: changes to `admin.hooks`, `admin.validators` or `admin.routes`, and a target's storage once the admin has published through it, because publish providers are created once and reused (#1446).
 
 ## Templates
 
