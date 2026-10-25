@@ -3,6 +3,7 @@
 ## Prerequisites
 
 - Node.js 22+
+- macOS or Linux. On Windows, use [WSL](https://learn.microsoft.com/windows/wsl/): Gazetta isn't tested on Windows directly.
 
 ## Create a site
 
