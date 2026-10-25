@@ -12,8 +12,8 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer, type Server } from 'node:net'
-import { cp, rm } from 'node:fs/promises'
-import { resolve, dirname } from 'node:path'
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tempDir } from './_helpers/temp.js'
 
@@ -28,7 +28,11 @@ let holder: Server | null = null
 let projectDir: string | null = null
 
 afterEach(async () => {
-  for (const child of children) child.kill('SIGTERM')
+  for (const child of children) {
+    if (child.exitCode !== null) continue
+    child.kill('SIGTERM')
+    await Promise.race([new Promise(r => child.once('close', r)), new Promise(r => setTimeout(r, 5000))])
+  }
   children = []
   if (holder) {
     await new Promise(r => holder!.close(r))
@@ -89,9 +93,13 @@ function runCliUntil(args: string[], marker: string): Promise<string> {
 
 function holdPort(port: number): Promise<void> {
   holder = createServer()
+  // Held on every interface so all three commands conflict regardless of
+  // their listen address: dev and admin bind 127.0.0.1, serve binds all
+  // interfaces (on macOS a 127.0.0.1-only holder would not conflict with
+  // serve's wildcard bind).
   return new Promise<void>((res, rej) => {
     holder!.once('error', rej)
-    holder!.listen(port, '127.0.0.1', () => res())
+    holder!.listen(port, () => res())
   })
 }
 
@@ -113,6 +121,15 @@ describe('CLI on a busy port (#1184)', () => {
     it(`gazetta ${name} on a busy port prints a plain message and exits 1; a free port starts unchanged`, async () => {
       projectDir = tempDir(`busy-port-${name}-${Date.now()}`)
       await cp(starterDir, projectDir, { recursive: true })
+      // The starter's dist/ is gitignored, so CI has no built admin UI and
+      // `gazetta admin` would exit on that check before ever binding the
+      // port. Drop the local build and stub the one file runAdmin requires;
+      // the busy-port path is what is under test, not the admin UI.
+      await rm(join(projectDir, 'dist'), { recursive: true, force: true })
+      if (name === 'admin') {
+        await mkdir(join(projectDir, 'dist/admin'), { recursive: true })
+        await writeFile(join(projectDir, 'dist/admin/index.html'), '<html></html>')
+      }
 
       const port = 4900 + Math.floor(Math.random() * 200)
       await holdPort(port)
