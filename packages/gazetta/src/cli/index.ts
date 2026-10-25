@@ -625,8 +625,22 @@ export default template
     const { execSync } = await import('node:child_process')
     execSync('npm install', { cwd: target, stdio: 'pipe' })
     s.stop('Dependencies installed')
-  } catch {
-    s.stop('npm install failed — run it manually')
+  } catch (err) {
+    // #1300: a failed install used to print "Done!" and exit 0, so a
+    // newcomer (or the Stage 1 tutorial's CI check) ran `gazetta dev` in a
+    // site with no dependencies. The files init wrote stay in place; show
+    // npm's own error, say how to finish, and exit non-zero.
+    s.stop('npm install failed')
+    const e = err as { stdout?: unknown; stderr?: unknown }
+    const npmOutput = [e.stdout, e.stderr]
+      .filter(Boolean)
+      .map(out => String(out).trim())
+      .filter(Boolean)
+      .join('\n')
+    if (npmOutput) console.error(npmOutput)
+    const retryStep = dir !== '.' ? `cd ${dir} && ` : ''
+    outro(`Setup is incomplete. Finish it yourself: ${c.cyan(`${retryStep}npm install`)}`)
+    process.exit(1)
   }
 
   const cdStep = dir !== '.' ? `cd ${dir} && ` : ''
