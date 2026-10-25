@@ -9,7 +9,7 @@
  * publish generation and the CDN purge. Purge scope is the caller's
  * explicit option.
  */
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { publishToTarget, type PurgeOutcome } from '../src/publish-target.js'
@@ -82,7 +82,10 @@ describe('publishToTarget (#1426)', () => {
       ...extra,
     }) as TargetConfig
 
-  const pageName = () => [...site.pages.keys()].find(k => !k.includes('['))!
+  // A publishable content page: not dynamic, not a system page (system
+  // pages never qualify for the sitemap).
+  const pageName = () =>
+    [...site.pages.keys()].find(k => !k.includes('[') && !(site.manifest.systemPages ?? []).includes(k))!
 
   const publish = (targetConfig: TargetConfig, purgeScope: 'all' | 'items' = 'all') =>
     publishToTarget({
@@ -152,6 +155,17 @@ describe('publishToTarget (#1426)', () => {
     expect(await innerTarget.exists('sitemap.xml')).toBe(false)
   })
 
+  it('deletes a previously published sitemap.xml when the target has no site URL', async () => {
+    // Spec acceptance: with no URL for the sitemap there is no sitemap
+    // content, and generated files are written or deleted, never
+    // skipped - the stale file does not stay live.
+    await innerTarget.writeFile('sitemap.xml', 'old sitemap')
+    const result = await publish(stagingConfig({ siteUrl: undefined }))
+    expect(result.generatedFiles).not.toContain('sitemap.xml')
+    expect(result.deletedFiles).toContain('sitemap.xml')
+    expect(await innerTarget.exists('sitemap.xml')).toBe(false)
+  })
+
   it('deletes a previously published redirects file when no redirect rows remain', async () => {
     await innerTarget.writeFile('_redirects', 'old rows')
     const result = await publish(stagingConfig({ redirects: { format: 'cloudflare' } } as Partial<TargetConfig>))
@@ -169,9 +183,155 @@ describe('publishToTarget (#1426)', () => {
   })
 
   it("purgeScope 'items' purges only the published pages' URLs", async () => {
-    const result = await publish(stagingConfig({ cache: { purge: PURGE_CONFIG } }), 'items')
-    expect(purgeCalls).toEqual(['purgeUrls:1'])
+    // The starter's about page has a French version: the purge covers
+    // the published page's URLs including its locale variants, and no
+    // other page's.
+    const result = await publishToTarget({
+      targetName: 'staging',
+      targetStorage,
+      targetConfig: stagingConfig({ cache: { purge: PURGE_CONFIG } }),
+      sourceRoot,
+      sourceName: 'local',
+      site,
+      siteManifest: manifest,
+      items: ['pages/about'],
+      itemRefs: [
+        { kind: 'page', name: 'about' },
+        { kind: 'page', name: 'about', locale: 'fr' },
+      ],
+      templateInfos,
+      purgeScope: 'items',
+    })
+    expect(purgeCalls).toEqual(['purgeUrls:2'])
     expect(result.purge.kind).toBe('purged-urls')
+    if (result.purge.kind === 'purged-urls') {
+      expect(result.purge.urls).toContain('https://example.com/about')
+      expect(result.purge.urls).toContain('https://example.com/fr/about')
+    }
+  })
+
+  it('limits the source-side sitemap merge to the items published in this run (#1430 review)', async () => {
+    // A partial publish must not list pages the target never received
+    // (they would be 404 URLs): only this run's pages merge into the
+    // target listing, alongside what the target already has.
+    const siteRoot = join(tmp, 'site')
+    await mkdir(join(siteRoot, 'pages', 'one'), { recursive: true })
+    await writeFile(
+      join(siteRoot, 'pages', 'one', 'page.json'),
+      JSON.stringify({ template: 'page-default', content: {} }),
+    )
+    await mkdir(join(siteRoot, 'pages', 'two'), { recursive: true })
+    await writeFile(
+      join(siteRoot, 'pages', 'two', 'page.json'),
+      JSON.stringify({ template: 'page-default', content: {} }),
+    )
+    const twoPageRoot = createContentRoot(createFilesystemProvider(siteRoot), '')
+    const twoPageSite = await loadSite({
+      contentRoot: twoPageRoot,
+      templatesDir: starterTemplatesDir,
+      manifest: await starterManifest(),
+    })
+    const result = await publishToTarget({
+      targetName: 'staging',
+      targetStorage,
+      targetConfig: stagingConfig(),
+      sourceRoot: twoPageRoot,
+      sourceName: 'local',
+      site: twoPageSite,
+      siteManifest: manifest,
+      items: ['pages/one'],
+      itemRefs: [{ kind: 'page', name: 'one' }],
+      templateInfos,
+      purgeScope: 'all',
+    })
+    expect(result.run?.failed).not.toBe(true)
+    const sitemap = await innerTarget.readFile('sitemap.xml')
+    expect(sitemap).toContain('/one')
+    expect(sitemap).not.toContain('/two')
+
+    // A follow-up publish of the second page adds it: it is both on
+    // the target (sidecar) and in this run's merge set.
+    const second = await publishToTarget({
+      targetName: 'staging',
+      targetStorage,
+      targetConfig: stagingConfig(),
+      sourceRoot: twoPageRoot,
+      sourceName: 'local',
+      site: twoPageSite,
+      siteManifest: manifest,
+      items: ['pages/two'],
+      itemRefs: [{ kind: 'page', name: 'two' }],
+      templateInfos,
+      purgeScope: 'all',
+    })
+    expect(second.run?.failed).not.toBe(true)
+    const sitemap2 = await innerTarget.readFile('sitemap.xml')
+    expect(sitemap2).toContain('/one')
+    expect(sitemap2).toContain('/two')
+  })
+
+  it('stops before the generated files, generation and purge when the run fails (#1430 review)', async () => {
+    // A target whose renders all fail keeps the history revision and
+    // the manifest copy, but gets no sitemap, no 404, no generation
+    // bump and no purge - the edge keeps serving the last good state.
+    const failing = {
+      ...innerTarget,
+      writeFile: async (path: string, content: string) => {
+        if (path.endsWith('.html')) throw new Error('render write exploded')
+        return innerTarget.writeFile(path, content)
+      },
+    } as StorageProvider
+    const result = await publishToTarget({
+      targetName: 'staging',
+      targetStorage: failing,
+      targetConfig: { type: 'static', environment: 'staging', siteUrl: 'https://example.com' } as TargetConfig,
+      sourceRoot,
+      sourceName: 'local',
+      site,
+      siteManifest: manifest,
+      items: [`pages/${pageName()}`],
+      itemRefs: [{ kind: 'page', name: pageName() }],
+      templateInfos,
+      purgeScope: 'all',
+    })
+    expect(result.run?.failed).toBe(true)
+    expect(result.generatedFiles).toEqual([])
+    expect(result.purge).toEqual({ kind: 'none' })
+    expect(purgeCalls).toEqual([])
+    expect(await innerTarget.exists(PUBLISH_GENERATION_PATH)).toBe(false)
+    expect(await innerTarget.exists('sitemap.xml')).toBe(false)
+    expect(await innerTarget.exists('404.html')).toBe(false)
+    // The manifest copy did land before the render loop.
+    expect(await innerTarget.exists(`pages/${pageName()}/page.json`)).toBe(true)
+  })
+
+  it('writes 404.html for a static target before the generation and the purge (#1430 review)', async () => {
+    const result = await publishToTarget({
+      targetName: 'staging',
+      targetStorage,
+      targetConfig: {
+        type: 'static',
+        environment: 'staging',
+        siteUrl: 'https://example.com',
+        cache: { purge: PURGE_CONFIG },
+      } as TargetConfig,
+      sourceRoot,
+      sourceName: 'local',
+      site,
+      siteManifest: manifest,
+      items: [`pages/${pageName()}`],
+      itemRefs: [{ kind: 'page', name: pageName() }],
+      templateInfos,
+      purgeScope: 'all',
+    })
+    expect(result.run?.failed).not.toBe(true)
+    expect(await innerTarget.exists('404.html')).toBe(true)
+    expect(result.generatedFiles[0]).toBe('404.html')
+    const notFoundIndex = events.indexOf('write:404.html')
+    const generationIndex = events.indexOf(`write:${PUBLISH_GENERATION_PATH}`)
+    expect(notFoundIndex).toBeGreaterThan(-1)
+    expect(generationIndex).toBeGreaterThan(notFoundIndex)
+    expect(purgeCalls).toEqual(['purgeAll'])
   })
 
   it('a bare item records and copies the default plus every translation manifest', async () => {
