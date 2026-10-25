@@ -135,14 +135,21 @@ export async function createTargetRegistry(
           }
           return provider
         }
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(
+        let initTimer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<never>((_, reject) => {
+          initTimer = setTimeout(
             () => reject(new Error(`init timed out after ${TARGET_INIT_TIMEOUT_MS}ms`)),
             TARGET_INIT_TIMEOUT_MS,
-          ),
-        )
-        const provider = await Promise.race([initOne(), timeout])
-        registry.set(name, provider)
+          )
+        })
+        try {
+          const provider = await Promise.race([initOne(), timeout])
+          registry.set(name, provider)
+        } finally {
+          // Clear the guard timer either way: a pending 10s timeout keeps
+          // the Node event loop alive after the CLI's work is done (#1180).
+          clearTimeout(initTimer)
+        }
       } catch (err) {
         console.warn(`  Warning: target "${name}" failed to initialize: ${(err as Error).message}`)
       }
