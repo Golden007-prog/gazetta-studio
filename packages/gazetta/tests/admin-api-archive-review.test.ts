@@ -260,6 +260,40 @@ describe('Cut 14 — unarchive restores to draft (Q9 N-B.1)', () => {
   })
 })
 
+describe('#1344 review — dotted item names have no sidecar path', () => {
+  // `isSafeItemName` allows dots (`v1.2`, `release.notes`) but
+  // `encodeRefName` throws on them, so no review sidecar can ever
+  // exist for a dotted name: archive/unarchive must treat it as
+  // draft instead of 500ing.
+  beforeEach(() => {
+    setup({
+      'pages/release.notes/page.json': JSON.stringify({
+        template: 'page-default',
+        content: {},
+      }),
+    })
+  })
+
+  it('archives a dotted page name without touching the sidecar encoding', async () => {
+    const res = await app.request('/api/pages/release.notes/archive', { method: 'POST' })
+    expect(res.status).toBe(200)
+
+    const archived = await readJson('pages/release.notes/page.json')
+    expect(archived.archived).toBe(true)
+  })
+
+  it('unarchives a dotted page name without touching the sidecar encoding', async () => {
+    await app.request('/api/pages/release.notes/archive', { method: 'POST' })
+
+    const res = await app.request('/api/pages/release.notes/unarchive', { method: 'POST' })
+    expect(res.status).toBe(200)
+
+    const restored = await readJson('pages/release.notes/page.json')
+    expect(restored.archived).toBeUndefined()
+    expect(restored.template).toBe('page-default')
+  })
+})
+
 describe('regression #284 — audit ordering race (direct provider, deterministic)', () => {
   beforeEach(() => {
     setup({
