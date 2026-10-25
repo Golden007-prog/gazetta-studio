@@ -30,3 +30,24 @@ export function authTrustOf(authBlock: unknown): string {
   const trust = (authBlock as { trust?: unknown } | undefined)?.trust
   return typeof trust === 'string' ? trust : 'none'
 }
+
+/**
+ * Print a plain message and exit 1 when a CLI server fails to start (#1184).
+ * Without an 'error' listener, Node rethrows the listen error as an
+ * unhandled 'error' event and the user sees a raw stack trace with no hint
+ * about `-p`. Attach right after `serve()` returns; the listen error fires
+ * on a later turn, so the listener is in place in time.
+ */
+export function exitOnListenError(
+  server: { on(event: 'error', listener: (err: NodeJS.ErrnoException) => void): unknown },
+  port: number,
+): void {
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n  Port ${port} is already in use. Stop the other server or pass \`-p <port>\`.\n`)
+    } else {
+      console.error(`\n  ${err.message}\n`)
+    }
+    process.exit(1)
+  })
+}
