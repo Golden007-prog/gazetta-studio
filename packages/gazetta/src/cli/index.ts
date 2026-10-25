@@ -1818,8 +1818,13 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     console.log(`  ${c.bgGreen(c.bold(' gazetta '))} ${c.green(site.manifest.name)} ${c.dim(`ready in ${elapsed} ms`)}`)
     console.log()
     console.log(`  ${c.dim('┃')} Local    ${c.cyan(`http://localhost:${port}/`)}`)
-    if (isDevMode) {
+    // #1317: the CMS is mounted in both modes (inline Vite in the monorepo,
+    // pre-built static files in the packed package). Print its URL whenever
+    // it is served, not only in monorepo dev mode.
+    if (cmsApp) {
       console.log(`  ${c.dim('┃')} CMS      ${c.cyan(`http://localhost:${port}/admin`)}`)
+    }
+    if (isDevMode) {
       console.log(`  ${c.dim('┃')} Dev      ${c.cyan(`http://localhost:${port}/admin/dev`)}`)
     }
     console.log()
