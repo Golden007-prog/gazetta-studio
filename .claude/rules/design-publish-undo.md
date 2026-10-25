@@ -2,7 +2,7 @@
 
 Undo and rollback on a publish destination put the previous **content** back and publish it, so visitors see the previous version. Today they restore manifests only: the publish panel says "Undone on production" while the live site keeps serving the published version.
 
-**Status**: design pass complete (2026-10-21). Cut 3 landed in #1082 (2026-10-21); cut 1 is next.
+**Status**: design pass complete (2026-10-21). Cut 3 landed in #1082 (2026-10-21), cut 1 in #1430 (2026-10-25); cut 2 is next.
 
 **Companion docs:**
 - [#1084](https://github.com/gazetta-studio/gazetta-studio/issues/1084): the issue this design resolves
@@ -231,7 +231,7 @@ No production users. Revisions recorded before cut 3 on CLI-published targets ha
 ## Open questions
 
 1. ~~**Does deleting a page on the source and publishing leave it on the target today?**~~ **Yes** (read from code, 2026-10-21): compare reports it as `deleted`, but the admin can't select it and the CLI never removes it, so a hand-deleted page stays live and the sync count stays "behind". Filed as [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094); cut 2's removal step is what a fix would use.
-2. **Where the CDN purge actually runs today:** `publishRun` lists it as step 12 but marks it reserved; the CLI and admin route purge themselves. Cut 1 settles it.
+2. ~~**Where the CDN purge actually runs today.**~~ Settled by cut 1 (#1430): in the shared function (`publishToTarget`, step 6), after the publish generation, and not at all for a failed run (Q4).
 
 ## Future directions
 
