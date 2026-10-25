@@ -10,7 +10,6 @@ import { loadSite } from '../site-loader.js'
 import { resolvePage } from '../resolver.js'
 import { renderPage } from '../renderer.js'
 import { createFilesystemProvider } from '../providers/filesystem.js'
-import { writePublishGeneration } from '../publish-generation.js'
 import { invalidateTemplate, invalidateAllTemplates } from '../template-loader.js'
 import { REQUIRED_NODE_FLOOR } from '../node-floor.js'
 import { isTemplateEventRecent, TEMPLATE_RECENT_CHANGE_WINDOW_MS } from './dev-template-watcher.js'
@@ -25,7 +24,6 @@ import { parseArgs } from './args.js'
 import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
 import { devNotFound } from './dev-not-found.js'
 import { viteCacheDir } from './vite-cache-dir.js'
-import { trimTrailingSlashes } from '../url.js'
 import { isStatePath, STATE_ROOT } from '../state-folders.js'
 
 // ANSI color helpers — no dependency, suppressed when NO_COLOR or CI
@@ -668,11 +666,13 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
   const { createTargetRegistry } = await import('../targets.js')
   const targets = await createTargetRegistry(Object.fromEntries(targetNames.map(n => [n, siteYaml.targets![n]])))
 
-  // Per Cut 6 cutover: per-target render loop now goes through publishRun
-  // (imported below at use site). publishRun owns: per-item dispatch +
-  // asset publish + dep indices + site manifest. CLI keeps: incremental
-  // skip via compareTargets, locale fan-out into ItemRefs, console
-  // output via onProgress, sitemap+robots+redirects+purge post-loop.
+  // Per Cut 6 cutover + publish-undo cut 1 (#1426): the per-target
+  // publish goes through the shared target-publish function (imported
+  // at the use site), which runs publishRun's render loop (per-item
+  // dispatch + asset publish + dep indices + site manifest) plus the
+  // history record, manifest copy, generated files and CDN purge.
+  // CLI keeps: incremental skip via compareTargets, locale fan-out
+  // into ItemRefs, console output and exit codes.
   const { scanTemplates, reportTemplateErrors } = await import('../templates-scan.js')
 
   // Validate templates once for this publish run. publishRun consumes
@@ -704,17 +704,16 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
   //     CLI pre-filters ItemRefs[] based on per-locale unchanged sets)
   //   - locale fan-out (CLI expands page name → ItemRef[] including all
   //     locale variants supported by the target)
-  //   - console output (onProgress callback formats human-readable lines)
-  //   - sitemap / robots.txt / _redirects / cache purge (post-publishRun
-  //     side effects on each target — kept inline)
+  //   - console output (onProgress callback formats human-readable lines;
+  //     generated-file and purge lines are echoed from the shared
+  //     function's result)
   //
   // publishRun owns: per-item mode dispatch, archive short-circuit,
   // sidecar emit, asset publish, dep indices, site manifest emit.
-  const { publishRun } = await import('../publish-run.js')
-  const { createContentRoot: _createContentRoot } = await import('../content-root.js')
 
   let failedItems = 0
   const failedTargets: string[] = []
+  const purgeReports: { name: string; outcome: import('../publish-target.js').PurgeOutcome }[] = []
   for (const name of targetNames) {
     const targetStorage = targets.get(name)
     if (!targetStorage) {
@@ -806,41 +805,28 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
       }
     }
 
-    // History (#1079): when the target has history enabled, hand
-    // publishRun a provider so it records one `publish` revision before
-    // any writes — undo can then restore pre-publish state. Best-effort:
-    // publishRun never lets a history failure break the publish.
-
-    // Source manifest copy: publishRun copies the source item
-    // directories to the target (after the history record, so the
-    // baseline stays pre-publish) - the same publishItems step the
-    // admin route runs. CLI and admin then go through one pipeline
-    // and the revision matches what is on the target (#1079 review).
-    let historyProvider
-    const { isHistoryEnabled, getHistoryRetention } = await import('../types.js')
-    if (targetConfig && isHistoryEnabled(targetConfig)) {
-      const { createHistoryProvider } = await import('../history-provider.js')
-      historyProvider = createHistoryProvider({
-        storage: targetStorage,
-        retention: getHistoryRetention(targetConfig),
-      })
-    }
-
-    // Delegate the per-item × per-target render loop + asset publish +
-    // dep indices + site manifest to publishRun. Single-target call;
-    // CLI loops targets itself so per-target init failures (storage
-    // missing) short-circuit just that target.
-    const runResult = await publishRun({
-      items: itemRefs,
-      targets: [name],
-      history: historyProvider,
-      historySource: source.targetName,
-      copySourceItems: true,
-      site,
+    // Cutover (publish-undo cut 1, #1426): the approval-gate place,
+    // history record (#1079), source manifest copy, render loop,
+    // sitemap/robots/redirects, publish generation and CDN purge all
+    // run inside the shared target-publish function; the CLI keeps
+    // target iteration, incremental filtering, the locale fan-out
+    // above, console output and the exit code. The manifest copy is
+    // per item DIRECTORY (bare item strings), the same whole-folder
+    // publishItems step publishRun's step 13b ran.
+    const sharedItems = [...new Set(itemRefs.map(ref => `${ref.kind === 'page' ? 'pages' : 'fragments'}/${ref.name}`))]
+    const { publishToTarget } = await import('../publish-target.js')
+    const shared = await publishToTarget({
+      targetName: name,
+      targetStorage,
+      targetConfig,
       sourceRoot: source.contentRoot,
+      sourceName: source.targetName,
+      site,
       siteManifest: manifest,
-      targetStorages: new Map([[name, targetStorage]]),
+      items: sharedItems,
+      itemRefs,
       templateInfos,
+      purgeScope: 'all',
       onProgress: ev => {
         if (ev.kind === 'item-done') {
           if (ev.result.ok) {
@@ -854,10 +840,15 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
           }
         }
       },
+      onHistoryError: message => {
+        console.warn(`publishRun: history record failed for ${name}: ${message}`)
+      },
     })
 
-    // Aggregate counts from publishRun's per-target result.
-    const tr = runResult.targets.find(t => t.name === name)
+    // Aggregate counts: the shared function's manifest copy plus
+    // publishRun's per-target render result.
+    totalFiles += shared.copiedFiles
+    const tr = shared.run
     if (tr) {
       totalFiles += tr.filesWritten
       totalRemoved += tr.filesRemoved
@@ -866,6 +857,7 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
         failedTargets.push(name)
       }
     }
+    purgeReports.push({ name, outcome: shared.purge })
 
     if (skipped > 0) console.log(`    ${c.dim(`· ${skipped} unchanged (skipped)`)}`)
 
@@ -877,210 +869,31 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
       console.log(`    ${c.dim('· 404.html')}`)
     }
 
-    // Sitemap + robots.txt — generated from target sidecars
-    const siteUrl = targetConfig?.siteUrl
-    if (siteUrl) {
-      const { listSidecars } = await import('../sidecars.js')
-      const { generateSitemap } = await import('../sitemap.js')
-      const { generateRobotsTxt } = await import('../robots.js')
-
-      const targetPageSidecars = await listSidecars(targetStorage, 'pages')
-
-      // Merge source-side knowledge — listSidecars may miss just-written
-      // entries on R2 due to eventual list-after-write consistency. Every
-      // page we just published gets an entry even if the listing missed it.
-      const now = new Date().toISOString()
-      for (const [pageName, page] of site.pages) {
-        if (!targetPageSidecars.has(pageName)) {
-          targetPageSidecars.set(pageName, {
-            hash: '',
-            pub: { lastPublished: now, noindex: !!page.metadata?.robots?.includes('noindex') },
-          })
-        }
-      }
-      for (const [pageName, localeEntry] of site.pageLocales) {
-        for (const [loc, localePage] of localeEntry.locales) {
-          const key = `${pageName}:${loc}`
-          if (!targetPageSidecars.has(key)) {
-            targetPageSidecars.set(key, {
-              hash: '',
-              pub: { lastPublished: now, noindex: !!localePage.metadata?.robots?.includes('noindex') },
-            })
-          }
-        }
-      }
-
-      const { resolveSiteLocales, defaultLocaleFor } = await import('../locale.js')
-
-      // Build hreflang groups — two strategies:
-      // 1. Subpath: same siteUrl, multiple locales → locale-prefixed routes
-      // 2. Cross-domain: other targets with different siteUrl → cross-link
-      const resolvedLoc = resolveSiteLocales(manifest)
-      const defLoc = defaultLocaleFor(manifest)
-      const hreflangGroups = new Map<string, { locale: string; url: string }[]>()
-      if (resolvedLoc) {
-        const { localeRoutePrefix } = await import('../locale.js')
-        const thisTargetLocales = targetConfig?.locales ?? resolvedLoc.supported
-        const thisTargetDefault = targetConfig?.locale ?? defLoc
-
-        for (const [pageName, page] of site.pages) {
-          if (pageName.includes('[')) continue
-          const alternates: { locale: string; url: string }[] = []
-
-          // Subpath alternates on this target
-          if (thisTargetLocales.length > 1) {
-            for (const loc of thisTargetLocales) {
-              const prefix = localeRoutePrefix(loc, { ...resolvedLoc, default: thisTargetDefault })
-              const route = page.route === '/' ? prefix || '/' : `${prefix}${page.route}`
-              alternates.push({ locale: loc, url: `${siteUrl}${route}` })
-            }
-          } else {
-            // Single-locale target — add self
-            alternates.push({ locale: thisTargetLocales[0] ?? defLoc, url: `${siteUrl}${page.route}` })
-          }
-
-          // Cross-domain alternates from other targets
-          for (const [otherName, otherConfig] of Object.entries(siteYaml.targets ?? {})) {
-            if (otherName === name) continue // skip self
-            if (!otherConfig.siteUrl) continue
-            const otherLocales = otherConfig.locales ?? resolvedLoc.supported
-            const otherDefault = otherConfig.locale ?? defLoc
-            for (const loc of otherLocales) {
-              // Skip locales already covered by this target
-              if (alternates.some(a => a.locale === loc)) continue
-              const otherResolved = { ...resolvedLoc, default: otherDefault }
-              const prefix = localeRoutePrefix(loc, otherResolved)
-              const route = page.route === '/' ? prefix || '/' : `${prefix}${page.route}`
-              alternates.push({ locale: loc, url: `${otherConfig.siteUrl}${route}` })
-            }
-          }
-
-          if (alternates.length > 1) {
-            hreflangGroups.set(pageName, alternates)
-          }
-        }
-      }
-
-      const sitemapXml = generateSitemap({
-        siteUrl,
-        pages: targetPageSidecars,
-        systemPages: site.manifest.systemPages,
-        hreflangGroups: hreflangGroups.size > 0 ? hreflangGroups : undefined,
-        defaultLocale: defLoc,
-      })
-      if (sitemapXml) {
-        await targetStorage.writeFile('sitemap.xml', sitemapXml)
-        totalFiles++
-        console.log(`    ${c.dim('· sitemap.xml')}`)
-      }
-
-      // robots.txt: only at the domain root — Google ignores robots.txt at
-      // subpaths. If siteUrl has a path component, the domain root belongs
-      // to someone else (host, reverse proxy, another app).
-      const isRootDeploy = !trimTrailingSlashes(new URL(siteUrl).pathname)
-      if (isRootDeploy) {
-        let robotsTxt: string
-        try {
-          robotsTxt = await source.contentRoot.storage.readFile(source.contentRoot.path('robots.txt'))
-        } catch {
-          robotsTxt = generateRobotsTxt({ siteUrl })
-        }
-        await targetStorage.writeFile('robots.txt', robotsTxt)
-        totalFiles++
-        console.log(`    ${c.dim('· robots.txt')}`)
-      }
+    // Sitemap, robots.txt, host-format redirects, the publish
+    // generation and the CDN purge ran inside the shared target-publish
+    // function (#1426). Echo the files it wrote in the CLI's own lines
+    // and keep the per-target count identical (one per generated file).
+    for (const file of shared.generatedFiles) {
+      totalFiles++
+      console.log(`    ${c.dim(`· ${file}`)}`)
     }
-
-    // Host-format redirects file (e.g. _redirects for Cloudflare/Netlify).
-    // Per design-soft-delete.md Q10: plain-static targets without a worker
-    // can't read the per-page HTML marker; this file is the host-glue
-    // that makes archived-page redirects work for them. Independent of
-    // siteUrl — the format determines whether to emit at all.
-    const redirectsFormat = targetConfig?.redirects?.format
-    if (redirectsFormat && redirectsFormat !== 'none') {
-      const { emitRedirects } = await import('../runtime/redirects-emit.js')
-      const { allPageEntries, deriveRoute } = await import('../site-loader.js')
-      const { resolveSiteLocales, localeRoutePrefix } = await import('../locale.js')
-      const archives: { from: string; to?: string }[] = []
-      // One row per published route: a redirect keeps the visitor's
-      // language (#1124). Locale variant entries share the parent's
-      // archive state in v1 (per `design-soft-delete.md` future
-      // directions), so rows expand from the default-locale entry.
-      const resolvedLoc = resolveSiteLocales(manifest)
-      // Rows mirror the static write path (staticPageIndexPath): default-
-      // locale content is always published unprefixed — the target's
-      // locales filter only gates variants — and each published variant
-      // lives at /<locale>/. The site default is therefore always in the
-      // row set, and prefixes never apply target.locale/defaultPrefix
-      // overrides, which the static write path ignores.
-      const siteDefault = resolvedLoc?.default ?? ''
-      const rowLocales = resolvedLoc
-        ? [siteDefault, ...(targetConfig?.locales ?? resolvedLoc.supported).filter(l => l !== siteDefault)]
-        : ['']
-      for (const entry of allPageEntries(site)) {
-        if (entry.page.archived !== true) continue
-        if (entry.locale) continue
-        const baseFrom = deriveRoute(entry.name)
-        const baseTo = entry.page.aliasOf ? deriveRoute(entry.page.aliasOf) : undefined
-        for (const loc of rowLocales) {
-          const prefix = loc
-            ? localeRoutePrefix(loc, { ...resolvedLoc!, default: siteDefault, defaultPrefix: false })
-            : ''
-          const from = baseFrom === '/' ? prefix || '/' : `${prefix}${baseFrom}`
-          // A language with no destination version falls back to the
-          // destination's default-language page (#1124 Q10): static
-          // publish only writes /<locale>/<page> when the page has
-          // that version, while the archived page's own row exists
-          // for every published route.
-          const destEntry = entry.page.aliasOf ? site.pageLocales.get(entry.page.aliasOf) : undefined
-          const destPrefix = loc === '' || loc === siteDefault || (destEntry?.locales.has(loc) ?? false) ? prefix : ''
-          const to = baseTo === undefined ? undefined : baseTo === '/' ? destPrefix || '/' : `${destPrefix}${baseTo}`
-          archives.push(to !== undefined ? { from, to } : { from })
-        }
-      }
-      const result = emitRedirects(redirectsFormat, archives)
-      if (result && result.body !== '') {
-        await targetStorage.writeFile(result.filename, result.body)
-        totalFiles++
-        console.log(`    ${c.dim(`· ${result.filename}`)}`)
-      }
-    }
-
-    // Generation after the content and site files, before the purge,
-    // whether or not a purge is configured (#1125).
-    await writePublishGeneration(targetStorage)
 
     const removedMsg = totalRemoved > 0 ? c.dim(` (${totalRemoved} old files cleaned)`) : ''
     console.log(`\n  ${c.green('✓')} ${c.bold(name)}: ${totalFiles} files published${removedMsg}\n`)
   }
 
-  // Purge CDN cache per target
-  const { resolveEnvVars } = await import('../targets.js')
-  const { selectPurgeTargets } = await import('../publish-purge.js')
-  for (const [name, config] of selectPurgeTargets(siteYaml.targets ?? {}, targetName)) {
-    const purge = config.cache?.purge
-    if (!purge) continue
-    if (purge.type === 'cloudflare') {
-      const apiToken = resolveEnvVars(purge.apiToken)
-      if (!apiToken) {
-        console.log(`  ${name}: purge.apiToken not set, skipping cache purge`)
-        continue
-      }
-      try {
-        const { lookupCloudflareZoneId } = await import('../publish-rendered.js')
-        const zoneId =
-          resolveEnvVars(purge.zoneId) ??
-          (config.siteUrl ? await lookupCloudflareZoneId(config.siteUrl, apiToken) : null)
-        if (!zoneId) {
-          console.log(`  ${name}: zone not found, set purge.zoneId or siteUrl`)
-          continue
-        }
-        const { createCloudflarePurge } = await import('../publish-rendered.js')
-        await createCloudflarePurge(zoneId, apiToken).purgeAll()
-        console.log(`  ${name}: cache purged`)
-      } catch (err) {
-        console.warn(`  ${name}: cache purge failed: ${(err as Error).message}`)
-      }
+  // CDN purge outcomes, one line per target after the loop as before.
+  // The purge itself ran inside the shared function (#1426); the CLI
+  // keeps its own wording.
+  for (const { name, outcome } of purgeReports) {
+    if (outcome.kind === 'purged-all') {
+      console.log(`  ${name}: cache purged`)
+    } else if (outcome.kind === 'skipped-no-token') {
+      console.log(`  ${name}: purge.apiToken not set, skipping cache purge`)
+    } else if (outcome.kind === 'skipped-no-zone') {
+      console.log(`  ${name}: zone not found, set purge.zoneId or siteUrl`)
+    } else if (outcome.kind === 'failed') {
+      console.warn(`  ${name}: cache purge failed: ${outcome.message}`)
     }
   }
 
