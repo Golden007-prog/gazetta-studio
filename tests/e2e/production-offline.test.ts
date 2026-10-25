@@ -56,3 +56,34 @@ test.describe('Production admin offline', () => {
     await expect(page.locator('[data-testid="offline-banner"]')).toBeHidden({ timeout: 30_000 })
   })
 })
+
+test('the connection check never hits the bare /api/health path (#1388)', async ({ page, context }) => {
+  test.setTimeout(120_000)
+  const healthRequests: string[] = []
+  page.on('request', req => {
+    const { pathname } = new URL(req.url())
+    if (pathname.endsWith('/api/health')) healthRequests.push(pathname)
+  })
+
+  await page.goto('/admin')
+  await expect(page.locator('[data-testid="publish-btn"]')).toBeVisible({ timeout: 20_000 })
+
+  // Drive one full offline -> online cycle so the heartbeat actually
+  // fires: heartbeats only run after a transition, and recovery
+  // probes immediately on the browser's online event.
+  test.info().annotations.push({ type: 'allow-console-errors' })
+  await context.setOffline(true)
+  await page.route('**/*', route => route.abort())
+  const banner = page.locator('[data-testid="offline-banner"][data-state="offline"]')
+  await expect(banner).toBeVisible({ timeout: 30_000 })
+  await page.unroute('**/*')
+  await context.setOffline(false)
+  await expect(banner).toBeHidden({ timeout: 15_000 })
+
+  // The admin app is mounted at /admin, so every health request must
+  // use the derived /admin/api/health path. A bare /api/health means
+  // the store still targets the site root. The positive count keeps
+  // the negative assertion honest (checks really ran).
+  expect(healthRequests.length).toBeGreaterThan(0)
+  expect(healthRequests.every(p => p === '/admin/api/health')).toBe(true)
+})
