@@ -46,6 +46,7 @@
 import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref } from 'vue'
 import { onlineManager } from '@tanstack/vue-query'
+import { API_BASE } from '../api/_request.js'
 
 /** 5 connection states per `design-offline.md` Q2 lock. */
 export type ConnectionStatus = 'online' | 'degraded' | 'offline' | 'reconnecting'
@@ -57,8 +58,14 @@ const DEGRADED_HEARTBEAT_MS = 5_000
 /** Heartbeat cadence in offline mode (ms). Longer to back off. */
 const OFFLINE_HEARTBEAT_MS = 30_000
 
-/** Health endpoint path. Lives at /api/health per Cut 7. */
-const HEALTH_PATH = '/api/health'
+/**
+ * Health endpoint path. Derived from the admin API base so it tracks
+ * the mount point: the route lives on the admin app (`/admin/api/health`),
+ * not the site root. A bare `/api/health` 404s under `gazetta dev`
+ * (#1388) and only "worked" under `gazetta admin` by falling through
+ * to the SPA fallback.
+ */
+const HEALTH_PATH = `${API_BASE}/health`
 
 /**
  * Heartbeat probe contract. Returns true on success, false on
