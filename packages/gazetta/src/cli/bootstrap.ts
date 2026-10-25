@@ -88,9 +88,28 @@ function assertTargetsHaveStorage(targetConfigs: Record<string, TargetConfig>, c
  * Load site.config.ts, initialize all targets, and return a TargetRegistry view.
  * Throws if site.config.ts is missing or has no targets declared.
  */
+/**
+ * Hoist `gazetta.config.ts` defaults into the site manifest (object
+ * fields only; a site-level value always wins). The config loader
+ * applies the same merge to `SiteConfig` via `applyGazettaDefaults`,
+ * but the CLI path works with manifests and previously never applied
+ * it, so `defaults.cache` and `defaults.audit` were silently ignored
+ * by dev, admin and publish (#1373).
+ */
+function applyManifestDefaults(manifest: SiteManifest, gazettaManifest?: GazettaManifest): SiteManifest {
+  const defaults = gazettaManifest?.defaults
+  if (!defaults) return manifest
+  const admin = manifest.admin ?? {}
+  return {
+    ...manifest,
+    cache: manifest.cache ?? defaults.cache,
+    admin: { ...admin, audit: admin.audit ?? defaults.audit },
+  }
+}
+
 export async function bootstrapFromSiteYaml(projectSiteDir: string): Promise<BootstrapResult> {
-  const manifest = await loadManifestFromConfig(projectSiteDir)
   const gazettaManifest = await loadGazettaManifestFromProject(projectSiteDir)
+  const manifest = applyManifestDefaults(await loadManifestFromConfig(projectSiteDir), gazettaManifest)
   const targetConfigs = manifest.targets ?? {}
 
   if (Object.keys(targetConfigs).length === 0) {
@@ -129,8 +148,11 @@ export async function buildSourceContext(opts: BuildSourceContextOptions): Promi
   targetConfigs: Record<string, TargetConfig>
   gazettaManifest?: GazettaManifest
 }> {
-  const manifest = opts.manifest ?? (await loadManifestFromConfig(opts.projectSiteDir))
   const gazettaManifest = await loadGazettaManifestFromProject(opts.projectSiteDir)
+  const manifest = applyManifestDefaults(
+    opts.manifest ?? (await loadManifestFromConfig(opts.projectSiteDir)),
+    gazettaManifest,
+  )
   const targetConfigs = manifest.targets ?? {}
   if (Object.keys(targetConfigs).length === 0) {
     throw new Error(
