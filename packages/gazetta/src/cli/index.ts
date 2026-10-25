@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve, join, dirname, relative, sep } from 'node:path'
-import { watch, existsSync, readFileSync } from 'node:fs'
+import { watch, existsSync, readFileSync, realpathSync } from 'node:fs'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
@@ -2068,18 +2068,30 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     const norm = filename.replace(/\\/g, '/')
     if (isStatePath(norm)) return
     if (filename.endsWith('.json') || filename.endsWith('.yaml')) {
-      // Only files under the active source target's content root are
-      // content; JSON elsewhere in the site folder (scratch files, other
-      // targets' state) serves nothing, so don't log or invalidate for
-      // it (#1318). Non-filesystem storage exposes no on-disk root, and
-      // its content can't be watched anyway, so the check is skipped.
+      // "Manifest changed" is only worth logging for files under the
+      // active source target's content root; JSON elsewhere in the site
+      // folder (scratch files, other targets' state) is noise (#1318).
+      // The invalidation below still runs for those files: the admin
+      // reads every local target, so an out-of-band wipe of another
+      // target's storage must drop its cached page summaries. Skipping
+      // it broke the target-switch e2e (stale staging summary after the
+      // fixture wipes sites/main/dist/staging). Non-filesystem storage
+      // exposes no on-disk root, so the check is skipped. realpathSync
+      // both sides: temp dirs can sit behind symlinks (/var ->
+      // /private/var on macOS) and the two paths are resolved through
+      // different bases.
+      let logChange = true
       const sourceRoot = live.source.storage.root
       if (sourceRoot) {
-        const changedPath = resolve(siteDir, filename)
-        const contentRootAbs = resolve(sourceRoot)
-        if (changedPath !== contentRootAbs && !changedPath.startsWith(contentRootAbs + sep)) return
+        try {
+          const changedPath = resolve(realpathSync(siteDir), filename)
+          const contentRootAbs = realpathSync(sourceRoot)
+          logChange = changedPath === contentRootAbs || changedPath.startsWith(contentRootAbs + sep)
+        } catch {
+          logChange = true
+        }
       }
-      console.log(`  Manifest changed: ${filename}`)
+      if (logChange) console.log(`  Manifest changed: ${filename}`)
       invalidateAllTemplates()
       // Out-of-band manifest changes (git pull, manual edit, e2e
       // test wipes) bypass the admin-api save handler that would
