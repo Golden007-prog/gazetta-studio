@@ -84,6 +84,8 @@ export interface ArchivedNameConflictDetails {
   archivedAt?: string
   archivedBy?: string
   aliasOf?: string
+  /** True when the archive is a Manual Redirect — restore is refused (#1343). */
+  redirect?: boolean
 }
 export class ArchivedNameConflictError extends Error {
   readonly code = 'ARCHIVED_NAME_CONFLICT' as const
