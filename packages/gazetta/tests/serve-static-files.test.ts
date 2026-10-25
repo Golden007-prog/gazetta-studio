@@ -102,6 +102,36 @@ describe('static serve — stored non-page files (#1249)', () => {
     expect(await res.text()).toBe('lost')
   })
 
+  it('never exposes the underlying Node Buffer pool (small pooled file)', async () => {
+    // The filesystem provider returns fs.readFile's Buffer as-is; small
+    // files are views into Node's shared 8KB pool. The response must
+    // contain exactly the file's bytes, not the pool allocation.
+    const pool = Buffer.allocUnsafe(8192).fill(0x41)
+    PNG_BYTES.forEach((b, i) => (pool[100 + i] = b))
+    const pooled = pool.subarray(100, 100 + PNG_BYTES.length)
+    const storage = memoryStorage()
+    storage.seed({ 'index.html': '<h1>home</h1>' })
+    storage.seedBytes({ 'assets/logo-abc12345.png': pooled })
+    const app = createServer({ storage, type: 'static' })
+
+    const res = await app.request('/assets/logo-abc12345.png')
+    expect(res.status).toBe(200)
+    const body = new Uint8Array(await res.arrayBuffer())
+    expect(body.byteLength).toBe(PNG_BYTES.length)
+    expect(body).toEqual(PNG_BYTES)
+  })
+
+  it('serves an empty file as zero bytes (no pool exposure)', async () => {
+    const storage = memoryStorage()
+    storage.seed({ 'index.html': '<h1>home</h1>' })
+    storage.seedBytes({ 'empty.bin': Buffer.allocUnsafe(0) })
+    const app = createServer({ storage, type: 'static' })
+
+    const res = await app.request('/empty.bin')
+    expect(res.status).toBe(200)
+    expect((await res.arrayBuffer()).byteLength).toBe(0)
+  })
+
   it('unknown extensions answer application/octet-stream', async () => {
     const storage = memoryStorage()
     storage.seed({ 'index.html': '<h1>home</h1>' })
