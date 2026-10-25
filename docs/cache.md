@@ -131,6 +131,10 @@ different caches.
 fields (including `instance`) surface when the underlying provider
 tracks them.
 
+`lastInvalidation.prefix` is the consumer-facing prefix (`pages:`),
+matching the invalidation stream. Only `invalidatePrefix` updates the
+field; single-key `invalidate(key)` calls don't.
+
 The `instance` field is critical in multi-instance deployments: with
 a round-robin load balancer, two consecutive `curl` calls to this
 endpoint may hit different pods and return different counter values.
