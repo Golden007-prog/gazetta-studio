@@ -93,7 +93,7 @@ describe('gazetta publish on a one-target site', { timeout: 120000 }, () => {
 
     expect(res.code).toBe(1)
     expect(res.output).toContain("This site has one target, so there's nowhere to publish to.")
-    expect(res.output).toContain('https://gazetta.studio/docs/getting-started')
+    expect(res.output).toContain('Add a target in site.config.ts: https://gazetta.studio/docs\n')
     expect(await snapshotTree(join(projectDir, 'sites/main/targets'))).toEqual(before)
   })
 
