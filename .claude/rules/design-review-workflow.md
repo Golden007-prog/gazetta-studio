@@ -75,6 +75,7 @@ Failure outcomes (`forbidden`, `validation-failed`, `unauthenticated`) follow th
 - Configurable via `reviewWorkflow.allowSelfApproval: boolean` (default `true`)
 - When self-approval allowed AND actor has both `review:submit` + `review:approve`, UI offers combined "Submit & approve" button
 - When `allowSelfApproval: false`, approver who is also the submitter gets 403 at click-time
+- Publish requests have their own target setting, `allowSelfPublishApproval` (default `true`; 2026-10-25, below)
 
 ### Re-review on save granularity
 - Configurable: `reviewWorkflow.invalidateOnSave: 'content-diff' | 'always'`
@@ -86,7 +87,7 @@ Failure outcomes (`forbidden`, `validation-failed`, `unauthenticated`) follow th
 - `.gazetta/review/{kind}/{name}/approvers/{actor}` — zero-byte per-approver sidecar
 - `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}.json` — publish request state, on the source the author publishes from (amended 2026-10-25, below)
 - `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}/approvers/{actor}` — zero-byte per-approver sidecar
-- `.gazetta/review/pending/{kind}/{name}` and `.gazetta/publish-requests/{target}/pending/{request-id}` — zero-byte pending markers the queues list (2026-10-25, below)
+- `.gazetta/review/pending/{kind}/{encoded name}` and `.gazetta/publish-requests/{target}/pending/{kind}.{encoded name}.{request-id}` — zero-byte pending markers the queues list, names encoded as in `sidecars.md` (2026-10-25, below)
 - Per-edge granularity → multi-instance correct via the same pattern as asset-refs
 
 ### Publish-approval execution (locked 2026-10-04)
@@ -94,7 +95,7 @@ Failure outcomes (`forbidden`, `validation-failed`, `unauthenticated`) follow th
 Locked before re-filing Cut 12 (#526), whose first spec left these open and named the wrong file. Cut 12 implements 1, 5, 6; Cut 13 implements 2, 3, 4.
 
 1. **The gate lives at the start of the shared target-publish function** ([`design-publish-undo.md`](design-publish-undo.md) Q4), which wraps `publishRun` and also runs removals and undo, not in `admin-api/routes/publish.ts`. Cuts 12–13 wait for publish undo's cut 1, which builds that function, so the gate is built once, in its final place. Both the admin API and the CLI publish through this path; a route-level gate would let `gazetta publish` bypass approval. *(Amended 2026-10-22 so removals can't skip the gate: [`design-target-removal.md`](design-target-removal.md) Q13.)*
-2. **Routes:** `POST /api/publish-requests/:target/:requestId/{approve,reject,withdraw}` and `GET /api/publish-requests?target=`. Request *creation* is not a route: it is what `POST /api/publish` does for a gated target. Zod schemas per MCP discipline.
+2. **Routes:** `POST /api/publish-requests/:target/:kind/:name/:requestId/{approve,reject,withdraw}` (item in the route: amended 2026-10-25, below) and `GET /api/publish-requests?target=`. Request *creation* is not a route: it is what `POST /api/publish` does for a gated target. Zod schemas per MCP discipline.
 3. **A request snapshots content.** Each request records the item's manifest hash (the same `hashManifest` value publish already computes) at request time. The approval that reaches the threshold re-hashes the source; on mismatch it refuses with `409 STALE_REQUEST` and the request must be withdrawn and re-made. Approving one version and shipping another is not possible. A removal request snapshots the item as absent on the source and its hash on the target; the approval re-checks both. A rollback request snapshots the target's history head and the revision to restore; the approval re-checks the head and refuses with `409 STALE_REQUEST` if it moved ([`design-target-removal.md`](design-target-removal.md) Q13). *(Amended 2026-10-23.)*
 4. **The final approver's request executes it.** The approval that reaches `requiredPublishApprovers` runs the shared target-publish function for exactly the snapshotted item, removal or rollback and that one target. `publish:approve` is the only capability needed; approval is the gate. Audit records requester (`publish-request`) and each approver (`publish-approve`) separately.
 5. **Mixed fan-out.** In one publish run, ungated targets publish immediately; each gated target gets one request per item in the caller-expanded list (`publishRun` treats `items` verbatim, so dependents expanded by the caller get their own requests) and one per removal. The per-target result reports `outcome: 'requested'` with the `requestId`s. Creating a request requires `publish:request` (403 otherwise). A removal request that relies on items of the same run runs only after their requests have run, and a rollback is one request ([`design-target-removal.md`](design-target-removal.md) Q13). *(Amended 2026-10-23: [`design-target-removal.md`](design-target-removal.md) Q13.)*
@@ -141,12 +142,12 @@ A read-only review of the remaining cuts against the current code and the newer 
 1. **Undoing the latest publish skips the gate.** On a target that requires publish approval, Undo after a publish runs at once, as [`design-publish-undo.md`](design-publish-undo.md) Q2 locks; it needs `restore:history` and the target's publish capability. `gazetta undo` on such a target is refused with lock 6's message. Rolling back further is a request (lock 3).
 2. **Publish requests live on the source.** `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}.json` and its approvers, on the source the author publishes from, as [`design-public-storage.md`](design-public-storage.md) Q5 records them, so a public production target can require approval. The request records its source, so the approval re-hashes the right content. `publish-requests` joins the state folder registry (`state-folders.ts`) as not safe on public targets (cut 12).
 3. **Requesting doesn't need the production capability.** On a target that requires publish approval, `POST /api/publish` doesn't refuse for a missing `publish:production`; the gate creates the request, which needs `publish:request` (lock 5). An author with only `publish:request` clicks **Publish** and sees "Approval requested".
-4. **The approval runs Publish's own steps.** The approval that meets the threshold runs the steps `POST /api/publish` runs before the shared function, for exactly the requested item: dependency expansion, `beforePublish` hooks, the validation gate and the publish audit event. They move into one helper both call, so a template changed since the request is still checked.
+4. **The approval runs Publish's own steps.** The approval that meets the threshold runs the steps `POST /api/publish` runs before the shared function, for exactly the requested item: `beforePublish` hooks, the validation gate and the publish audit event. It doesn't expand dependents again: they were expanded when the request was made and each has its own request (lock 5). They move into one helper both call, so a template changed since the request is still checked.
 5. **A failed approved publish can be retried.** If the publish fails, the request stays `publish-approved` with the failure reason. Its row reads "Approved, publish failed: {reason}" with **Retry** (`publish:approve`), which re-checks the snapshot first. Two final approvals at the same moment on two instances can both publish the same content; that's accepted and documented.
 6. **The snapshot covers every file the request publishes.** A request records one `hashManifest` per manifest it will copy (the page and each translation); any difference at approval answers `409 STALE_REQUEST`.
 7. **Review doesn't block publishing.** With review on and publish approval off (archetype B), content that isn't approved still publishes; the publish panel marks those rows "Not approved" (cut 22). Only publish approval blocks.
 8. **One review state per page.** A page and its translations are reviewed together, as `review/sidecars.ts` keys them today; a translation can't be submitted on its own in v1.
-9. **Pending markers for the queues.** Submitting writes a zero-byte `.gazetta/review/pending/{kind}/{name}`, removed on approve, reject or withdraw (cut 7); creating a publish request writes `.gazetta/publish-requests/{target}/pending/{request-id}`, removed when it publishes, is rejected or withdrawn (cut 12). Each queue is one directory listing, within the 5,000-page envelope.
+9. **Pending markers for the queues.** Submitting writes a zero-byte `.gazetta/review/pending/{kind}/{encoded name}`, removed on approve, reject or withdraw (cut 7); creating a publish request writes `.gazetta/publish-requests/{target}/pending/{kind}.{encoded name}.{request-id}`, removed when it publishes, is rejected or withdrawn (cut 12). Names are encoded as in `sidecars.md`, so a nested page is one file. Each queue is one directory listing, within the 5,000-page envelope.
 
 Decided: maintainer, 2026-10-25 (#1434)
 
@@ -162,6 +163,19 @@ Decided: maintainer, 2026-10-25 (#1434)
 | Leave unapproved rows unmarked | Authors can't see that what they publish wasn't reviewed |
 | One review state per translation | Changes the review storage, the save lock and cut 7's routes before cut 7 lands |
 | Read every item's state for the queues, cached | Up to 5,000 reads on cloud storage, past the 5-second admin limit |
+
+Two more, from Seer's review of the above:
+
+10. **Self-approval of publish requests is set on the target.** `allowSelfPublishApproval` (default `true`) sits next to `requiresPublishApproval`. With `false`, a requester who also has `publish:approve` gets 403 on their own request ("You can't approve your own publish request"), and the "Publish-request & approve" button isn't offered. `reviewWorkflow.allowSelfApproval` governs content review only.
+11. **The item is in the approval routes.** `POST /api/publish-requests/:target/:kind/:name/:requestId/{approve,reject,withdraw}` (lock 2, amended). Storage stays per item, so the publish panel finds an item's requests with one listing; the publish-pending queue (cut 21) lists the pending markers, which name the item.
+
+Decided: maintainer, 2026-10-25 (#1434)
+
+| Rejected | Why |
+|---|---|
+| Reuse `reviewWorkflow.allowSelfApproval` for publish requests | A site couldn't allow self-review while forbidding self-approved production publishes |
+| Never allow self-approval of publish requests | A solo operator who turns the gate on can't publish |
+| Store requests flat by id (`{target}/{request-id}.json`) | Finding an item's requests for the publish panel would need a second per-item marker |
 
 ### Configuration
 ```ts
@@ -198,7 +212,7 @@ The content-review policy that applies is the one for the editable target the au
 - **B. Small team — content focus** — review on, publish gate off; reviewer-as-approver
 - **C. Small team — release focus** — review off, publish gate on (prod only)
 - **D. Mid team — both** — review on + publish gate on (prod only); 3 distinct roles
-- **E. Compliance** — review on with `requiredApprovers: 2`, `allowSelfApproval: false`, publish gate on with `requiredPublishApprovers: 2`
+- **E. Compliance** — review on with `requiredApprovers: 2`, `allowSelfApproval: false`, publish gate on with `requiredPublishApprovers: 2` and `allowSelfPublishApproval: false`
 
 Each archetype gets a copy-paste-ready `site.config.ts` snippet + role mapping + capability mapping in the design doc.
 
@@ -209,7 +223,7 @@ Each archetype gets a copy-paste-ready `site.config.ts` snippet + role mapping +
 
 ### Combined-action UX
 - "Submit & approve" button when actor has both capabilities AND self-approval allowed AND `requiredApprovers: 1`
-- "Publish-request & approve" button when actor has both AND self-approval allowed AND `requiredPublishApprovers: 1`
+- "Publish-request & approve" button when actor has both AND the target's `allowSelfPublishApproval` AND `requiredPublishApprovers: 1`
 - Audit records both events (submit + approve) with same timestamp + same actor
 
 ### Constructive errors
