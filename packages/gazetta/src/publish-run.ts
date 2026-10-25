@@ -34,9 +34,13 @@
  *  10. for each target: publishDepIndices (asset-refs, fragment-deps,
  *      archive-aliases sidecars)
  *  11. for each target: publishSiteManifest (site.json snapshot)
- *  12. for each target: cache-purge dispatch (cloudflare/configured
- *      strategy, fire-and-forget)
- *  13. record history revision per target
+ *  12. cache purge: runs in the shared target-publish function
+ *      (publish-target.ts, publish-undo cut 1, #1426) - publishRun
+ *      itself never purges
+ *  13. record history revision per target (opt-in via `history`;
+ *      callers routing through the shared function leave this and
+ *      `copySourceItems` unset - the shared function records and
+ *      copies itself so each target gets exactly one revision)
  *  14. (RESERVED) dispatchAfterPublishRun hooks
  *  15. audit success per (item, target, outcome)
  *  16. (RESERVED) cascades — Soft-Delete Q6 auto-cancel scheduled
