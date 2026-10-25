@@ -110,8 +110,8 @@ Carries per-site concerns:
 
 ```ts
 import { defineSite, filesystemStorage, r2Storage } from 'gazetta'
-import slackNotify from '@gazetta/slack-notify'
-import autoSlugify from './admin/plugins/auto-slugify'
+import { slackHook } from '@example/slack-notify'
+import autoSlugify from './admin/hooks/auto-slugify'
 
 export default defineSite({
   name: 'main',
@@ -138,14 +138,8 @@ export default defineSite({
         map: { 'gazetta-admins': 'admin', 'gazetta-editors': 'editor' },
       },
     },
-    plugins: [
-      slackNotify({ webhookUrl: process.env.SLACK_WEBHOOK_URL! }),
-      autoSlugify(),
-    ],
-    hooks: {
-      // site-local hooks discovered from admin/hooks/ automatically;
-      // disable / configure via this block
-    },
+    // Factory contributions per surface (ADR-0009); no file discovery (design-hooks.md)
+    hooks: [autoSlugify(), slackHook({ webhookUrl: process.env.SLACK_WEBHOOK_URL! })],
   },
 })
 ```
@@ -154,7 +148,7 @@ Fields belonging to site config: see existing dimension design docs (`design-i18
 
 ### Defaults flow
 
-`gazetta.config.ts` `defaults` field provides values that `site.config.ts` inherits per-field. Site config overrides per-field. **No deep merge for arrays** (plugins, hooks): arrays are explicit per site; different sites may want different plugins, so no inheritance.
+`gazetta.config.ts` `defaults` field provides values that `site.config.ts` inherits per-field. Site config overrides per-field. **No deep merge for arrays** (`admin.hooks`, `admin.validators`, `admin.routes`): arrays are explicit per site; different sites may want different contributions, so no inheritance.
 
 Defaults are factory results (constructed instances), not raw config data — Path X applies uniformly. Per the **single-Site-per-process invariant** (locked in `CONTEXT.md`), each Gazetta process loads exactly one Site, so the gazetta-level instance is inherited by the Site directly. No per-Site-instance reconstruction is needed because each process has its own evaluation of `gazetta.config.ts` and its own runtime memory.
 
@@ -186,7 +180,7 @@ export default defineSite({
 | Production (`NODE_ENV !== 'development'`) | Load once at boot; restart to apply changes |
 | Dev (`NODE_ENV === 'development'`, `gazetta dev`) | File watcher on `gazetta.config.ts` + `sites/*/site.config.ts`; reload on save |
 
-**Dev reload and plugins**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle. A reload re-evaluates the config ([#1353](https://github.com/gazetta-studio/gazetta-studio/issues/1353)); which config-built state it rebuilds is not decided here, including the `admin.hooks`/`admin.validators`/`admin.routes` contributions ([`design-plugins.md`](design-plugins.md) Future directions: plugin hot-reload needs an admin restart).
+**Dev reload and plugins**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle. A reload re-evaluates the config ([#1353](https://github.com/gazetta-studio/gazetta-studio/issues/1353)); which config-built state it rebuilds, including the `admin.hooks`/`admin.validators`/`admin.routes` contributions, is not decided here; [`design-plugins.md`](design-plugins.md) lists plugin hot-reload as out of scope (admin restart) under Future directions.
 
 Follows from ADR-0009 (no lifecycle) and #1353, decided 2026-10-24 (reload on save).
 
