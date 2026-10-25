@@ -562,7 +562,9 @@ export default template
             {
               name: 'intro',
               template: 'text-block',
-              content: { body: '<p>Edit this content in the CMS at <a href="/admin">/admin</a>.</p>' },
+              content: {
+                body: '<p>Run <code>npx gazetta dev</code> and open /admin to edit this content.</p>',
+              },
             },
           ],
         },
