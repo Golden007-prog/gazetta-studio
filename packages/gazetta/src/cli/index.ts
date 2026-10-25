@@ -26,6 +26,7 @@ import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.j
 import { devNotFound } from './dev-not-found.js'
 import { viteCacheDir } from './vite-cache-dir.js'
 import { trimTrailingSlashes } from '../url.js'
+import { isStatePath, STATE_ROOT } from '../state-folders.js'
 
 // ANSI color helpers — no dependency, suppressed when NO_COLOR or CI
 const noColor = !!process.env.NO_COLOR || !process.stdout.isTTY
@@ -424,7 +425,7 @@ async function runInit(dir: string) {
 
   const files: Record<string, string> = {
     // First write: if init is interrupted, later state is still ignored.
-    '.gitignore': `node_modules/\ndist/\n.env\n.env.local\n**/.gazetta/\n`,
+    '.gitignore': `node_modules/\ndist/\n.env\n.env.local\n**/${STATE_ROOT}/\n`,
 
     'sites/main/site.config.ts': `import { defineSite, filesystemStorage } from 'gazetta'
 
@@ -2116,7 +2117,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     // content changes would flood SSE reloads and reset preview iframe
     // scroll state mid-test. Filter them out at the watcher boundary.
     const norm = filename.replace(/\\/g, '/')
-    if (norm.includes('/.gazetta/') || norm.startsWith('.gazetta/')) return
+    if (isStatePath(norm)) return
     if (filename.endsWith('.json') || filename.endsWith('.yaml')) {
       console.log(`  Manifest changed: ${filename}`)
       invalidateAllTemplates()
