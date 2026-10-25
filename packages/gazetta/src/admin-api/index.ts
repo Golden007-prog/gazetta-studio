@@ -279,7 +279,7 @@ export function createAdminApp(opts: AdminAppOptions): AdminApp {
   // plain-static target can't emit 301 redirects from archive
   // operations). Non-blocking — admin starts. Operators see the
   // warning during deploy so misconfiguration surfaces early.
-  // #1305: only once the site has an archived page — a fresh site
+  // #1305: only once the site has an archived page. A fresh site
   // gets no warning (the gap still shows in the archive dialog,
   // site health and the publish check). Callers that don't pass
   // `anyArchived` keep the warn-always behavior. 'defer' is for
