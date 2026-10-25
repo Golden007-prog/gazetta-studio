@@ -32,7 +32,14 @@ are open to anyone, people and bots. To start small, look for
    description. The bots that work on issues skip any issue an open PR mentions, so
    they won't open a second PR for it.
 
-If you're not sure what to pick:
+Want an issue kept for you? Comment on it and we'll assign it to you; the bots skip
+assigned issues. If one of our bots opens a PR for an issue you've claimed or are
+already working on, yours goes ahead and we close the bot's, unless it's already merged.
+
+Not sure what to pick? Ask in
+[Looking for something to work on?](https://github.com/gazetta-studio/gazetta-studio/discussions/1428)
+and we'll suggest one or two issues that fit. Until an issue is assigned to you, a bot
+may still take it; if that happens, we'll suggest another. Or choose for yourself:
 
 | Kind | How to spot it | Good first pick? |
 |---|---|---|
