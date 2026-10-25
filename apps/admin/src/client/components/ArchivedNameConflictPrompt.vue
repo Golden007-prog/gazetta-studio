@@ -34,7 +34,10 @@ const emit = defineEmits<{
 
 // Default Restore per Q5 I3 lock — the most common intent (author
 // forgot the content was already there).
-const choice = ref<'restore' | 'replace' | 'moveAside'>('restore')
+// A Manual Redirect archive has no content to restore (#1343) — the
+// backend refuses restore, so the option is hidden and Replace is the
+// default.
+const choice = ref<'restore' | 'replace' | 'moveAside'>(props.archive.redirect ? 'replace' : 'restore')
 
 const archivedAtFormatted = computed(() => {
   if (!props.archive.archivedAt) return null
@@ -60,7 +63,7 @@ const archivedAtFormatted = computed(() => {
     </div>
 
     <div class="conflict-options">
-      <label class="conflict-option" :data-testid="`conflict-option-restore`">
+      <label v-if="!archive.redirect" class="conflict-option" :data-testid="`conflict-option-restore`">
         <RadioButton v-model="choice" inputId="conflict-restore" value="restore" />
         <div class="conflict-option-content">
           <strong>Restore the archive</strong>
