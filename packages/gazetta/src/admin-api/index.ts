@@ -49,6 +49,7 @@ import { archiveRoutes } from './routes/archive.js'
 import { renameRoutes } from './routes/rename.js'
 import { redirectRoutes } from './routes/redirects.js'
 import { warnOnCapabilityGaps } from '../runtime/capability-gap-warnings.js'
+import { isArchived } from '../archive-helpers.js'
 import { HookRegistry, type HookContribution } from '../hooks/index.js'
 
 export interface BuildHooksRegistryOptions {
@@ -126,8 +127,11 @@ export interface AdminAppOptions {
    * loaded the site anyway (dev boot) pass the flag so a fresh site
    * boots without the warning. Defaults to true (warn), preserving
    * the previous behavior for callers that don't track archive state.
+   * Pass 'defer' when the server never loads the site at boot
+   * (`gazetta admin`): no boot warning, and the warning instead fires
+   * on the first request that loads the site, once per process.
    */
-  anyArchived?: boolean
+  anyArchived?: boolean | 'defer'
   /**
    * Disable the periodic cache-stats logger. Defaults to false (logger
    * runs every 5 minutes). Tests pass true to avoid background timers
@@ -278,8 +282,20 @@ export function createAdminApp(opts: AdminAppOptions): AdminApp {
   // #1305: only once the site has an archived page — a fresh site
   // gets no warning (the gap still shows in the archive dialog,
   // site health and the publish check). Callers that don't pass
-  // `anyArchived` keep the warn-always behavior.
-  if (source.manifest) warnOnCapabilityGaps(source.manifest, { anyArchived: opts.anyArchived ?? true })
+  // `anyArchived` keep the warn-always behavior. 'defer' is for
+  // servers that don't load the site at boot (`gazetta admin`):
+  // the warning waits for the first request that loads the site,
+  // fires once per process, and only if a page is archived.
+  if (source.manifest && opts.anyArchived === 'defer') {
+    const manifest = source.manifest
+    source.onFirstSiteLoad = site => {
+      if ([...site.pages.values()].some(page => isArchived(page))) {
+        warnOnCapabilityGaps(manifest)
+      }
+    }
+  } else if (source.manifest) {
+    warnOnCapabilityGaps(source.manifest, { anyArchived: opts.anyArchived !== false })
+  }
 
   // Build the per-request source resolver. When target configs are
   // declared, routes honor `?target=<name>` to read from any known
