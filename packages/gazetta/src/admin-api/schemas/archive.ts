@@ -72,6 +72,12 @@ export const PurgeBlockedSchema = z.object({
 })
 export type PurgeBlocked = z.infer<typeof PurgeBlockedSchema>
 
+export const PurgeNotArchivedSchema = z.object({
+  code: z.literal('NOT_ARCHIVED'),
+  error: z.string(),
+})
+export type PurgeNotArchived = z.infer<typeof PurgeNotArchivedSchema>
+
 export const PurgeResponseSchema = z.object({
   ok: z.literal(true),
   name: z.string(),
