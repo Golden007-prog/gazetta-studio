@@ -34,7 +34,7 @@ import { findArchivesAliasingInSite } from '../site-users.js'
 import { rebuildAssetRefs } from '../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../fragment-deps.js'
 import { isManualRedirectArchive } from '../archive-helpers.js'
-import { clearReviewSidecar } from '../review/index.js'
+import { resetReviewStateForItem } from './routes/archive-review.js'
 import type { ItemRef } from '../dep-sidecars.js'
 import type { SourceContext } from './source-context.js'
 
@@ -101,7 +101,7 @@ async function runRestore(opts: ResolveOptions): Promise<ArchivedNameConflictRes
   // #1344: restore-always-to-draft (Q9 N-B.1) applies on the
   // conflict-restore path too — reset the review sidecar so the
   // restored item comes back in draft.
-  await clearReviewSidecar(opts.source.contentRoot, opts.kind, opts.name)
+  await resetReviewStateForItem(opts.source.contentRoot, opts.kind, opts.name)
 
   return { kind: 'restored' }
 }
