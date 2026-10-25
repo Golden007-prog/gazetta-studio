@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { StorageProvider } from './types.js'
+import { stateFolderPath } from './state-folders.js'
 
 /**
  * #1125: every publish writes a value unique to that publish to
@@ -10,7 +11,7 @@ import type { StorageProvider } from './types.js'
  * key part until the target's next publish. The value is a publish
  * id only, no personal data.
  */
-export const PUBLISH_GENERATION_PATH = '.gazetta/publish-generation'
+export const PUBLISH_GENERATION_PATH = stateFolderPath('publish-generation')
 
 export function newPublishGeneration(): string {
   return `${Date.now().toString(36)}-${randomBytes(6).toString('hex')}`
