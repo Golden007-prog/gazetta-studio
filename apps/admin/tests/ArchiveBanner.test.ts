@@ -105,6 +105,17 @@ describe('ArchiveBanner', () => {
     expect(wrapper.find('[data-testid="archive-restore-page-old"]').exists()).toBe(false)
   })
 
+  it('hides Restore for a template-less archive whose alias was dropped (#1343)', () => {
+    // No aliasOf, no template: still a redirect manifest underneath,
+    // and restoring it would write `{}`.
+    seedSite({
+      pages: [{ name: 'old', route: '/old', archived: true }],
+    })
+    const wrapper = render({ kind: 'page', name: 'old' })
+    expect(wrapper.find('[data-testid="archive-banner-page-old"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="archive-restore-page-old"]').exists()).toBe(false)
+  })
+
   it('keeps Restore for an archived content item that aliases elsewhere', () => {
     seedSite({
       pages: [{ name: 'old', route: '/old', template: 'page-default', archived: true, aliasOf: 'home' }],
