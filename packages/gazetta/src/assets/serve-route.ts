@@ -46,6 +46,14 @@ import { assetMimeForPath, dispositionFor, ifNoneMatches, parseAssetUrlInput } f
 const ASSETS_ROOT = 'assets'
 
 /**
+ * Decoded control characters (NUL through unit separator, DEL) make the
+ * path unrepresentable or ambiguous for storage backends - the fs
+ * provider throws `ERR_INVALID_ARG_VALUE` on NUL, for one - so they are
+ * rejected at the edge with 400, next to the `..` check.
+ */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
+
+/**
  * Resolve the storage provider to serve from, given an optional target
  * query param. Narrower than the admin-api SourceContextResolver — this
  * route only needs storage, not the rest of the source context.
@@ -84,7 +92,7 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
       return c.text('Invalid asset path', 400)
     }
 
-    if (path.includes('..') || path.startsWith('/')) {
+    if (CONTROL_CHARS.test(path) || path.includes('..') || path.startsWith('/')) {
       return c.text('Invalid asset path', 400)
     }
 
@@ -127,14 +135,23 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
       return c.body(null, 304)
     }
 
-    // Bounded ranges (bytes=A-B) answer 206. Unbounded ones (bytes=A-)
-    // fall back to a full 200: ignoring Range is RFC-legal, and the
-    // storage interface exposes no stat() to compute the Content-Range
-    // end. (The worker answers both — R2 reports the object size.)
-    const boundedRange = range && Number.isFinite(range.end) ? range : undefined
-
-    try {
-      const bodyStream = await storage.readStream(storagePath, boundedRange)
+    // Range requests need exact Content-Range bounds, and the storage
+    // interface exposes no stat() — so they read the object (size-capped
+    // at upload, DEFAULT_ASSET_MAX_BYTES) and slice. Full requests keep
+    // the streaming path.
+    if (range) {
+      let bytes: Uint8Array
+      try {
+        bytes = await storage.readBytes(storagePath)
+      } catch {
+        return c.text('Not found', 404) // deleted between exists and read
+      }
+      const size = bytes.length
+      if (range.start >= size) {
+        c.header('Content-Range', `bytes */${size}`)
+        return c.text('Range not satisfiable', 416)
+      }
+      const last = Math.min(range.end ?? size - 1, size - 1)
       c.header('Content-Type', mime)
       c.header('X-Content-Type-Options', 'nosniff')
       c.header('Cache-Control', policy.cacheControl)
@@ -143,12 +160,22 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
       c.header('Content-Disposition', dispositionFor(mime))
       c.header('Access-Control-Allow-Origin', '*')
       c.header('Accept-Ranges', 'bytes')
-      if (boundedRange) {
-        c.status(206)
-        // Complete-length unknown (no stat on StorageProvider) — the
-        // `*` form is the RFC 9110 §14.4 answer for that.
-        c.header('Content-Range', `bytes ${boundedRange.start}-${boundedRange.end}/*`)
-      }
+      c.header('Content-Range', `bytes ${range.start}-${last}/${size}`)
+      // slice (not subarray) so the ArrayBuffer view covers exactly the
+      // served range — c.body takes ArrayBuffer, not a TypedArray view.
+      return c.body(bytes.slice(range.start, last + 1).buffer as ArrayBuffer, 206)
+    }
+
+    try {
+      const bodyStream = await storage.readStream(storagePath)
+      c.header('Content-Type', mime)
+      c.header('X-Content-Type-Options', 'nosniff')
+      c.header('Cache-Control', policy.cacheControl)
+      if (policy.vary) c.header('Vary', policy.vary)
+      if (etag) c.header('ETag', etag)
+      c.header('Content-Disposition', dispositionFor(mime))
+      c.header('Access-Control-Allow-Origin', '*')
+      c.header('Accept-Ranges', 'bytes')
       return stream(c, async out => {
         await out.pipe(bodyStream)
       })
@@ -161,14 +188,17 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
 }
 
 /**
- * Parse a byte-range HTTP header into the storage provider's `ByteRange`.
- * Suffix ranges (bytes=-N) stay unsupported, same as before.
+ * Parse a byte-range HTTP header. An omitted end stays undefined (read
+ * to the object end, bounded by the caller once the size is known).
+ * Suffix ranges (bytes=-N) stay unsupported, and a backwards range
+ * (bytes=5-3) is ignored like any grammar the route doesn't serve.
  */
-function parseRange(header: string | undefined): { start: number; end: number } | undefined {
+function parseRange(header: string | undefined): { start: number; end?: number } | undefined {
   if (!header) return undefined
   const match = /^bytes=(\d+)-(\d+)?$/.exec(header)
   if (!match) return undefined
   const start = Number.parseInt(match[1], 10)
-  const end = match[2] ? Number.parseInt(match[2], 10) : Number.POSITIVE_INFINITY
-  return Number.isFinite(end) ? { start, end } : undefined
+  const end = match[2] ? Number.parseInt(match[2], 10) : undefined
+  if (end !== undefined && end < start) return undefined
+  return { start, end }
 }
