@@ -18,6 +18,7 @@ import type { SiteManifest, StorageProvider, TargetType } from './types.js'
 import { assembleEsi, parseCacheComment } from './assemble.js'
 import { isPublicSitePath } from './public-site-path.js'
 import { assetServeRoutes } from './assets/serve-route.js'
+import { assetMimeForPath } from './assets/serve-shared.js'
 import { archiveGoneResponse, archiveResponse } from './runtime/archive-response.js'
 import { aliasTargetIssue, parseArchiveMarker } from './runtime/archive-marker.js'
 import { deriveRoute, fillRouteParams } from './runtime/derive-route.js'
@@ -258,6 +259,16 @@ export function createServer(options: ServeOptions) {
 
   app.get('/health', c => c.json({ ok: true }))
 
+  /**
+   * Cache lifetime for a stored non-page file on a static target (#1249):
+   * publish fingerprints /assets/ names, so they can be immutable; other
+   * files (robots.txt, sitemap.xml, favicon) get the ESI routes' one hour.
+   */
+  function staticFileCacheControl(requestPath: string): string {
+    if (requestPath.startsWith('/assets/')) return 'public, max-age=31536000, immutable'
+    return 'public, max-age=3600'
+  }
+
   if (type === 'static') {
     app.get('*', async c => {
       const requestPath = new URL(c.req.url).pathname
@@ -276,11 +287,31 @@ export function createServer(options: ServeOptions) {
         if (c.req.header('If-None-Match') === etag) return new Response(null, { status: 304, headers: { ETag: etag } })
         return c.html(html, 200, { 'Cache-Control': 'public, max-age=0, must-revalidate', ETag: etag })
       } catch {
+        // Not a page — serve the stored file byte-exact with a content
+        // type from its extension (#1249). Reading it as UTF-8 text and
+        // answering `c.html` corrupted binary files and typed every
+        // stored file as text/html. HTML files keep the text path so
+        // the archived-page check still runs.
+        const contentType = assetMimeForPath(requestPath)
+        const isHtml = requestPath.endsWith('.html') || requestPath.endsWith('.htm')
+        if (isHtml) {
+          try {
+            const html = await storage.readFile(requestPath.slice(1))
+            const archived = await staticArchiveFor(html, locale)
+            if (archived) return archived
+            return c.html(html)
+          } catch {
+            // fall through to the 404 chain below
+          }
+        }
         try {
-          const html = await storage.readFile(requestPath.slice(1))
-          const archived = await staticArchiveFor(html, locale)
-          if (archived) return archived
-          return c.html(html)
+          const bytes = await storage.readBytes(requestPath.slice(1))
+          return new Response(bytes.slice().buffer as ArrayBuffer, {
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': staticFileCacheControl(requestPath),
+            },
+          })
         } catch {
           // The target's own 404.html, as plain hosts show it (#1152).
           try {
