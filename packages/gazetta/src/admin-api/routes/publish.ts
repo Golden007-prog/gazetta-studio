@@ -1052,27 +1052,70 @@ export function publishRoutes(
       return c.json({ code: 'PUBLISH_AUDIT_FAILED' as const, blocked }, 409)
     }
 
+    // Strict audit mode (#1393): same pre-record as the sync route,
+    // placed synchronously BEFORE the SSE stream opens so a failed
+    // recording refuses the publish with AUDIT_FAILED and nothing
+    // reaches the target. The admin's Publish button calls this
+    // endpoint, so without it a strict site would still publish
+    // from the admin UI.
+    const strictPreRecord = c.var.audit?.strict === true
+    if (strictPreRecord) {
+      const preResult = await c.var.audit.record({
+        action: 'publish',
+        outcome: 'success',
+        scope: { kind: 'site' },
+        metadata: { items: finalItems, targets: body.targets, source: body.source },
+      })
+      if (preResult.failed > 0) {
+        return c.json(
+          { code: 'AUDIT_FAILED' as const, message: 'Audit recording failed; publish refused (strict mode)' },
+          500,
+        )
+      }
+    }
+
     return streamSSE(c, async stream => {
       let recordedSuccess = false
+      let recordedWriteFailed = false
       const collectedResults: PublishResult[] = []
+      // Under strict mode the pre-write record already claims the
+      // publish; a fatal (yielded or thrown) gets one compensating
+      // 'write-failed' event (#1393).
+      const recordWriteFailed = async (): Promise<void> => {
+        if (!strictPreRecord || recordedWriteFailed) return
+        recordedWriteFailed = true
+        await c.var.audit.record({
+          action: 'publish',
+          outcome: 'write-failed',
+          scope: { kind: 'site' },
+          metadata: { items: finalItems, targets: body.targets, source: body.source },
+        })
+      }
       try {
         for await (const ev of runPublish(finalItems, body.targets, body.source)) {
           if (stream.aborted) return
           await stream.writeSSE({ event: ev.kind, data: JSON.stringify(ev) })
+          if (ev.kind === 'fatal') {
+            await recordWriteFailed()
+          }
           if (ev.kind === 'done') {
             // Record once per stream — same shape as the
-            // synchronous /api/publish endpoint.
-            await c.var.audit.record({
-              action: 'publish',
-              outcome: 'success',
-              scope: { kind: 'site' },
-              metadata: { items: finalItems, targets: body.targets, source: body.source },
-            })
+            // synchronous /api/publish endpoint. Skipped when
+            // strict mode already recorded above (#1393).
+            if (!strictPreRecord) {
+              await c.var.audit.record({
+                action: 'publish',
+                outcome: 'success',
+                scope: { kind: 'site' },
+                metadata: { items: finalItems, targets: body.targets, source: body.source },
+              })
+            }
             recordedSuccess = true
             collectedResults.push(...ev.results)
           }
         }
       } catch (err) {
+        await recordWriteFailed()
         if (!stream.aborted) {
           await stream.writeSSE({
             event: 'fatal',
