@@ -63,6 +63,12 @@ function openPublish() {
 // never publish stale data.
 const canPublish = computed(() => !editing.hasPendingEdits)
 
+// design-editor-ux.md "Progressive disclosure": 1 target configured means no
+// publish UI, Save is all — a one-target site has nowhere to publish to
+// (#1285). Sync chips and the target switcher already derive from non-active
+// targets, so they disappear on their own; this button needs the same gate.
+const hasPublishDestination = computed(() => activeTarget.targets.length > 1)
+
 // Disabled buttons need to explain themselves — silent click-with-nothing-happens
 // confuses users and is the most common UX gripe with the toolbar.
 const saveTitle = computed(() => {
@@ -129,7 +135,7 @@ function handleBack() {
         class="cms-btn" />
       <Button v-if="uiMode.mode === 'edit'" :label="saveLabel" icon="pi pi-save" :severity="saveSeverity" :loading="editing.saving"
         data-testid="save-btn" :title="saveTitle" :disabled="!editing.hasPendingEdits" @click="editing.save()" size="small" class="cms-btn" />
-      <Button label="Publish" icon="pi pi-cloud-upload" severity="success"
+      <Button v-if="hasPublishDestination" label="Publish" icon="pi pi-cloud-upload" severity="success"
         data-testid="publish-btn" :title="publishTitle" :disabled="!canPublish" @click="openPublish" size="small" class="cms-btn" />
     </template>
   </Toolbar>
