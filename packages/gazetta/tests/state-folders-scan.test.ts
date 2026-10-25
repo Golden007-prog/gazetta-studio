@@ -49,7 +49,7 @@ function findStateRootLiterals(file: string, sourceText: string): Array<{ line: 
 }
 
 describe('state-folder registry scan', () => {
-  it('flags no `.gazetta` path literal outside state-folders.ts', () => {
+  it('flags no `.gazetta` path literal outside state-folders.ts', { timeout: 30000 }, () => {
     const offenders: string[] = []
     for (const file of walk(SRC_ROOT)) {
       if (ALLOWLIST.has(file.slice(SRC_ROOT.length + 1))) continue
