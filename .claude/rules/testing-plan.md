@@ -60,6 +60,17 @@ sensitivity, atomic writes, range requests) is covered separately by
 [`docker.test.ts`](../../apps/admin/tests/docker.test.ts) testcontainers
 conformance — don't reproduce there.
 
+## Code that builds or compares filesystem paths
+
+CI runs on Linux and macOS only, so Windows path behaviour is never exercised by default. Code that builds, splits or compares filesystem paths (containment checks, mapping a watched file to a content root, separators) gets unit tests that run the logic with `path.win32` as well as `path.posix`: drive-letter case, backslashes, a path on another drive, a lookalike sibling folder (`local` vs `local-old`), and the root itself. Prefer `path.relative` + `isAbsolute` over `startsWith` for "is this file inside that folder": `path.win32.relative` compares case-insensitively.
+
+Decided: maintainer, 2026-10-25 (#1449)
+
+| Rejected | Why |
+|---|---|
+| A Windows CI leg | Declares native Windows support (a product decision) and would surface existing Windows failures to triage first; revisit if a Windows user asks |
+| No rule; handle Windows paths case by case | #1447's first content-root check used `startsWith`, which a drive-letter case difference breaks on Windows; nothing would catch the next one |
+
 ## AI-era disciplines
 
 Three layers ride on top of whatever shape the sub-system uses. Each catches a
