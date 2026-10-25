@@ -95,6 +95,7 @@ import {
   ArchiveRequestSchema,
   type LiveRef,
   type PurgeBlocked,
+  type PurgeNotArchived,
   type PurgeResponse,
   type SetAliasResponse,
   SetAliasRequestSchema,
@@ -490,6 +491,10 @@ export async function handlePurge(
   resolve: SourceContextResolver,
   handle: ItemHandle,
   scanner: import('../../validation/scanner.js').ValidationScanner | null = null,
+  // The explicit `?permanent=true` delete routes pass allowLive: they
+  // are the documented hard-delete intent for live items (#1341 only
+  // closes the /purge routes).
+  opts: { allowLive?: boolean } = {},
 ) {
   const name = c.req.param('name')
   if (!name) return c.json({ error: 'Missing name parameter' }, 400)
@@ -510,6 +515,19 @@ export async function handlePurge(
   if (!force && (aliases.length > 0 || liveRefs.length > 0)) {
     const blocked: PurgeBlocked = { code: 'DELETE_BLOCKED', aliases, liveRefs }
     return c.json(blocked, 409)
+  }
+
+  // Purge is the permanent delete of an ARCHIVED item
+  // (design-soft-delete.md): a live page or fragment must be
+  // archived first so a mistaken call cannot skip the archive step
+  // (#1341). `?force=true` bypasses this like the blockers above
+  // (Q5 lock E1: the audited admin override).
+  if (!force && !opts.allowLive && manifest.archived !== true) {
+    const notArchived: PurgeNotArchived = {
+      code: 'NOT_ARCHIVED',
+      error: `${handle.label} "${name}" is not archived - archive it first`,
+    }
+    return c.json(notArchived, 409)
   }
 
   // History first per pages.ts/fragments.ts pattern: the recorder's
