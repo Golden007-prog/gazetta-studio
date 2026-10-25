@@ -9,7 +9,10 @@
  *
  * Mount this at the top level of the serving app (dev server,
  * `gazetta serve`), NOT under `/admin` — the resolver emits root-relative
- * `/assets/...` URLs that must match this route.
+ * `/assets/...` URLs that must match this route. The Cloudflare worker
+ * can't mount this module (sharp adapter, node streams), so it keeps an
+ * R2-native equivalent of this handler in `workers/cloudflare-r2.ts`;
+ * shared logic lives in `assets/serve-shared.ts`.
  *
  * The factory takes a **storage resolver** + an optional **adapter
  * resolver**. Storage gives us the bytes; adapter gives us the cache
@@ -19,6 +22,9 @@
  *
  * Security:
  * - Rejects paths containing `..` (belt-and-suspenders)
+ * - Only public site paths are served (`isPublicSitePath`): `*.asset.json`
+ *   manifests, dot-paths, and other private storage answer 404 like a
+ *   missing file, same as static `gazetta serve` (#1330)
  * - Cache headers come from `adapter.cachePolicy()` — whatever the
  *   adapter says is right for the URLs it produces. Default
  *   (sharp adapter) returns `immutable` because hash-in-path is
@@ -31,18 +37,13 @@
 import { Hono } from 'hono'
 import { stream } from 'hono/streaming'
 import type { StorageProvider } from '../types.js'
-import type { AssetUrlInput, TransformAdapter } from '../transforms/adapter.js'
+import type { TransformAdapter } from '../transforms/adapter.js'
 import { defaultSharpAdapter } from '../transforms/sharp.js'
+import { isPublicSitePath } from '../public-site-path.js'
+import { assetMimeForPath, dispositionFor, ifNoneMatches, parseAssetUrlInput } from './serve-shared.js'
 
 /** Where assets live, relative to the target storage root. */
 const ASSETS_ROOT = 'assets'
-
-/** MIME lookup for extensions we produce in v1 (JPEG, PNG). */
-const MIME_BY_EXT: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-}
 
 /**
  * Resolve the storage provider to serve from, given an optional target
@@ -76,10 +77,21 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
 
   app.get('/assets/*', async c => {
     const url = new URL(c.req.url)
-    const path = url.pathname.replace(/^\/assets\//, '')
+    let path: string
+    try {
+      path = decodeURIComponent(url.pathname.replace(/^\/assets\//, ''))
+    } catch {
+      return c.text('Invalid asset path', 400)
+    }
 
     if (path.includes('..') || path.startsWith('/')) {
       return c.text('Invalid asset path', 400)
+    }
+
+    // Private storage (manifests, dot-paths) answers 404 like a missing
+    // file — one rule shared with static `gazetta serve` (#1330).
+    if (!isPublicSitePath(path)) {
+      return c.text('Not found', 404)
     }
 
     const targetName = c.req.query('target')
@@ -90,7 +102,7 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
     }
 
     const ext = path.split('.').pop()?.toLowerCase() ?? ''
-    const mime = MIME_BY_EXT[ext] ?? 'application/octet-stream'
+    const mime = assetMimeForPath(path)
 
     const range = parseRange(c.req.header('range'))
 
@@ -115,8 +127,14 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
       return c.body(null, 304)
     }
 
+    // Bounded ranges (bytes=A-B) answer 206. Unbounded ones (bytes=A-)
+    // fall back to a full 200: ignoring Range is RFC-legal, and the
+    // storage interface exposes no stat() to compute the Content-Range
+    // end. (The worker answers both — R2 reports the object size.)
+    const boundedRange = range && Number.isFinite(range.end) ? range : undefined
+
     try {
-      const bodyStream = await storage.readStream(storagePath, range)
+      const bodyStream = await storage.readStream(storagePath, boundedRange)
       c.header('Content-Type', mime)
       c.header('X-Content-Type-Options', 'nosniff')
       c.header('Cache-Control', policy.cacheControl)
@@ -124,6 +142,13 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
       if (etag) c.header('ETag', etag)
       c.header('Content-Disposition', dispositionFor(mime))
       c.header('Access-Control-Allow-Origin', '*')
+      c.header('Accept-Ranges', 'bytes')
+      if (boundedRange) {
+        c.status(206)
+        // Complete-length unknown (no stat on StorageProvider) — the
+        // `*` form is the RFC 9110 §14.4 answer for that.
+        c.header('Content-Range', `bytes ${boundedRange.start}-${boundedRange.end}/*`)
+      }
       return stream(c, async out => {
         await out.pipe(bodyStream)
       })
@@ -136,36 +161,9 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
 }
 
 /**
- * Parse a minimal `AssetUrlInput` from the URL path. Used only for the
- * `cachePolicy()` call — the route doesn't need to recover full
- * variants/dimensions, just whatever the adapter might key on.
- *
- * Filename shape: `{name}-{hash}[.{loc}][.{theme}][-{w}w].{ext}`. We
- * extract `name` and `hash`; selector/variants/dims default to nulls.
- * Future adapters that need more (e.g. per-locale cache TTL) would
- * expand this parser or we'd thread the resolver-time inputs through
- * a different path.
+ * Parse a byte-range HTTP header into the storage provider's `ByteRange`.
+ * Suffix ranges (bytes=-N) stay unsupported, same as before.
  */
-function parseAssetUrlInput(path: string, ext: string): AssetUrlInput {
-  // Strip extension.
-  const stem = path.replace(/\.[^.]+$/, '')
-  // Match `{name}-{hash}` where hash is 8 hex chars; everything after
-  // the first hash-suffix is selector + width.
-  const m = /^(.+)-([0-9a-f]{8})/.exec(stem)
-  const name = m ? m[1]! : stem
-  const hash = m ? m[2]! : ''
-  return {
-    name,
-    hash,
-    ext,
-    selector: null,
-    variants: [],
-    width: null,
-    height: null,
-  }
-}
-
-/** Parse a byte-range HTTP header into the storage provider's `ByteRange`. */
 function parseRange(header: string | undefined): { start: number; end: number } | undefined {
   if (!header) return undefined
   const match = /^bytes=(\d+)-(\d+)?$/.exec(header)
@@ -173,36 +171,4 @@ function parseRange(header: string | undefined): { start: number; end: number } 
   const start = Number.parseInt(match[1], 10)
   const end = match[2] ? Number.parseInt(match[2], 10) : Number.POSITIVE_INFINITY
   return Number.isFinite(end) ? { start, end } : undefined
-}
-
-/**
- * Evaluate `If-None-Match` against the asset's ETag. RFC 7232 §3.2
- * mandates *weak comparison* for `If-None-Match`: a weak validator
- * (`W/"tag"`) matches the strong form (`"tag"`) of the same opaque-tag.
- * Strip the `W/` prefix from both the request token and the ETag before
- * comparing, so a client or proxy sending the weak form still gets the
- * 304. `*` matches any representation — the asset exists (`storage.exists`
- * already passed), so it short-circuits to a match.
- */
-function ifNoneMatches(header: string | undefined, etag: string): boolean {
-  if (!header) return false
-  if (header.trim() === '*') return true
-  const want = stripWeakPrefix(etag)
-  return header.split(',').some(token => stripWeakPrefix(token.trim()) === want)
-}
-
-function stripWeakPrefix(tag: string): string {
-  return tag.startsWith('W/') ? tag.slice(2) : tag
-}
-
-/**
- * `Content-Disposition` per the asset's rendering contract. Embedded
- * kinds (image/video/audio, rendered inline by templates) serve
- * `inline`; everything else serves `attachment` so documents download
- * rather than render in the asset origin. v1 infers the kind from the
- * response MIME — reading the manifest's `kind` field is the
- * authoritative upgrade once non-image MIMEs enter `MIME_BY_EXT`.
- */
-function dispositionFor(mime: string): string {
-  return /^(?:image|video|audio)\//.test(mime) ? 'inline' : 'attachment'
 }
