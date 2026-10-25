@@ -62,14 +62,15 @@ conformance — don't reproduce there.
 
 ## Code that builds or compares filesystem paths
 
-Pull-request CI runs on Linux and macOS. Windows runs only the end-to-end smoke job (`init`, `dev`, fetch a page), on pushes to `main` (`ci.yml`), which doesn't reach unit-level path logic. So code that builds or compares filesystem paths gets unit tests that run it with `path.win32` as well as `path.posix`. Cases worth covering include a drive letter in a different case, another drive, a lookalike sibling folder (`local` vs `local-old`) and the root itself. For "is this file inside that folder", `path.relative` + `isAbsolute` is the usual check: `path.win32.relative` compares case-insensitively, `startsWith` doesn't.
+Pull-request CI runs every job on Linux and the smoke job on macOS. Windows runs only the end-to-end smoke job (`init`, `dev`, fetch a page), on pushes to `main` (`ci.yml`), which doesn't reach unit-level path logic. So code that builds or compares filesystem paths gets unit tests that run it with `path.win32` as well as `path.posix`. Cases worth covering include a drive letter in a different case, another drive, a lookalike sibling folder (`local` vs `local-old`) and the root itself. For "is this file inside that folder", `path.relative` + `isAbsolute` is the usual check: `path.win32.relative` compares case-insensitively, `startsWith` doesn't.
 
 Decided: maintainer, 2026-10-25 (#1449)
 
 | Rejected | Why |
 |---|---|
 | No rule; rely on the Windows smoke on `main` | It runs after merge and end to end only: #1447's first content-root check used `startsWith`, which a drive-letter case difference breaks on Windows, and the smoke run wouldn't reach it |
-| A required list of cases, and `path.relative` mandated | The cases differ per change; listed as examples instead |
+| A required list of cases, and `path.relative` mandated | The maintainer chose examples over a required list |
+| The bare rule only, with no cases or guidance | The maintainer chose to list the cases as examples |
 
 Windows in the pull-request or unit-test jobs is left open until a Windows user asks.
 
