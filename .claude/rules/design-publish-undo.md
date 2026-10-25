@@ -123,7 +123,7 @@ Decided: maintainer, 2026-10-23 (#1220)
 
 **A failed run stops there.** When a target's render run fails (its setup failed, or every item failed), nothing after it runs for that target, from either caller: no sitemap, no publish generation, no purge. A failed run wrote no pages, so a purge would only drop cache that is still valid.
 
-Decided: maintainer, 2026-10-25 (#PR)
+Decided: maintainer, 2026-10-25 (#1432)
 
 | Option | Why rejected |
 |---|---|
@@ -131,7 +131,7 @@ Decided: maintainer, 2026-10-25 (#PR)
 
 **Sitemap hreflang for both callers.** The shared function builds hreflang alternates into `sitemap.xml` as the CLI did, so admin publishes now get them too. For one-domain-per-language targets that's where `design-i18n.md` puts them, and admin publishes were missing them. Two gaps against `design-i18n.md` remain, in [#1431](https://github.com/gazetta-studio/gazetta-studio/issues/1431): path-based targets get a sitemap copy of the hreflang already in each page's `<head>` (Google: allowed, no benefit), and per-domain sitemaps are written as each target publishes instead of after all targets have.
 
-Decided: maintainer, 2026-10-25 (#PR)
+Decided: maintainer, 2026-10-25 (#1432)
 
 | Option | Why rejected |
 |---|---|
