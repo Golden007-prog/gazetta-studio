@@ -281,14 +281,15 @@ export function pageRoutes(
 
   // DELETE = soft-delete by default (Cut 7 cutover per design-soft-delete.md).
   // `?permanent=true` calls the purge logic from archive.ts for explicit
-  // hard-delete intent; `?force=true` (admin-only) bypasses purge-blocked
+  // hard-delete intent (allowLive: the /purge routes themselves refuse
+  // non-archived items, #1341); `?force=true` (admin-only) bypasses purge-blocked
   // checks. The unified path keeps audit shape consistent with the explicit
   // /archive and /purge routes — DELETE without `?permanent=true` audits
   // as `action: 'archive'`, DELETE with `?permanent=true` audits as
   // `action: 'purge'`.
   app.delete('/api/pages/:name{.+}', requireCapability('delete:pages'), editableTarget, async c => {
     const permanent = c.req.query('permanent') === 'true'
-    if (permanent) return handlePurge(c, resolve, PAGE_HANDLE)
+    if (permanent) return handlePurge(c, resolve, PAGE_HANDLE, null, { allowLive: true })
     return handleArchive(c, resolve, PAGE_HANDLE)
   })
 
