@@ -71,8 +71,11 @@ export function memoryStorage(): MemoryStorage {
     async readStream(path: string, range?: ByteRange): Promise<ReadableStream<Uint8Array>> {
       const v = files.get(path)
       if (v === undefined) throw new Error(`ENOENT: ${path}`)
-      // Inclusive start/end, clamped to the stored length — matches the
-      // filesystem provider's createReadStream behavior.
+      // Same contract as the filesystem provider: reject ranges that
+      // can't be served, clamp an over-long end to the stored length.
+      if (range && (range.start < 0 || range.end < range.start || range.start >= v.length)) {
+        throw new Error(`Invalid range for ${path}: start=${range.start}, end=${range.end}, size=${v.length}`)
+      }
       const bytes = range ? v.slice(range.start, Math.min(range.end + 1, v.length)) : v
       return new ReadableStream({
         start(controller) {
