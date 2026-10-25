@@ -156,12 +156,16 @@ export function auditRoutes(opts: AuditRoutesOptions) {
     // operational pattern": run history + external-sink as peers; the
     // drawer dedups the inline copies via `event.id` (we use a synthetic
     // tuple since AuditEvent has no explicit id field — timestamp +
-    // actor + action + scope is unique per attempt by construction).
+    // actor + action + scope + outcome is unique per attempt by
+    // construction). outcome is part of the key: strict mode (#1393)
+    // records a pre-write success event and a compensating
+    // write-failed event for the SAME attempt, often within one
+    // millisecond, and dropping either would misrepresent the attempt.
     const seen = new Set<string>()
     const merged: AuditEvent[] = []
     for (const events of eventsFromProviders) {
       for (const event of events) {
-        const dedupKey = `${event.timestamp}:${event.actor.id}:${event.action}:${event.scope.kind}:${event.scope.name ?? ''}`
+        const dedupKey = `${event.timestamp}:${event.actor.id}:${event.action}:${event.scope.kind}:${event.scope.name ?? ''}:${event.outcome}`
         if (seen.has(dedupKey)) continue
         seen.add(dedupKey)
         merged.push(event)
