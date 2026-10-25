@@ -86,6 +86,7 @@ import type { ItemRef } from '../../dep-sidecars.js'
 import type { Site } from '../../site-loader.js'
 import { findArchivesAliasingInSite, findFragmentUsersInSite } from '../../site-users.js'
 import { rebuildArchiveAliases } from '../../archive-aliases.js'
+import { isManualRedirectArchive, REDIRECT_RESTORE_MESSAGE } from '../../archive-helpers.js'
 import { rebuildAssetRefs } from '../../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../../fragment-deps.js'
 import {
@@ -362,6 +363,13 @@ async function handleUnarchive(
   if (manifest.archived !== true) {
     const response: UnarchiveResponse = { ok: true, name }
     return c.json(response)
+  }
+
+  // A Manual Redirect's manifest carries only archive fields + aliasOf —
+  // restoring would strip them and write `{}`, losing the redirect
+  // (#1343). Refuse; delete the redirect or change where it points.
+  if (isManualRedirectArchive(manifest)) {
+    return c.json({ error: REDIRECT_RESTORE_MESSAGE }, 409)
   }
 
   // Strip the archive fields. Per Q6 lock D1: unarchive = flip the bit.
@@ -681,7 +689,14 @@ function collectAliases(site: Site, name: string): AliasPointer[] {
     const key = `${ref.source}:${ref.name}`
     if (seen.has(key)) continue
     seen.add(key)
-    aliases.push({ kind: ref.source, name: ref.name })
+    // Mark Manual Redirect archives so clients don't offer Restore —
+    // restoring one would strip its manifest to `{}` (#1343).
+    const manifest = ref.source === 'page' ? site.pages.get(ref.name) : site.fragments.get(ref.name)
+    aliases.push({
+      kind: ref.source,
+      name: ref.name,
+      ...(manifest && isManualRedirectArchive(manifest) ? { redirect: true } : {}),
+    })
   }
   return aliases
 }
