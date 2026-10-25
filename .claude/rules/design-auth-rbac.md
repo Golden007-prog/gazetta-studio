@@ -72,7 +72,7 @@ Adding auth/RBAC later means auditing every endpoint consumer and adding a Princ
 | Role | Capabilities (baseline) |
 |---|---|
 | `admin` | Everything: read / edit / delete / publish / configure |
-| `editor` | Read everything; edit + save; publish to non-production targets; cannot delete or configure |
+| `editor` | Read everything; edit + save; publish to non-production targets; request publishes to targets that require approval (`publish:request`, `design-review-workflow.md` 2026-10-25); cannot delete or configure |
 | `viewer` | Read-only; cannot edit, save, or publish |
 
 **Custom roles** allowed via `site.config.ts` `roles:` block. Operator names + capabilities. Common cases: `translator` (editor-scope on locale variants only), `approver` (viewer + publish), `auditor` (read + audit-log access).

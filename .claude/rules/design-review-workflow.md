@@ -177,6 +177,19 @@ Decided: maintainer, 2026-10-25 (#1434)
 | Never allow self-approval of publish requests | A solo operator who turns the gate on can't publish |
 | Store requests flat by id (`{target}/{request-id}.json`) | Finding an item's requests for the publish panel would need a second per-item marker |
 
+Two more, from Seer's second review:
+
+12. **A page's request waits for the fragments it relies on.** When one publish run requests a page and a fragment the page uses that isn't on the target yet, the page's request records the fragment's request. Approving the page's request first is refused: "@promo isn't on production yet: approve its request first." If the fragment's request is rejected or withdrawn, the page's request is withdrawn too, with the reason. This is the pattern [`design-target-removal.md`](design-target-removal.md) Q13 uses for removals.
+13. **Editors can request.** The built-in editor role gains `publish:request`, so an editor clicking **Publish** to a gated target sees "Approval requested". `POST /api/publish` checks `publish:non-production` only for destinations that don't require approval and `publish:request` for those that do (cut 12, with `docs/auth.md`).
+
+Decided: maintainer, 2026-10-25 (#1434)
+
+| Rejected | Why |
+|---|---|
+| Publish in any order and document it | Production can serve a page without its new fragment until the fragment's request runs |
+| One request per publish run on a gated target | Reverses lock 5: approvers could no longer approve items separately |
+| Grant `publish:request` only through custom roles | Out of the box, nobody but an admin could request a publish to a gated target |
+
 ### Configuration
 ```ts
 export default defineSite({
@@ -445,7 +458,7 @@ State lives in GitHub sub-issue close-state; this table is intent only (no statu
 | 9 | **Extract `<Banner>` primitive + its `.stories.ts`** (additive; 4 shipped banners untouched; follow `ArchiveBanner.stories.ts`) | 10 | agent | component | Medium |
 | 10 | **Wire the story runner (`@storybook/addon-vitest`) into CI** so `.stories.ts` execute green (not view-only) — the gate every UX cut relies on | — | agent | api-first | Low |
 | 11 | ReviewBanner.vue (= `<Banner>` + `<Button>`s; ReviewActions folded in) + ReviewRejectDialog + SiteTree state badge + **their `.stories.ts` (transcribed from the design-doc state table) running green** | 7, 8, 9, 10, 20 | agent | component | High |
-| 12 | Publish-request state machine + per-edge request/approver sidecars + the gate at the start of the shared target-publish function (creates requests for `requiresPublishApproval` targets; CLI refuses; removal requests come with target removal cut 2, rollback requests with publish undo cut 4) — locks 1, 5, 6; requests on the source, the production check giving way to the gate, per-file snapshot, pending markers (2026-10-25 items 2, 3, 6, 9) | 4, publish undo cut 1 | agent | api-first | High |
+| 12 | Publish-request state machine + per-edge request/approver sidecars + the gate at the start of the shared target-publish function (creates requests for `requiresPublishApproval` targets; CLI refuses; removal requests come with target removal cut 2, rollback requests with publish undo cut 4) — locks 1, 5, 6; requests on the source, the production check giving way to the gate, per-file snapshot, pending markers, requests that wait for their fragments, `publish:request` on the editor role (2026-10-25 items 2, 3, 6, 9, 12, 13) | 4, publish undo cut 1 | agent | api-first | High |
 | 13 | Publish-approval admin API (`approve`/`reject`/`withdraw` + `GET`), snapshot check (`409 STALE_REQUEST`), execution on the threshold approval with Publish's own steps, Retry after a failed publish — locks 2, 3, 4; 2026-10-25 items 4, 5 | 12 | agent | api-first | High |
 | 14 | Publish-approval gate UX — PublishPanel destination rows + **their `.stories.ts` (5 states from the design-doc table) running green** | 8, 10, 13, 20 | agent | component | High |
 | 15 | Combined "Submit & approve" + "Publish-request & approve" buttons | 11, 14 | agent | component | Low |
