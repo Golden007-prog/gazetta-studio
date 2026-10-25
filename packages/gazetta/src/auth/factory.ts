@@ -35,6 +35,7 @@
 import type { AuthIdentityProvider } from './provider.js'
 import { AuthConfigSchema, type AuthConfig } from './config.js'
 import { AuthConfigurationError } from './errors.js'
+import { unknownCapabilityIssues } from './role-resolver.js'
 import { noneAuthProvider } from './providers/none.js'
 import { createForwardedUserAuthProvider } from './providers/forwarded-user.js'
 import { createCloudflareAccessAuthProvider } from './providers/cloudflare-access.js'
@@ -55,12 +56,32 @@ function flattenRoles(
 }
 
 /**
+ * Boot-time check for unknown custom-role capabilities (#1394).
+ * Reserved-prefix capabilities must come from the built-in
+ * vocabulary; a typo such as `read:pagez` previously booted without
+ * a message. Now flagged once at boot: a warning naming the role and
+ * capability by default, an `AuthConfigurationError` with the same
+ * message under `admin.auth.strict: true`. Role-name collisions with
+ * the built-in set are #1368's scope and stay untouched here.
+ */
+function checkUnknownCapabilities(config: AuthConfig): void {
+  const customRoles = flattenRoles(config.roles)
+  if (!customRoles) return
+  const issues = unknownCapabilityIssues(customRoles)
+  if (issues.length === 0) return
+  const message = issues.join(' ')
+  if (config.strict) throw new AuthConfigurationError(message)
+  console.warn(`[gazetta] ${message}`)
+}
+
+/**
  * Build the configured `AuthIdentityProvider`. Returns the
  * `none`-mode provider when `config` is undefined (the default
  * when `site.config.ts` has no `admin.auth` block).
  */
 export function buildAuthProvider(config: AuthConfig | undefined): AuthIdentityProvider {
   if (!config) return noneAuthProvider
+  checkUnknownCapabilities(config)
 
   switch (config.trust) {
     case 'none':
