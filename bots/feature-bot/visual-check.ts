@@ -125,6 +125,11 @@ export async function prepareVisualCheck(
   if (storyFiles.length === 0) return { kind: 'none' }
 
   const outDir = screenshotDir(o.issueNumber, o.attempt)
+  // TMPDIR can point inside the checkout; never write screenshots
+  // into the working tree, where a commit could pick them up (#1412).
+  if (isInsideRepo(outDir, o.cwd)) {
+    return { kind: 'skipped', reason: 'the screenshot folder is inside the repository' }
+  }
   const sb: StorybookResult = await (deps.startStorybook ?? startStorybook)({
     cwd: o.cwd,
     outputDir: join(dirname(outDir), `storybook-static-${basename(outDir)}`),
