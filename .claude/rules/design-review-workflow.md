@@ -141,8 +141,8 @@ A read-only review of the remaining cuts against the current code and the newer 
 
 1. **Undoing the latest publish skips the gate.** On a target that requires publish approval, Undo after a publish runs at once, as [`design-publish-undo.md`](design-publish-undo.md) Q2 locks; it needs `restore:history` and the target's publish capability. `gazetta undo` on such a target is refused with lock 6's message. Rolling back further is a request (lock 3).
 2. **Publish requests live on the source.** `.gazetta/publish-requests/{target}/{kind}/{name}/{request-id}.json` and its approvers, on the source the author publishes from, as [`design-public-storage.md`](design-public-storage.md) Q5 records them, so a public production target can require approval. The request records its source, so the approval re-hashes the right content. `publish-requests` joins the state folder registry (`state-folders.ts`) as not safe on public targets (cut 12).
-3. **Requesting doesn't need the production capability.** On a target that requires publish approval, `POST /api/publish` doesn't refuse for a missing `publish:production`; the gate creates the request, which needs `publish:request` (lock 5). An author with only `publish:request` clicks **Publish** and sees "Approval requested".
-4. **The approval runs Publish's own steps.** The approval that meets the threshold runs the steps `POST /api/publish` runs before the shared function, for exactly the requested item: `beforePublish` hooks, the validation gate and the publish audit event. It doesn't expand dependents again: they were expanded when the request was made and each has its own request (lock 5). They move into one helper both call, so a template changed since the request is still checked.
+3. **Requesting doesn't need the production capability.** On a target that requires publish approval, `POST /api/publish` (and `POST /api/publish/stream`, which the admin panel uses) doesn't refuse for a missing `publish:production`; the gate creates the request, which needs `publish:request` (lock 5). An author with only `publish:request` clicks **Publish** and sees "Approval requested".
+4. **The approval runs Publish's own steps.** The approval that meets the threshold runs the steps the publish routes (`POST /api/publish`, `POST /api/publish/stream`) run before the shared function, for exactly the requested item: `beforePublish` hooks, the validation gate and the publish audit event. It doesn't expand dependents again: they were expanded when the request was made and each has its own request (lock 5). They move into one helper both call, so a template changed since the request is still checked.
 5. **A failed approved publish can be retried.** If the publish fails, the request stays `publish-approved` with the failure reason. Its row reads "Approved, publish failed: {reason}" with **Retry** (`publish:approve`), which re-checks the snapshot first. Two final approvals at the same moment on two instances can both publish the same content; that's accepted and documented.
 6. **The snapshot covers every file the request publishes.** A request records one `hashManifest` per manifest it will copy (the page and each translation); any difference at approval answers `409 STALE_REQUEST`.
 7. **Review doesn't block publishing.** With review on and publish approval off (archetype B), content that isn't approved still publishes; the publish panel marks those rows "Not approved" (cut 22). Only publish approval blocks.
@@ -179,8 +179,8 @@ Decided: maintainer, 2026-10-25 (#1434)
 
 Two more, from Seer's second review:
 
-12. **A page's request waits for the fragments it relies on.** When one publish run requests a page and a fragment the page uses that isn't on the target yet, the page's request records the fragment's request. Approving the page's request first is refused: "@promo isn't on production yet: approve its request first." If the fragment's request is rejected or withdrawn, the page's request is withdrawn too, with the reason. This is the pattern [`design-target-removal.md`](design-target-removal.md) Q13 uses for removals. On a static target, where fragments are baked into pages, the page's request also waits for the requests of changed fragments it uses: "@header's change isn't approved yet." On ESI targets a changed fragment publishes separately, so only new ones matter.
-13. **Editors can request.** The built-in editor role gains `publish:request`, so an editor clicking **Publish** to a gated target sees "Approval requested". `POST /api/publish` checks `publish:non-production` only for destinations that don't require approval and `publish:request` for those that do (cut 12, with `docs/auth.md`).
+12. **A page's request waits for the fragments it relies on.** When one publish run requests a page and a fragment the page uses that isn't on the target yet, the page's request records the fragment's request. Approving the page's request first is refused: "@promo isn't on production yet: approve its request first." If the fragment's request is rejected or withdrawn, the page's request is withdrawn too, with the reason. This is the pattern [`design-target-removal.md`](design-target-removal.md) Q13 uses for removals. On a static target, where fragments are baked into pages, the page's request also waits for the requests of changed fragments it uses from the same run: "@header's change isn't approved yet." On ESI targets a changed fragment publishes separately, so only new ones matter.
+13. **Editors can request.** The built-in editor role gains `publish:request`, so an editor clicking **Publish** to a gated target sees "Approval requested". Both publish routes (`POST /api/publish`, `POST /api/publish/stream`) check `publish:non-production` only for destinations that don't require approval and `publish:request` for those that do (cut 12, with `docs/auth.md`).
 
 Decided: maintainer, 2026-10-25 (#1434)
 
@@ -194,32 +194,30 @@ Decided: maintainer, 2026-10-25 (#1434)
 ### Configuration
 ```ts
 export default defineSite({
+  // Content review: per content, on the source (or per editable target)
+  reviewWorkflow: {
+    enabled: true,
+    requiredApprovers: 1,
+    allowSelfApproval: true,
+    invalidateOnSave: 'content-diff',
+  },
   targets: {
-    staging: {
-      storage: r2Storage({ /* ... */ }),
-      reviewWorkflow: {
-        enabled: true,
-        requiredApprovers: 1,
-        allowSelfApproval: true,
-        invalidateOnSave: 'content-diff',
-      },
+    local: {
+      storage: filesystemStorage({ path: './dist/local' }),
+      editable: true,
     },
     production: {
       storage: r2Storage({ /* ... */ }),
-      reviewWorkflow: {
-        enabled: true,
-        requiredApprovers: 2,
-        allowSelfApproval: false,
-        invalidateOnSave: 'always',
-      },
+      // Publish approval: per destination
       requiresPublishApproval: true,
       requiredPublishApprovers: 1,
+      allowSelfPublishApproval: false,
     },
   },
 })
 ```
 
-The content-review policy that applies is the one for the editable target the author saves to, or the site-level block (`resolveSaveReviewPolicy`, `review/save-gate.ts`); cut 7's routes resolve it the same way. A `reviewWorkflow` block on a publish-only target such as `staging` above has no effect on content review.
+Content review is per content, not per target (Locked decisions), so the policy that applies is the one for the editable target the author saves to, or the site-level block (`resolveSaveReviewPolicy`, `review/save-gate.ts`). Publish approval (`requiresPublishApproval`, `requiredPublishApprovers`, `allowSelfPublishApproval`) is set on the destination.
 
 ### Workflow archetypes (5 documented recipes)
 - **A. Solo** — review off, publish gate off; one actor does everything
@@ -401,7 +399,7 @@ Each UX cut then **transcribes its slice of the locked design-doc state table** 
 
 Three surfaces were grilled into locked story specs. Each named story = one Storybook story = one bot spec variant.
 
-**Surface 1 — `ReviewBanner.vue`** (= `<Banner>` + inline `<Button>` actions; mounts above the editor à la `ArchiveBanner`; renders only when the active target has `reviewWorkflow.enabled` — absence-as-state otherwise). **`ReviewActions` is folded in** — no separate component. The design doc's earlier two-component naming was unjustified enumeration (rule 25); every POV (discoverability, SRP, bot-risk, Krug) favored fusion, matching the `ArchiveBanner` precedent where the banner hosts its own actions. The 10 stories below *are* the action spec (each names its buttons); a separate `ReviewActions.vue` would only add a coordination bug class (banner/actions out of sync) that fusion eliminates by construction.
+**Surface 1 — `ReviewBanner.vue`** (= `<Banner>` + inline `<Button>` actions; mounts above the editor à la `ArchiveBanner`; renders only when content review is on for the active target (its `reviewWorkflow` block, or the site's: `resolveSaveReviewPolicy`) — absence-as-state otherwise). **`ReviewActions` is folded in** — no separate component. The design doc's earlier two-component naming was unjustified enumeration (rule 25); every POV (discoverability, SRP, bot-risk, Krug) favored fusion, matching the `ArchiveBanner` precedent where the banner hosts its own actions. The 10 stories below *are* the action spec (each names its buttons); a separate `ReviewActions.vue` would only add a coordination bug class (banner/actions out of sync) that fusion eliminates by construction.
 
 Root testid `review-banner` with `data-state` (the `OfflineBanner` pattern). The 10 stories enumerate content-state × actor-capability × config; **draft has two visible variants** — clean (fresh/withdrawn, no message) vs. with-note (rejected or auto-invalidated, shows the reason). The rejected variant is load-bearing: without it the author never sees *why* content bounced (the hole the first-draft matrix missed).
 
@@ -433,8 +431,9 @@ Each action button has an in-flight `:loading` variant (the `archive.status === 
 | Story | Destination-row state | Shows |
 |---|---|---|
 | `DestNoGate` | target without `requiresPublishApproval` | normal **Publish** |
-| `DestRequestable` | gated, viewer has `publish:request`, no open request | **Request publish approval** (`publish-request`) |
-| `DestPending` | gated, request open, threshold unmet | `<StateBadge>` "Pending {N}/{required}"; **Approve**/**Reject** (`publish-approve`/`publish-reject`) inline when viewer has `publish:approve` |
+| `DestRequestable` | gated, viewer has `publish:request`, no open request | `<StateBadge>` "Requires approval" (`publish-request`); the panel's **Publish** creates the request and the row then reads "Approval requested" (2026-10-25 items 3, 13) |
+| `DestPending` | gated, request open, threshold unmet | `<StateBadge>` "Pending {N}/{required}"; **Approve**/**Reject** (`publish-approve`/`publish-reject`) inline when viewer has `publish:approve`; approving a page that waits for a fragment's request shows "@promo isn't on production yet: approve its request first" (2026-10-25 item 12) |
+| `DestFailed` | gated, threshold met, the publish failed | `<StateBadge>` "Approved, publish failed: {reason}"; **Retry** (`publish-retry`) when viewer has `publish:approve` (2026-10-25 item 5) |
 | `DestApproved` | gated, threshold met (the approval published) | `<StateBadge>` "Published by {approver}"; no **Publish** button (2026-10-25) |
 | `DestNoCap` | gated, viewer lacks `publish:request` | `<StateBadge>` "Requires publish approval" (informational) |
 
@@ -461,7 +460,7 @@ State lives in GitHub sub-issue close-state; this table is intent only (no statu
 | 11 | ReviewBanner.vue (= `<Banner>` + `<Button>`s; ReviewActions folded in) + ReviewRejectDialog + SiteTree state badge + **their `.stories.ts` (transcribed from the design-doc state table) running green** | 7, 8, 9, 10, 20 | agent | component | High |
 | 12 | Publish-request state machine + per-edge request/approver sidecars + the gate at the start of the shared target-publish function (creates requests for `requiresPublishApproval` targets; CLI refuses; removal requests come with target removal cut 2, rollback requests with publish undo cut 4) — locks 1, 5, 6; requests on the source, the production check giving way to the gate, per-file snapshot, pending markers, requests that wait for their fragments, `publish:request` on the editor role (2026-10-25 items 2, 3, 6, 9, 12, 13) | 4, publish undo cut 1 | agent | api-first | High |
 | 13 | Publish-approval admin API (`approve`/`reject`/`withdraw` + `GET`), snapshot check (`409 STALE_REQUEST`), execution on the threshold approval with Publish's own steps, Retry after a failed publish — locks 2, 3, 4; 2026-10-25 items 4, 5 | 12 | agent | api-first | High |
-| 14 | Publish-approval gate UX — PublishPanel destination rows + **their `.stories.ts` (5 states from the design-doc table) running green** | 8, 10, 13, 20 | agent | component | High |
+| 14 | Publish-approval gate UX — PublishPanel destination rows + **their `.stories.ts` (6 states from the design-doc table) running green** | 8, 10, 13, 20 | agent | component | High |
 | 15 | Combined "Submit & approve" + "Publish-request & approve" buttons | 11, 14 | agent | component | Low |
 | 16 | Constructive errors (`409 NO_APPROVER_AVAILABLE`; boot config validation; helpful 403s) | 7, 13 | agent | api-first | Low |
 | 17 | Pending review queue (cross-content "what's waiting for me"; `GET /api/reviews?action=pending-review`; paginated) | 7 | agent | api+component | Medium |
@@ -476,7 +475,8 @@ State lives in GitHub sub-issue close-state; this table is intent only (no statu
 - **Cut 10 is the story-runner CI wiring** (`@storybook/addon-vitest`) — repurposed from the now-removed human story-authoring cut. No-dep; the gate that makes "stories run green" real. Every UX cut (8, 9, 11, 14) depends on it.
 - Cuts 8, 9 (primitives + their stories) depend only on the story-runner (10); they otherwise run in parallel with the data-shape cuts 1–7.
 - Cut 11 folds `ReviewActions.vue` into `ReviewBanner.vue` (the 10 stories encode all button logic) and adds the SiteTree badge via `<StateBadge>`; it authors `ReviewBanner.stories.ts` + `ReviewRejectDialog.stories.ts` from the design-doc state table.
-- Cut 14 is PublishPanel destination-row states (5 stories), not a new surface.
+- Cut 14 is PublishPanel destination-row states (6 stories), not a new surface.
+- Cut 18 depends on 7 and 13 because the review hooks fire in cut 7's review routes and cut 13's approval routes. Cut 21 depends on 17 as well as 13 because it extends cut 17's `/api/reviews?action=` route with `publish-pending`.
 - Cut 17 is the cross-content queue — distinct from cut 14's per-content gate (the UX-grill walk surfaced this split).
 - Cut 20 adds **Agent B visual self-check + PR screenshot embed** (per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md) "validation stack" + "Screenshots embedded in the PR"): the reviewer screenshots each new/changed story, judges it against the design-doc state table (factoring into APPROVE/REJECT), **and embeds those screenshots in the PR body so the human reviewer sees rendered states inline.** The self-check catches *gross* visual failures (invisible element, overflow, collapsed layout) — advisory bot-loop, **not** a CI gate and **not** pixel-regression (LLM-judges-prose, no baseline; the real visual gate stays human PR review). The PR embed **uploads the screenshots as GitHub Release assets** (`gh release upload`, rolling `bot-screenshots` tag) and embeds them inline via the public `…/releases/download/…` URLs (per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md): token-only, official API, public-served raw bytes that render inline). **The bytes never touch `main`** — which is *why* this beats the feature-branch-commit option (whose commits would merge into `main`'s history under squash/rebase/merge even though the branch is deleted). **Cleanup by reconciliation:** each feature-bot run starts by deleting the assets of cuts whose PR is merged or closed (`gh release delete-asset`); a PR-close trigger would need a workflow file bots can't push (#840), so closed PRs' screenshots linger up to a week. Best-effort with a mandatory fallback: on upload failure the PR opens without images + a note, never blocked; a cleanup failure never blocks the merge. UX cuts 11 + 14 depend on it. Depends only on Cut 10 (needs `build-storybook` working). Revised 2026-10-18: everything runs from bot code, no workflow edit (#535).
 - Cut 19 absorbs the old Cut 15 docs + the consolidation work (retiring the impl doc per [ADR-0015](../../docs/adr/0015-impl-doc-artifact-retires.md)).

@@ -135,7 +135,7 @@ export default defineSite({
 ```ts
 const BUILT_IN_ROLES = {
   admin: ['*'],
-  editor: ['read:*', 'edit:*', 'publish:non-production'],
+  editor: ['read:*', 'edit:*', 'publish:non-production', 'review:submit', 'publish:request'],
   viewer: ['read:*'],
 }
 ```
