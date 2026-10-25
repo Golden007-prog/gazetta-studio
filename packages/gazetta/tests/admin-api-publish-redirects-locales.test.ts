@@ -26,29 +26,33 @@ interface BuildOpts {
   manifestExtra?: Record<string, unknown>
   targetConfigExtra?: Record<string, unknown>
   seedExtra?: Record<string, string>
+  /** Inject storages to keep state across two app instances; skips the seed. */
+  storages?: { sourceStorage: MemoryStorage; targetStorage: MemoryStorage }
 }
 
-function buildApp(opts: BuildOpts = {}): { app: Hono; targetStorage: MemoryStorage } {
-  const sourceStorage = memoryStorage()
-  const targetStorage = memoryStorage()
-  sourceStorage.seed({
-    'fragments/header/fragment.json': JSON.stringify({ template: 'header-layout' }),
-    'pages/landing/page.json': JSON.stringify({
-      template: 'page-default',
-      content: {},
-      archived: true,
-      aliasOf: 'welcome',
-    }),
-    'pages/old/page.json': JSON.stringify({
-      template: 'page-default',
-      content: {},
-      archived: true,
-    }),
-    'pages/welcome/page.json': JSON.stringify({ template: 'page-default', content: {} }),
-    'pages/welcome/page.fr.json': JSON.stringify({ template: 'page-default', content: {} }),
-    'pages/home/page.json': JSON.stringify({ template: 'page-default', content: {} }),
-    ...opts.seedExtra,
-  })
+function buildApp(opts: BuildOpts = {}): { app: Hono; sourceStorage: MemoryStorage; targetStorage: MemoryStorage } {
+  const sourceStorage = opts.storages?.sourceStorage ?? memoryStorage()
+  const targetStorage = opts.storages?.targetStorage ?? memoryStorage()
+  if (!opts.storages) {
+    sourceStorage.seed({
+      'fragments/header/fragment.json': JSON.stringify({ template: 'header-layout' }),
+      'pages/landing/page.json': JSON.stringify({
+        template: 'page-default',
+        content: {},
+        archived: true,
+        aliasOf: 'welcome',
+      }),
+      'pages/old/page.json': JSON.stringify({
+        template: 'page-default',
+        content: {},
+        archived: true,
+      }),
+      'pages/welcome/page.json': JSON.stringify({ template: 'page-default', content: {} }),
+      'pages/welcome/page.fr.json': JSON.stringify({ template: 'page-default', content: {} }),
+      'pages/home/page.json': JSON.stringify({ template: 'page-default', content: {} }),
+      ...opts.seedExtra,
+    })
+  }
 
   const targetConfig = {
     storage: targetStorage,
@@ -87,7 +91,7 @@ function buildApp(opts: BuildOpts = {}): { app: Hono; targetStorage: MemoryStora
     disableCacheStatsLogger: true,
   })
 
-  return { app, targetStorage }
+  return { app, sourceStorage, targetStorage }
 }
 
 async function publishAndReadRedirects(app: Hono, targetStorage: MemoryStorage): Promise<string> {
@@ -184,6 +188,32 @@ describe('publish route — redirects rows per target language (#1130)', () => {
     expect(body).toContain('/fr/ancien  /  301')
     expect(body).not.toContain('/fr/contact')
     expect(body.trim().split('\n')).toHaveLength(8)
+  })
+
+  it('deletes _redirects when the last archived page is unarchived and republished (#1426)', async () => {
+    // Generated files are written or deleted, never skipped: once no
+    // archived pages remain there are no rows, and the previously
+    // published file must not stay live.
+    const first = buildApp({})
+    const body = await publishAndReadRedirects(first.app, first.targetStorage)
+    expect(body).toContain('/old  /  410')
+
+    first.sourceStorage.seed({
+      'pages/landing/page.json': JSON.stringify({ template: 'page-default', content: {} }),
+      'pages/old/page.json': JSON.stringify({ template: 'page-default', content: {} }),
+    })
+    // A fresh app: the source context caches the loaded site, so the
+    // unarchived manifests only take effect on a new instance.
+    const second = buildApp({
+      storages: { sourceStorage: first.sourceStorage, targetStorage: first.targetStorage },
+    })
+    const res = await second.app.request('/api/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: ['fragments/header'], targets: ['staging'] }),
+    })
+    expect(res.status).toBeLessThan(300)
+    expect(await second.targetStorage.exists('_redirects')).toBe(false)
   })
 
   it('writes the same rows as before for a site without locales', async () => {
