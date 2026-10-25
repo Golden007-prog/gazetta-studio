@@ -71,6 +71,7 @@
  */
 import type { StorageProvider } from '../types.js'
 import { enqueueStorageTask } from './append-queue.js'
+import { stateFolderPath } from '../state-folders.js'
 import type { AuditEvent } from './types.js'
 
 export interface AuditRetentionConfig {
@@ -93,7 +94,7 @@ export interface PruneResult {
   filesInspected: number
 }
 
-const AUDIT_DIR = '.gazetta/audit'
+const AUDIT_DIR = stateFolderPath('audit')
 
 /**
  * Walk the audit JSONL files, evict events that violate retention,
