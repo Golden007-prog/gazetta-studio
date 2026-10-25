@@ -76,6 +76,31 @@ describe('screenshots stay out of the repository', () => {
     expect(isInsideRepo(join(REPO_ROOT, 'bots', 'x.png'), REPO_ROOT)).toBe(true)
     expect(isInsideRepo(join(REPO_ROOT, '..', 'x.png'), REPO_ROOT)).toBe(false)
   })
+
+  it('prepareVisualCheck skips without starting Storybook when the temp base is inside the checkout (#1412)', async () => {
+    // TMPDIR pointing into the working tree would put screenshots
+    // where Agent A's commit could pick them up.
+    const prev = process.env.TMPDIR
+    process.env.TMPDIR = join(REPO_ROOT, '.tmp-visual-check')
+    try {
+      let storybookStarted = false
+      const result = await prepareVisualCheck(
+        { cwd: REPO_ROOT, changedFiles: [`${C}/Banner.stories.ts`], issueNumber: 535, attempt: 1 },
+        {
+          exists: () => true,
+          startStorybook: async (): Promise<StorybookResult> => {
+            storybookStarted = true
+            throw new Error('startStorybook must not be called')
+          },
+        },
+      )
+      expect(result).toEqual({ kind: 'skipped', reason: 'the screenshot folder is inside the repository' })
+      expect(storybookStarted).toBe(false)
+    } finally {
+      if (prev === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = prev
+    }
+  })
 })
 
 describe('prepareVisualCheck', () => {
