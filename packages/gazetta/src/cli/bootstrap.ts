@@ -85,10 +85,6 @@ function assertTargetsHaveStorage(targetConfigs: Record<string, TargetConfig>, c
 }
 
 /**
- * Load site.config.ts, initialize all targets, and return a TargetRegistry view.
- * Throws if site.config.ts is missing or has no targets declared.
- */
-/**
  * Hoist `gazetta.config.ts` defaults into the site manifest (object
  * fields only; a site-level value always wins). The config loader
  * applies the same merge to `SiteConfig` via `applyGazettaDefaults`,
@@ -107,7 +103,24 @@ function applyManifestDefaults(manifest: SiteManifest, gazettaManifest?: Gazetta
   }
 }
 
+/**
+ * Load site.config.ts, initialize all targets, and return a TargetRegistry view.
+ * Throws if site.config.ts is missing or has no targets declared.
+ */
 export async function bootstrapFromSiteYaml(projectSiteDir: string): Promise<BootstrapResult> {
+  const { manifest, targetConfigs, gazettaManifest } = await loadSiteTargets(projectSiteDir)
+  const providers = await createTargetRegistry(targetConfigs)
+  const registry = createTargetRegistryView(providers, targetConfigs)
+  return { manifest, targetConfigs, registry, gazettaManifest }
+}
+
+/**
+ * Load site.config.ts and its targets without initializing any of them.
+ * For commands that work on one target and initialize it themselves: an
+ * unreachable other target would otherwise hold them for the init
+ * timeout (#1459).
+ */
+export async function loadSiteTargets(projectSiteDir: string): Promise<Omit<BootstrapResult, 'registry'>> {
   const gazettaManifest = await loadGazettaManifestFromProject(projectSiteDir)
   const manifest = applyManifestDefaults(await loadManifestFromConfig(projectSiteDir), gazettaManifest)
   const targetConfigs = manifest.targets ?? {}
@@ -119,10 +132,7 @@ export async function bootstrapFromSiteYaml(projectSiteDir: string): Promise<Boo
     )
   }
   assertTargetsHaveStorage(targetConfigs, join(projectSiteDir, 'site.config.ts'))
-
-  const providers = await createTargetRegistry(targetConfigs)
-  const registry = createTargetRegistryView(providers, targetConfigs)
-  return { manifest, targetConfigs, registry, gazettaManifest }
+  return { manifest, targetConfigs, gazettaManifest }
 }
 
 export interface BuildSourceContextOptions {

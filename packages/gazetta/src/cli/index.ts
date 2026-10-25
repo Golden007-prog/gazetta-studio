@@ -2626,8 +2626,10 @@ async function main() {
  * the other CLI commands that already do it the same way.
  */
 async function resolveHistoryContext(siteDir: string, targetName: string) {
-  const { bootstrapFromSiteYaml } = await import('./bootstrap.js')
-  const { targetConfigs } = await bootstrapFromSiteYaml(siteDir)
+  // Config only: cli/history.ts initializes the named target itself, and
+  // initializing the others would wait on any that can't be reached (#1459).
+  const { loadSiteTargets } = await import('./bootstrap.js')
+  const { targetConfigs } = await loadSiteTargets(siteDir)
   const config = targetConfigs[targetName]
   if (!config) {
     throw new Error(`Unknown target "${targetName}". Available: ${Object.keys(targetConfigs).join(', ')}`)
