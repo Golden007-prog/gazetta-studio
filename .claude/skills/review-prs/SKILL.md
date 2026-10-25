@@ -91,6 +91,10 @@ These are reasons to push back on a bot PR even if Agent B approved:
 - **Discovered items that are load-bearing**: a `Discovered:` entry that's actually the incomplete-fix case the bot should have addressed in-scope. Push back with "this isn't a follow-up; finish the fix."
 - **Leftover `tmp-*` files**: the runtime exercise's scratch script appears in the diff. Bot was supposed to delete before commit. Push back.
 
+### When an outside contributor is on the same issue
+
+An outside contributor beats our bots (maintainer, 2026-10-25). If a person has claimed the issue, is assigned to it, or has a PR for it, close the bot's PR with a comment pointing at theirs, even when the bot's PR came first or is approved. Only a merged bot PR stands; then thank the contributor and offer another issue. mangomac, an outside AI agent, ranks between them: people > mangomac > our bots. Before merging a bot PR, check the issue for a claim made since the PR opened. The contributor-matching session (gazetta-13) reports clashes it sees; CONTRIBUTING.md tells contributors the same rule.
+
 ## Pruning proof-of-work tests in bot PRs
 
 Bot-authored PRs with `Mode: structural` sometimes include tests that exist only to prove the bot DID the structural work — not to assert ongoing invariants the codebase needs. These are "proof-of-work" tests: they read production source files with `readFile` / `readdir` and regex-match the source text. Useful at TDD-contract time (Agent A's failing-test commit had to fail before the fix landed); operationally redundant once the diff is on main.
