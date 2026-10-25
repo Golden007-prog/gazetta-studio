@@ -4,6 +4,7 @@ import { allFragmentEntries, allPageEntries, loadSite } from './site-loader.js'
 import { createContentRoot, type ContentRoot } from './content-root.js'
 import type { DepRelation } from './dep-sidecars.js'
 import { rebuildItemDeps } from './dep-sidecars.js'
+import { stateFolderPath } from './state-folders.js'
 import { ASSET_REFS } from './assets/asset-deps.js'
 import { FRAGMENT_DEPS } from './fragment-deps.js'
 
@@ -52,7 +53,7 @@ export async function rebuildDepIndex(
 
   // Wipe existing index — full rebuild semantics. Stale entries from
   // targets that no longer exist in source manifests get cleared.
-  await destStorage.rm(destRoot.path('.gazetta', rel.rootName)).catch(() => {
+  await destStorage.rm(destRoot.path(stateFolderPath(rel.rootName))).catch(() => {
     // Missing dir = nothing to wipe; fine.
   })
 
