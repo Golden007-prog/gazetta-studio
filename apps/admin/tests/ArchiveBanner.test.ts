@@ -94,6 +94,25 @@ describe('ArchiveBanner', () => {
     expect(banner.text()).toContain('410 Gone')
   })
 
+  it('hides Restore for a Manual Redirect archive (alias + no template) (#1343)', () => {
+    // Redirect manifests carry no template — restoring one is refused
+    // by the backend, so the button must not be offered.
+    seedSite({
+      pages: [{ name: 'old', route: '/old', archived: true, aliasOf: 'home' }],
+    })
+    const wrapper = render({ kind: 'page', name: 'old' })
+    expect(wrapper.find('[data-testid="archive-banner-page-old"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="archive-restore-page-old"]').exists()).toBe(false)
+  })
+
+  it('keeps Restore for an archived content item that aliases elsewhere', () => {
+    seedSite({
+      pages: [{ name: 'old', route: '/old', template: 'page-default', archived: true, aliasOf: 'home' }],
+    })
+    const wrapper = render({ kind: 'page', name: 'old' })
+    expect(wrapper.find('[data-testid="archive-restore-page-old"]').exists()).toBe(true)
+  })
+
   it('Edit alias button dispatches askArchive on the store', async () => {
     seedSite({
       pages: [{ name: 'old', route: '/old', template: 'page-default', archived: true, aliasOf: 'home' }],
