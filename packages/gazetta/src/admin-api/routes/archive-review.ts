@@ -48,6 +48,20 @@ import type { ComponentManifest } from '../../types.js'
 import { clearReviewSidecar, readReviewSidecar, type ReviewStateKind } from '../../review/index.js'
 
 /**
+ * `isSafeItemName` (`item-name.ts`) allows dots in item names
+ * (`v1.2`, `release.notes`), but `encodeRefName` (`hash.ts`) throws on
+ * any dot, so no review sidecar path can ever be built for such a
+ * name: writing one would have thrown the same way. "No sidecar"
+ * (draft) is therefore the correct answer for a dotted name, and the
+ * lookup must not throw. Allowing dots in item names while the
+ * reference encoding forbids them is a separate inconsistency,
+ * tracked on its own.
+ */
+function canHaveReviewSidecar(name: string): boolean {
+  return !name.includes('.')
+}
+
+/**
  * Read the item's current review state from its sidecar. Returns
  * `undefined` when no sidecar exists (fresh content; the absence of
  * a sidecar IS the draft state in the review-workflow data model).
@@ -57,6 +71,7 @@ async function readReviewState(
   kind: ReviewStateKind,
   name: string,
 ): Promise<string | undefined> {
+  if (!canHaveReviewSidecar(name)) return undefined
   const sidecar = await readReviewSidecar(contentRoot, kind, name)
   return sidecar?.state
 }
@@ -130,6 +145,7 @@ export async function resetReviewStateForItem(
   kind: ReviewStateKind,
   name: string,
 ): Promise<void> {
+  if (!canHaveReviewSidecar(name)) return
   await clearReviewSidecar(contentRoot, kind, name)
 }
 
