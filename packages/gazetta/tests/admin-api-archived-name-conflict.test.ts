@@ -130,6 +130,28 @@ describe('POST /api/pages?onConflict=restore', () => {
     await postCreate('home', 'restore')
     expect(await storage.exists('.gazetta/alias-targets/about/pages.home')).toBe(false)
   })
+
+  it('resets the review sidecar, leaving the restored item in draft (#1344)', async () => {
+    await app.request('/api/pages/home/archive', { method: 'POST' })
+    // Seed the sidecar AFTER archiving so this isolates the
+    // conflict-restore path: the archive route itself also resets
+    // review state (#1344), and seeding first would let that path
+    // consume it.
+    storage.seed({
+      '.gazetta/review/page/home/state.json': JSON.stringify({
+        state: 'pending-review',
+        submitter: 'alice@example.com',
+        requiredApprovers: 1,
+        submittedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    })
+
+    const res = await postCreate('home', 'restore')
+    expect(res.status).toBe(200)
+
+    expect(await storage.exists('.gazetta/review/page/home/state.json')).toBe(false)
+  })
 })
 
 describe('Manual Redirect restore refusal (#1343)', () => {
