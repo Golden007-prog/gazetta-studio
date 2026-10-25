@@ -33,6 +33,7 @@ import { loadSiteFromSource } from './source-context.js'
 import { findArchivesAliasingInSite } from '../site-users.js'
 import { rebuildAssetRefs } from '../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../fragment-deps.js'
+import { isManualRedirectArchive } from '../archive-helpers.js'
 import type { ItemRef } from '../dep-sidecars.js'
 import type { SourceContext } from './source-context.js'
 
@@ -41,6 +42,7 @@ const ARCHIVED_NAME_CONFLICT_MODES: ReadonlySet<ArchivedNameConflictMode> = new 
 
 export type ArchivedNameConflictResult =
   | { kind: 'restored' }
+  | { kind: 'redirect-restore' }
   | { kind: 'replaced'; flattenedAliases: string[] }
   | { kind: 'moved-aside'; archivedAs: string; flattenedAliases: string[] }
   | { kind: 'invalid-mode' }
@@ -81,6 +83,10 @@ export async function resolveArchivedNameConflict(opts: ResolveOptions): Promise
 // (per Q6 D1 — restore = "flip the bit", no content overwrite).
 
 async function runRestore(opts: ResolveOptions): Promise<ArchivedNameConflictResult> {
+  // A Manual Redirect's manifest is only archive fields + aliasOf —
+  // restoring would write `{}` and lose the redirect (#1343). Routes
+  // map this variant to 409.
+  if (isManualRedirectArchive(opts.existing)) return { kind: 'redirect-restore' }
   const filename = filenameFor(opts.kind)
   const path = join(opts.existing.dir, filename)
   const restored = stripArchiveFields(opts.existing)
