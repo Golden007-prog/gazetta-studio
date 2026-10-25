@@ -9,6 +9,34 @@ import { setActivePinia, createPinia } from 'pinia'
 import { onlineManager } from '@tanstack/vue-query'
 import { configureConnectionState, useConnectionState } from '../src/client/stores/connectionState.js'
 
+describe('default heartbeat health path (#1388)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('the default connection check requests /admin/api/health', async () => {
+    // The admin bundle is built with --base /admin/, so API_BASE is
+    // /admin/api; a bare /api/health 404s under `gazetta dev`.
+    vi.stubEnv('BASE_URL', '/admin/')
+    vi.resetModules()
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { configureConnectionState: configure, useConnectionState: useStore } = await import(
+      '../src/client/stores/connectionState.js'
+    )
+    setActivePinia(createPinia())
+    // No heartbeatFn override: the store must use the real default
+    // heartbeat against the derived health path.
+    configure({ manualMode: true })
+    const store = useStore()
+    await store.tick()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('/admin/api/health')
+  })
+})
+
 describe('useConnectionState — 5-state model', () => {
   let heartbeatResult: boolean
 
