@@ -154,6 +154,28 @@ describe('POST /api/pages?onConflict=restore', () => {
   })
 })
 
+describe('#1344 review — dotted item names on conflict-restore', () => {
+  beforeEach(() => {
+    setup({
+      'pages/release.notes/page.json': JSON.stringify({
+        template: 'page-default',
+        content: { title: 'Notes' },
+      }),
+    })
+  })
+
+  it('conflict-restores a dotted page name without touching the sidecar encoding', async () => {
+    await app.request('/api/pages/release.notes/archive', { method: 'POST' })
+
+    const res = await postCreate('release.notes', 'restore')
+    expect(res.status).toBe(200)
+
+    const manifest = await readJson('pages/release.notes/page.json')
+    expect(manifest.archived).toBeUndefined()
+    expect(manifest.content).toEqual({ title: 'Notes' })
+  })
+})
+
 describe('Manual Redirect restore refusal (#1343)', () => {
   // A redirect manifest is only archive fields + aliasOf; restoring it
   // would write `{}` and lose the redirect. Predicate: archived === true
