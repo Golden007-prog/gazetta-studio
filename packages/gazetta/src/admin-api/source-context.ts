@@ -89,20 +89,49 @@ export interface SourceContext {
    * etc. on writes (Cut 4).
    */
   readonly cache: AdminCache
+  /**
+   * Optional callback fired with the first site successfully loaded
+   * through `loadSiteFromSource` for this context — once per process
+   * (#1305's deferred boot warning: `gazetta admin` doesn't load the
+   * site at boot, so its capability-gap warning waits for the first
+   * request that loads one). Set by the admin boot path; routes never
+   * touch it.
+   */
+  onFirstSiteLoad?: (site: Site) => void
 }
+
+/** Contexts whose first-load callback already fired (or is in flight). */
+const firstSiteLoadNotified = new WeakSet<SourceContext>()
 
 /**
  * Load a site from a SourceContext. Passes the project-level manifest
  * so loadSite doesn't need a target-level site config file. Forwards
  * the source's per-site cache so every load shares one cache instance.
+ * Fires `source.onFirstSiteLoad` once per process after the first
+ * successful load; a failed load clears the mark so a later success
+ * still notifies.
  */
 export function loadSiteFromSource(source: SourceContext, opts?: Partial<LoadSiteOptions>): Promise<Site> {
-  return loadSite({
+  const notify = source.onFirstSiteLoad
+  const marked = notify && !firstSiteLoadNotified.has(source)
+  if (marked) firstSiteLoadNotified.add(source)
+  const loaded = loadSite({
     contentRoot: source.contentRoot,
     manifest: source.manifest,
     cache: source.cache,
     ...opts,
   })
+  if (!marked) return loaded
+  return loaded.then(
+    site => {
+      notify(site)
+      return site
+    },
+    err => {
+      firstSiteLoadNotified.delete(source)
+      throw err
+    },
+  )
 }
 
 export interface CreateSourceContextOptions {
