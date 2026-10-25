@@ -1709,6 +1709,63 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     )
   }
 
+  // ---- Locale fallback for locales added after boot (#1353) ----
+  // Boot registers fallback routes only for the initial manifest's
+  // locales. A locale added to `supported` while dev runs has no
+  // registered routes, so resolve the same fallback per request against
+  // the live manifest. Registered last: Hono short-circuits on the first
+  // handler that returns, so existing routes win and only otherwise-404
+  // paths reach here.
+  const matchPageRoute = (pattern: string, path: string): Record<string, string> | null => {
+    const pp = pattern.split('/').filter(Boolean)
+    const sp = path.split('/').filter(Boolean)
+    if (pp.length !== sp.length) return null
+    const params: Record<string, string> = {}
+    for (let i = 0; i < pp.length; i++) {
+      if (pp[i].startsWith(':')) params[pp[i].slice(1)] = decodeURIComponent(sp[i])
+      else if (pp[i] !== sp[i]) return null
+    }
+    return params
+  }
+  app.all('*', async c => {
+    const segs = new URL(c.req.url).pathname.split('/').filter(Boolean)
+    const loc = segs[0]
+    const liveLocales = resolveSiteLocales(live.manifest)
+    if (!loc || !liveLocales || loc === liveLocales.default || !liveLocales.supported.includes(loc)) {
+      return c.notFound()
+    }
+    const rest = '/' + segs.slice(1).join('/')
+    try {
+      const freshSite = await loadSite({ contentRoot: live.source.contentRoot, templatesDir, manifest: live.manifest })
+      for (const [pageName, page] of freshSite.pages) {
+        const routeParams = matchPageRoute(page.route, rest)
+        if (!routeParams) continue
+        const resolved = await resolvePage(pageName, freshSite, loc)
+        const freshPage = freshSite.pageLocales.get(pageName)?.locales.get(loc) ?? freshSite.pages.get(pageName)
+        const html = await renderPage(resolved, {
+          routeParams,
+          metadata: freshPage?.metadata ?? page.metadata,
+          route: freshPage?.route ?? page.route,
+          seo: {
+            siteName: freshSite.manifest.name,
+            locale: loc,
+            defaultOgImage: freshSite.manifest.defaultOgImage,
+          },
+        })
+        return c.html(
+          html.replace(
+            '</body>',
+            `${RELOAD_SCRIPT}
+</body>`,
+          ),
+        )
+      }
+      return c.notFound()
+    } catch (err) {
+      return c.html(renderErrorOverlay(err as Error), 500)
+    }
+  })
+
   // ---- 404 ----
   app.notFound(devNotFound(site.pages))
 
@@ -1936,24 +1993,42 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   // state (#1353). jiti runs with moduleCache disabled, so each load sees
   // the edited file. A config that fails to evaluate keeps the last good
   // state, per the locked acceptance on #1353.
-  let configReloadInFlight = false
+  let configReloadRunning = false
+  let configReloadQueued = false
   const reloadSiteConfig = async () => {
-    if (configReloadInFlight) return
-    configReloadInFlight = true
+    // A save that lands while a reload runs is queued, not dropped: rerun
+    // once the in-flight reload ends so the last edit wins (#1353 review).
+    if (configReloadRunning) {
+      configReloadQueued = true
+      return
+    }
+    configReloadRunning = true
     try {
-      const next = await buildSourceContext({ projectSiteDir: siteDir })
-      live.source = next.source
-      live.manifest = next.manifest
-      live.targetConfigs = next.targetConfigs
-      console.log('  Config changed: site.config reloaded')
-      invalidateAllTemplates()
-      void cmsApp?.invalidateContentCache()
-      notifyReload()
-    } catch (err) {
-      console.error(`  Config reload failed: ${(err as Error).message}`)
-      console.error('  Keeping the last good config.')
+      do {
+        configReloadQueued = false
+        try {
+          const next = await buildSourceContext({ projectSiteDir: siteDir })
+          live.source = next.source
+          live.manifest = next.manifest
+          // Mutate targetConfigs in place rather than swapping the object:
+          // the admin app captured this reference at boot (target registry,
+          // lazy provider init, /api/targets), so in-place updates are how
+          // the admin sees edited targets without a restart.
+          for (const name of Object.keys(live.targetConfigs)) {
+            if (!(name in next.targetConfigs)) delete live.targetConfigs[name]
+          }
+          Object.assign(live.targetConfigs, next.targetConfigs)
+          console.log('  Config changed: site.config reloaded')
+          invalidateAllTemplates()
+          void cmsApp?.invalidateContentCache()
+          notifyReload()
+        } catch (err) {
+          console.error(`  Config reload failed: ${(err as Error).message}`)
+          console.error('  Keeping the last good config.')
+        }
+      } while (configReloadQueued)
     } finally {
-      configReloadInFlight = false
+      configReloadRunning = false
     }
   }
 
