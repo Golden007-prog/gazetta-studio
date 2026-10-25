@@ -153,6 +153,22 @@ describe('createTargetRegistry', () => {
     expect(registry.size).toBe(0)
   })
 
+  it('clears the init guard timer once init settles (#1180)', async () => {
+    vi.useFakeTimers()
+    try {
+      await mkdir(testDir, { recursive: true })
+      const targets: Record<string, TargetConfig> = {
+        local: { storage: filesystemStorage({ path: resolve(testDir, 'output') }) },
+      }
+      const registry = await createTargetRegistry(targets)
+      expect(registry.has('local')).toBe(true)
+      // A pending 10s guard timer would keep the CLI process alive (#1180).
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('skips targets that fail to initialize', async () => {
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const targets: Record<string, TargetConfig> = {
