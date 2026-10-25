@@ -290,7 +290,7 @@ The `_redirects` file is regenerated each publish from walked archived manifests
 
 For deployments that don't support `_redirects` (e.g., raw S3 static-website), archive operations still work — the manifest is updated and the item disappears from the live tree — but visitors hitting the old URL get the host's natural 404 instead of a 301 redirect or 410 Gone. This **capability gap** is surfaced at four points so operators see it before it bites:
 
-1. **Boot config validate** — once the site has archived pages, a warning when a target's runtime can't serve redirects (a site with nothing archived boots without it)
+1. **Boot config validate** — once the site has archived pages, a warning when a target's runtime can't serve redirects (at boot in `gazetta dev`, on the first site-loading request in `gazetta admin`; a site with nothing archived gets none)
 2. **Author-time modal** — the archive modal shows per-target capability badges
 3. **Background scanner** — `archive-not-supported-on-target` validator surfaces in the site-health drawer
 4. **Pre-publish gate** — listed alongside other publish-time issues
