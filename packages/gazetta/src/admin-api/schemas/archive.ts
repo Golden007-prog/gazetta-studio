@@ -74,6 +74,8 @@ export type PurgeBlocked = z.infer<typeof PurgeBlockedSchema>
 
 export const PurgeNotArchivedSchema = z.object({
   code: z.literal('NOT_ARCHIVED'),
+  // The admin client's deletePurge surfaces `error` on non-blocked
+  // 409s as the refusal reason.
   error: z.string(),
 })
 export type PurgeNotArchived = z.infer<typeof PurgeNotArchivedSchema>
