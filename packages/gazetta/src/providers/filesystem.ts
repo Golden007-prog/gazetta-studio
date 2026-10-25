@@ -15,6 +15,7 @@ export function createFilesystemProvider(basePath?: string): StorageProvider {
   }
 
   return {
+    root: basePath,
     async readFile(path: string): Promise<string> {
       const fullPath = resolvePath(path)
       try {
