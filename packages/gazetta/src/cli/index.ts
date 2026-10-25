@@ -1536,6 +1536,16 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   const site = await loadSite({ contentRoot: source.contentRoot, templatesDir, manifest })
   const storage = source.storage
 
+  // Live config state, swapped in place when site.config.ts changes on disk
+  // (#1353). Request-time handlers read through `live` so an edit takes
+  // effect without a restart; boot-time route registration keeps the
+  // initial values.
+  const live: { source: typeof source; manifest: typeof manifest; targetConfigs: typeof targetConfigs } = {
+    source,
+    manifest,
+    targetConfigs,
+  }
+
   const app = new Hono()
 
   // ---- Live reload (SSE) ----
@@ -1588,7 +1598,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   const { assetServeRoutes } = await import('../assets/serve-route.js')
   app.route(
     '/',
-    assetServeRoutes(async () => source.storage),
+    assetServeRoutes(async () => live.source.storage),
   )
 
   // ---- Site page routes (default + locale variants) ----
@@ -1597,7 +1607,11 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   for (const { name: pageName, page, locale: pageLocale } of allPageEntries(site)) {
     app.get(page.route, async c => {
       try {
-        const freshSite = await loadSite({ contentRoot: source.contentRoot, templatesDir, manifest })
+        const freshSite = await loadSite({
+          contentRoot: live.source.contentRoot,
+          templatesDir,
+          manifest: live.manifest,
+        })
         const resolved = await resolvePage(pageName, freshSite, pageLocale)
         const freshPage = pageLocale
           ? freshSite.pageLocales.get(pageName)?.locales.get(pageLocale)
@@ -1634,7 +1648,11 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
         const localeRoute = `/${loc}${page.route === '/' ? '' : page.route}`
         app.get(localeRoute, async c => {
           try {
-            const freshSite = await loadSite({ contentRoot: source.contentRoot, templatesDir, manifest })
+            const freshSite = await loadSite({
+              contentRoot: live.source.contentRoot,
+              templatesDir,
+              manifest: live.manifest,
+            })
             const resolved = await resolvePage(pageName, freshSite, loc)
             const freshPage = freshSite.pages.get(pageName)
             const html = await renderPage(resolved, {
@@ -1914,8 +1932,39 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   // when a watched subdir disappears (rm -rf during publish, git checkout).
   // Letting it crash would take the whole dev server down; logging a warning
   // is enough, the watcher recovers for still-existing paths.
+  // Re-evaluate site.config.ts (or .js/.mjs) on save and swap the live
+  // state (#1353). jiti runs with moduleCache disabled, so each load sees
+  // the edited file. A config that fails to evaluate keeps the last good
+  // state, per the locked acceptance on #1353.
+  let configReloadInFlight = false
+  const reloadSiteConfig = async () => {
+    if (configReloadInFlight) return
+    configReloadInFlight = true
+    try {
+      const next = await buildSourceContext({ projectSiteDir: siteDir })
+      live.source = next.source
+      live.manifest = next.manifest
+      live.targetConfigs = next.targetConfigs
+      console.log('  Config changed: site.config reloaded')
+      invalidateAllTemplates()
+      void cmsApp?.invalidateContentCache()
+      notifyReload()
+    } catch (err) {
+      console.error(`  Config reload failed: ${(err as Error).message}`)
+      console.error('  Keeping the last good config.')
+    } finally {
+      configReloadInFlight = false
+    }
+  }
+
   const siteWatcher = watch(siteDir, { recursive: true }, (_event, filename) => {
     if (!filename) return
+    const watchNorm = filename.replace(/\\/g, '/')
+    const watchBase = watchNorm.split('/').pop() ?? watchNorm
+    if (watchBase === 'site.config.ts' || watchBase === 'site.config.js' || watchBase === 'site.config.mjs') {
+      void reloadSiteConfig()
+      return
+    }
     // .gazetta/ is a reserved namespace (history, source-sidecars, etc.) that
     // the runtime never reads at request time. Writes there are extremely
     // frequent (one per save/publish × per-target) — treating them as
