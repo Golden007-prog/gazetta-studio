@@ -117,12 +117,24 @@ export function resolveRole(args: ResolveRoleArgs): ResolvedRole | null {
  */
 export function validateCustomRoles(customRoles: Readonly<Record<string, ReadonlyArray<string>>>): string[] {
   const issues: string[] = []
-  for (const [name, capabilities] of Object.entries(customRoles)) {
+  for (const name of Object.keys(customRoles)) {
     if (name in BUILT_IN_ROLES) {
       issues.push(
         `Custom role "${name}" conflicts with a built-in role. Choose a different name; built-in roles can't be redefined.`,
       )
     }
+  }
+  return issues.concat(unknownCapabilityIssues(customRoles))
+}
+
+/**
+ * Unknown-capability issues only: the check `buildAuthProvider` runs
+ * at boot (#1394). Role-name collisions with the built-in set are
+ * #1368's scope and stay out of this path.
+ */
+export function unknownCapabilityIssues(customRoles: Readonly<Record<string, ReadonlyArray<string>>>): string[] {
+  const issues: string[] = []
+  for (const [name, capabilities] of Object.entries(customRoles)) {
     for (const cap of capabilities) {
       // Plugin-scoped capabilities (e.g. '@my-org/search:rebuild-index')
       // sit outside Gazetta's reserved prefixes — their shape is
