@@ -34,6 +34,22 @@ export const MIME_BY_ASSET_EXT: Record<string, string> = {
   opus: 'audio/opus',
   aac: 'audio/aac',
   m4a: 'audio/mp4',
+  // Text/web files a static target can hold at its root (#1249) —
+  // robots.txt, sitemap.xml, and friends. Ingest still only allows the
+  // image/audio set above, so asset serving is unchanged in practice.
+  txt: 'text/plain',
+  xml: 'application/xml',
+  css: 'text/css',
+  js: 'text/javascript',
+  json: 'application/json',
+  ico: 'image/x-icon',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  pdf: 'application/pdf',
 }
 
 /** Content-Type for a stored asset path, from its extension. */
