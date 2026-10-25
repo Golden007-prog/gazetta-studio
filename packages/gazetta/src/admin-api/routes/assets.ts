@@ -574,7 +574,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
     const strictPreRecord = c.var.audit?.strict === true
     if (strictPreRecord) {
       const preResult = await c.var.audit.record({
-        action: 'upload',
+        action: 'save',
         outcome: 'success',
         scope: { kind: 'asset', name: initialAsset.name },
       })
@@ -627,7 +627,7 @@ export function assetRoutes(resolve: SourceContextResolver, opts: AssetRoutesOpt
       // upload; a second event records the failure (#1393).
       if (strictPreRecord) {
         await c.var.audit.record({
-          action: 'upload',
+          action: 'save',
           outcome: 'write-failed',
           scope: { kind: 'asset', name: initialAsset.name },
         })
