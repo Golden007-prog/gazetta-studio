@@ -1703,7 +1703,17 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   const hookContributions = readHookContributions(manifest)
   if (isDevMode) {
     // Dev mode: mount CMS API inline (same process = shared template cache)
-    cmsApp = await setupCmsApi(app, source, siteDir, templatesDir, adminDir, targetConfigs, hookContributions, manifest, anyArchived)
+    cmsApp = await setupCmsApi(
+      app,
+      source,
+      siteDir,
+      templatesDir,
+      adminDir,
+      targetConfigs,
+      hookContributions,
+      manifest,
+      anyArchived,
+    )
   } else if (cmsStaticDir) {
     // Production mode: inline CMS API + static files
     cmsApp = await setupProductionMode(
