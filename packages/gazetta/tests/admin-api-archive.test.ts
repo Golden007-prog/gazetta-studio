@@ -124,6 +124,53 @@ describe('POST /api/pages/:name/archive', () => {
   })
 })
 
+describe('POST /api/pages/:name/unarchive — Manual Redirect refusal (#1343)', () => {
+  // A Manual Redirect manifest carries only archive fields + aliasOf;
+  // restoring it would write `{}` and lose the redirect.
+  const redirectManifest = JSON.stringify({
+    archived: true,
+    archivedAt: '2026-10-20T10:00:00.000Z',
+    archivedBy: 'tester',
+    aliasOf: 'home',
+  })
+
+  it('answers 409 and leaves the manifest byte-identical (page)', async () => {
+    setup({ 'pages/old-products/page.json': redirectManifest })
+    const res = await app.request('/api/pages/old-products/unarchive', { method: 'POST' })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('This is a redirect: delete it or change where it points')
+    expect(await storage.readFile('pages/old-products/page.json')).toBe(redirectManifest)
+  })
+
+  it('answers 409 and leaves the manifest byte-identical (fragment)', async () => {
+    setup({ 'fragments/old-promo/fragment.json': redirectManifest })
+    const res = await app.request('/api/fragments/old-promo/unarchive', { method: 'POST' })
+    expect(res.status).toBe(409)
+    expect(await storage.readFile('fragments/old-promo/fragment.json')).toBe(redirectManifest)
+  })
+
+  it('still restores an archived content item that aliases elsewhere', async () => {
+    // aliasOf + template = an archived page with an alias, not a Manual
+    // Redirect — restore stays legal.
+    setup({
+      'pages/old-landing/page.json': JSON.stringify({
+        template: 'page-default',
+        content: { title: 'Old' },
+        archived: true,
+        archivedAt: '2026-10-20T10:00:00.000Z',
+        archivedBy: 'tester',
+        aliasOf: 'home',
+      }),
+    })
+    const res = await app.request('/api/pages/old-landing/unarchive', { method: 'POST' })
+    expect(res.status).toBe(200)
+    const manifest = await readJson('pages/old-landing/page.json')
+    expect(manifest.archived).toBeUndefined()
+    expect(manifest.template).toBe('page-default')
+  })
+})
+
 describe('POST /api/pages/:name/unarchive', () => {
   beforeEach(() => setup())
 
