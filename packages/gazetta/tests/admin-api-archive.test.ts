@@ -150,6 +150,46 @@ describe('POST /api/pages/:name/unarchive — Manual Redirect refusal (#1343)', 
     expect(await storage.readFile('fragments/old-promo/fragment.json')).toBe(redirectManifest)
   })
 
+  it('answers 409 for a template-less archive whose alias was dropped (page)', async () => {
+    // Dropping a redirect's alias leaves archived + no aliasOf + no
+    // template; restoring would still write `{}` (#1343 review).
+    const dropped = JSON.stringify({
+      archived: true,
+      archivedAt: '2026-10-20T10:00:00.000Z',
+      archivedBy: 'tester',
+    })
+    setup({ 'pages/old-products/page.json': dropped })
+    const res = await app.request('/api/pages/old-products/unarchive', { method: 'POST' })
+    expect(res.status).toBe(409)
+    expect(await storage.readFile('pages/old-products/page.json')).toBe(dropped)
+  })
+
+  it('drop-alias then restore: full flow refuses with 409 + manifest unchanged', async () => {
+    // End-to-end per the #1440 review request: create a redirect, drop
+    // its alias via PATCH alias (the purge-blocked dialog's "Drop
+    // alias"), then attempt restore.
+    setup()
+    await app.request('/api/page-redirects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-products', to: 'home' }),
+    })
+    const patch = await app.request('/api/pages/old-products/alias', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aliasOf: null }),
+    })
+    expect(patch.status).toBe(200)
+    const afterDrop = await storage.readFile('pages/old-products/page.json')
+    expect(afterDrop).not.toContain('aliasOf')
+
+    const res = await app.request('/api/pages/old-products/unarchive', { method: 'POST' })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('This is a redirect: delete it or change where it points')
+    expect(await storage.readFile('pages/old-products/page.json')).toBe(afterDrop)
+  })
+
   it('still restores an archived content item that aliases elsewhere', async () => {
     // aliasOf + template = an archived page with an alias, not a Manual
     // Redirect — restore stays legal.
