@@ -16,6 +16,7 @@ import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tempDir } from './_helpers/temp.js'
+import { resolveListenHost, type ServerCommand } from '../src/cli/listen-host.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../../..')
@@ -27,12 +28,25 @@ let children: ChildProcess[] = []
 let holder: Server | null = null
 let projectDir: string | null = null
 
-afterEach(async () => {
-  for (const child of children) {
-    if (child.exitCode !== null) continue
+async function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null) return
+  try {
+    process.kill(-child.pid!, 'SIGTERM')
+  } catch {
     child.kill('SIGTERM')
-    await Promise.race([new Promise(r => child.once('close', r)), new Promise(r => setTimeout(r, 5000))])
   }
+  await Promise.race([new Promise(r => child.once('close', r)), new Promise(r => setTimeout(r, 5000))])
+  if (child.exitCode === null) {
+    try {
+      process.kill(-child.pid!, 'SIGKILL')
+    } catch {
+      child.kill('SIGKILL')
+    }
+  }
+}
+
+afterEach(async () => {
+  for (const child of children) await stopChild(child)
   children = []
   if (holder) {
     await new Promise(r => holder!.close(r))
@@ -46,10 +60,14 @@ afterEach(async () => {
 
 function spawnCli(args: string[]): { child: ChildProcess; output: () => string } {
   let output = ''
+  // detached: the CLI gets its own process group, so teardown can signal
+  // the whole group. tsx runs the CLI in a descendant node process, and
+  // killing only the wrapper leaves that server alive and holding the port.
   const child = spawn(tsxBin, [cliPath, ...args], {
     cwd: projectDir!,
     env: { ...process.env, CI: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   })
   children.push(child)
   child.stdout?.on('data', d => (output += d.toString()))
@@ -91,15 +109,16 @@ function runCliUntil(args: string[], marker: string): Promise<string> {
   })
 }
 
-function holdPort(port: number): Promise<void> {
+function holdPort(port: number, host?: string): Promise<void> {
   holder = createServer()
-  // Held on every interface so all three commands conflict regardless of
-  // their listen address: dev and admin bind 127.0.0.1, serve binds all
-  // interfaces (on macOS a 127.0.0.1-only holder would not conflict with
-  // serve's wildcard bind).
+  // Held on the same address the command under test binds, per
+  // resolveListenHost: loopback for dev/admin, every interface for serve.
+  // macOS allows a loopback bind next to a wildcard holder (and vice
+  // versa), so one shared holder address cannot cover all commands.
   return new Promise<void>((res, rej) => {
     holder!.once('error', rej)
-    holder!.listen(port, () => res())
+    if (host) holder!.listen(port, host, () => res())
+    else holder!.listen(port, () => res())
   })
 }
 
@@ -134,7 +153,7 @@ describe('CLI on a busy port (#1184)', () => {
       }
 
       const port = 4900 + Math.floor(Math.random() * 200)
-      await holdPort(port)
+      await holdPort(port, resolveListenHost(name as ServerCommand))
 
       const busy = await runCli(args(port))
       expect(busy.code).toBe(1)
