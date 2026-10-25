@@ -3,6 +3,7 @@ import { streamSSE } from 'hono/streaming'
 import { getType, getEnvironment, isEditable, isHistoryEnabled, getHistoryRetention } from '../../types.js'
 import type { StorageProvider, TargetConfig } from '../../types.js'
 import { writePublishGeneration } from '../../publish-generation.js'
+import { stateFolderPath } from '../../state-folders.js'
 import { publishItems, resolveDependencies, findFragmentDependents, findDependentsFromSidecars } from '../../publish.js'
 import { localeFilename, localeFromFilename, isValidLocale } from '../../locale.js'
 import type { SourceContextResolver } from '../source-context.js'
@@ -238,7 +239,7 @@ export function publishRoutes(
     let p = fragmentDepsBackfill.get(key)
     if (p) return p
     p = (async () => {
-      const indexRoot = source.contentRoot.path('.gazetta', 'fragment-deps')
+      const indexRoot = source.contentRoot.path(stateFolderPath('fragment-deps'))
       // Cheap existence probe — if any entry is present, the index has
       // been written at least once and incremental save handlers keep
       // it consistent thereafter.
@@ -1363,4 +1364,4 @@ async function collectPublishedItemsForHistory(
     }
   }
   return out
-}
+                  }
