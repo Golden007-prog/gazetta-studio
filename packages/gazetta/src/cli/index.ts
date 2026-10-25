@@ -425,7 +425,7 @@ async function runInit(dir: string) {
 
   const files: Record<string, string> = {
     // First write: if init is interrupted, later state is still ignored.
-    '.gitignore': `node_modules/\ndist/\n.env\n.env.local\n**/${STATE_ROOT}/\n`,
+    '.gitignore': `node_modules/\ndist/\n.env\n.env.local\n**/${STATE_ROOT}/\n\n# Publish output under any target dir: rendered HTML, the publish-time\n# site manifest, and transient per-item sidecars (#1181). The editable\n# sources (page.json, fragment.json, an author's robots.txt) stay tracked.\n**/targets/**/.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].hash\n**/targets/**/.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].hash.*\n**/targets/**/.pub-*\n**/targets/**/index.html\n**/targets/**/index.*.html\n**/targets/**/404.html\n**/targets/**/site.json\n**/targets/**/index/\n`,
 
     'sites/main/site.config.ts': `import { defineSite, filesystemStorage } from 'gazetta'
 
