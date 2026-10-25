@@ -38,10 +38,11 @@ const summary = computed(() => {
 
 const isArchived = computed(() => summary.value?.archived === true)
 const aliasOf = computed(() => summary.value?.aliasOf)
-// A Manual Redirect archive (alias + no template) has no content to
-// restore — restoring would strip its manifest to `{}` (#1343), so the
-// backend refuses and the button is hidden.
-const isRedirect = computed(() => isArchived.value && !!aliasOf.value && !summary.value?.template)
+// A Manual Redirect archive (no template) has no content to restore —
+// restoring would strip its manifest to `{}` (#1343), so the backend
+// refuses and the button is hidden. The alias is incidental: dropping
+// it leaves a template-less archive that still must not be restored.
+const isRedirect = computed(() => isArchived.value && !summary.value?.template)
 
 async function onRestore() {
   const ok = await archive.unarchive({
