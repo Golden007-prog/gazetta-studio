@@ -651,6 +651,17 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
   const projectRoot = detectProjectRoot(siteDir)
   const templatesDir = join(projectRoot, 'templates')
 
+  // One target is the editing target itself: publishing would render the
+  // site into its own source storage, reachable by no visitor (#1286).
+  // Check before buildSourceContext so nothing is written, not even the
+  // source target's initialized storage.
+  const prePublishManifest = await loadSiteManifestForCli(siteDir)
+  if (prePublishManifest?.targets && Object.keys(prePublishManifest.targets).length === 1) {
+    console.error(`\n  Error: This site has one target, so there's nowhere to publish to.`)
+    console.error(`  Add a target in site.config.ts: https://gazetta.studio/docs/getting-started\n`)
+    process.exit(1)
+  }
+
   // Source comes from the default editable target in site.config.ts.
   const { buildSourceContext } = await import('./bootstrap.js')
   let source, manifest, targetConfigs
