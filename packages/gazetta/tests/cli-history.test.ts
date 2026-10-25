@@ -183,6 +183,28 @@ describe('gazetta history / undo / rollback', { timeout: 60000 }, () => {
     expect(res.stderr).toContain('Unknown revision')
   })
 
+  it('`history` does not initialize targets other than the one named (#1459)', async () => {
+    // A target whose init() never settles. Before #1459 every target was
+    // initialized first, so this one held the command until the 10 s guard
+    // fired and printed a warning about it.
+    const siteConfigPath = resolve(projectDir, 'sites/main/site.config.ts')
+    const ts = await readFile(siteConfigPath, 'utf-8')
+    const stalled =
+      `targets: {\n` +
+      `    stalled: {\n` +
+      `      storage: { ...filesystemStorage({ path: './dist/stalled' }), init: () => new Promise<void>(() => {}) },\n` +
+      `      publicStorage: false,\n` +
+      `    },`
+    expect(ts).toContain('targets: {')
+    await writeFile(siteConfigPath, ts.replace('targets: {', stalled))
+    await seedHistory(projectDir, 1)
+
+    const res = await runCli(projectDir, ['history', 'local', 'sites/main'])
+    expect(res.code).toBe(0)
+    expect(res.stdout).toContain('History — local')
+    expect(res.stderr).not.toContain('"stalled"')
+  })
+
   it('`undo` on production in CI requires --yes', async () => {
     // Patch site.config.ts: swap the azure-blob production block for a
     // filesystem target with environment:production + editable:true (so
