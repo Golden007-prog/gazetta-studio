@@ -186,19 +186,9 @@ export default defineSite({
 | Production (`NODE_ENV !== 'development'`) | Load once at boot; restart to apply changes |
 | Dev (`NODE_ENV === 'development'`, `gazetta dev`) | File watcher on `gazetta.config.ts` + `sites/*/site.config.ts`; reload on save |
 
-**Plugin lifecycle on dev reload**:
+**What a dev reload rebuilds**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle ([ADR-0009](../../docs/adr/0009-no-plugin-runtime-factory-contributions.md)). A reload re-evaluates the config and rebuilds what is built from it at boot: the provider instances (storage, transforms, cache), the hook and validator registries from `admin.hooks` and `admin.validators`, and the targets the admin reads. Follows from ADR-0009 and the dev row above.
 
-Plugins holding open resources (network connections, file handles) implement `dispose()`:
-
-```ts
-interface Plugin {
-  name: string
-  init(api: PluginAPI): void | Promise<void>
-  dispose?(): void | Promise<void>  // optional; called on dev reload
-}
-```
-
-Production never calls `dispose` — process restart releases everything.
+Production never reloads; a process restart releases everything.
 
 **Validation runs on every load** (boot OR reload):
 - TS types catch shape errors at edit time
