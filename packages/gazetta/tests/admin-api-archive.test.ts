@@ -219,6 +219,31 @@ describe('DELETE /api/pages/:name/purge', () => {
     const res = await app.request('/api/pages/missing/purge', { method: 'DELETE' })
     expect(res.status).toBe(404)
   })
+
+  it('refuses purge of a live page with NOT_ARCHIVED (#1341)', async () => {
+    const res = await app.request('/api/pages/home/purge', { method: 'DELETE' })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { code: string; error: string }
+    expect(body.code).toBe('NOT_ARCHIVED')
+    // The refusal wrote nothing - the live page is untouched.
+    expect(await storage.exists('pages/home/page.json')).toBe(true)
+  })
+
+  it('answers DELETE_BLOCKED for an archived item with alias-pointers', async () => {
+    // Archive landing aliasing home, then archive home itself: purge
+    // of the archived home is still blocked by landing's alias-pointer.
+    await app.request('/api/pages/landing/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aliasOf: 'home' }),
+    })
+    await app.request('/api/pages/home/archive', { method: 'POST' })
+    const res = await app.request('/api/pages/home/purge', { method: 'DELETE' })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { code: string }
+    expect(body.code).toBe('DELETE_BLOCKED')
+    expect(await storage.exists('pages/home/page.json')).toBe(true)
+  })
 })
 
 describe('PATCH /api/{kind}/:name/alias (Cut 12 — set / drop alias)', () => {
@@ -389,6 +414,14 @@ describe('Fragment archive lifecycle (parity with pages)', () => {
     const res = await app.request('/api/fragments/header/purge', { method: 'DELETE' })
     expect(res.status).toBe(200)
     expect(await storage.exists('fragments/header/fragment.json')).toBe(false)
+  })
+
+  it('refuses purge of a live fragment with NOT_ARCHIVED (#1341)', async () => {
+    const res = await app.request('/api/fragments/header/purge', { method: 'DELETE' })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { code: string; error: string }
+    expect(body.code).toBe('NOT_ARCHIVED')
+    expect(await storage.exists('fragments/header/fragment.json')).toBe(true)
   })
 })
 
