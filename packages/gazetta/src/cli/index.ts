@@ -861,14 +861,6 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
 
     if (skipped > 0) console.log(`    ${c.dim(`· ${skipped} unchanged (skipped)`)}`)
 
-    // Plain hosts show a top-level 404.html for missing paths (#1152).
-    if (targetType === 'static') {
-      const { writeStatic404 } = await import('../static-404.js')
-      await writeStatic404(targetStorage)
-      totalFiles++
-      console.log(`    ${c.dim('· 404.html')}`)
-    }
-
     // Sitemap, robots.txt, host-format redirects, the publish
     // generation and the CDN purge ran inside the shared target-publish
     // function (#1426). Echo the files it wrote in the CLI's own lines
