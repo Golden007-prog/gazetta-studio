@@ -369,27 +369,50 @@ describe('POST /api/page-redirects — collision handling', () => {
     expect(body.archive.aliasOf).toBe('home')
   })
 
-  it('?onConflict=restore unarchives existing + skips re-create', async () => {
+  it('?onConflict=restore on a Manual Redirect answers 409 and writes nothing (#1343)', async () => {
     // Create the first redirect pointing at 'home'.
     await app.request('/api/page-redirects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: 'old-products', to: 'home' }),
     })
-    // Retry with restore — should unarchive (strip archive fields).
+    const before = await storage.readFile('pages/old-products/page.json')
+    // Retry with restore — the existing archive is itself a redirect:
+    // unarchiving would strip its manifest to `{}` and lose it.
+    const res = await app.request('/api/page-redirects?onConflict=restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'old-products', to: 'products/featured' }),
+    })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('This is a redirect: delete it or change where it points')
+    expect(await storage.readFile('pages/old-products/page.json')).toBe(before)
+  })
+
+  it('?onConflict=restore still unarchives an archived content item', async () => {
+    // An archived page (template + content, no alias) restores normally
+    // when a redirect create names it.
+    setup({
+      seed: {
+        'pages/old-products/page.json': JSON.stringify({
+          template: 'page-default',
+          content: { title: 'Old products' },
+          archived: true,
+          archivedAt: '2026-10-20T10:00:00.000Z',
+          archivedBy: 'tester',
+        }),
+      },
+    })
     const res = await app.request('/api/page-redirects?onConflict=restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: 'old-products', to: 'products/featured' }),
     })
     expect(res.status).toBe(201)
-    const body = (await res.json()) as Record<string, unknown>
-    expect(body.ok).toBe(true)
-
-    // Manifest should now be live (archive fields stripped).
     const manifest = await readJson('pages/old-products/page.json')
     expect(manifest.archived).toBeUndefined()
-    expect(manifest.aliasOf).toBeUndefined()
+    expect(manifest.template).toBe('page-default')
   })
 
   it('?onConflict=replace purges old archive + creates new redirect atomically', async () => {
@@ -1015,14 +1038,22 @@ describe('POST /api/page-redirects — mutation-coverage backfill (issue #773)',
   })
 
   it('restore path response body pins the ternary — kills line-350/351 page-branch mutants', async () => {
-    // Seed an archive; the retry uses `to: 'home'` which is the ONE
-    // `to` value that distinguishes `deriveRoute(to)` (returns `/`)
-    // from `` `/${to}` `` (returns `/home`). Prior tests only asserted
-    // `body.ok === true`, so ternary mutants on lines 350-351 survived.
-    await app.request('/api/page-redirects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'old-restore-page', to: 'about' }),
+    // Seed an archived CONTENT page; the retry uses `to: 'home'` which
+    // is the ONE `to` value that distinguishes `deriveRoute(to)` (returns
+    // `/`) from `` `/${to}` `` (returns `/home`). Prior tests only
+    // asserted `body.ok === true`, so ternary mutants on lines 350-351
+    // survived. Seeds a content archive (not a redirect archive) because
+    // restoring a Manual Redirect is refused per #1343.
+    setup({
+      seed: {
+        'pages/old-restore-page/page.json': JSON.stringify({
+          template: 'page-default',
+          content: {},
+          archived: true,
+          archivedAt: '2026-10-20T10:00:00.000Z',
+          archivedBy: 'tester',
+        }),
+      },
     })
     const res = await app.request('/api/page-redirects?onConflict=restore', {
       method: 'POST',
@@ -1054,12 +1085,16 @@ describe('POST /api/page-redirects — mutation-coverage backfill (issue #773)',
           template: 'header-layout',
           content: {},
         }),
+        // Archived CONTENT fragment (not a redirect archive) — restoring
+        // a Manual Redirect is refused per #1343.
+        'fragments/old-restore-frag/fragment.json': JSON.stringify({
+          template: 'header-layout',
+          content: {},
+          archived: true,
+          archivedAt: '2026-10-20T10:00:00.000Z',
+          archivedBy: 'tester',
+        }),
       },
-    })
-    await app.request('/api/fragment-redirects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'old-restore-frag', to: 'header' }),
     })
     const res = await app.request('/api/fragment-redirects?onConflict=restore', {
       method: 'POST',
