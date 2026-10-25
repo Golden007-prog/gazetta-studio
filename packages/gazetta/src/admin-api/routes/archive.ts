@@ -520,9 +520,11 @@ export async function handlePurge(
   // Purge is the permanent delete of an ARCHIVED item
   // (design-soft-delete.md): a live page or fragment must be
   // archived first so a mistaken call cannot skip the archive step
-  // (#1341). `?force=true` bypasses this like the blockers above
-  // (Q5 lock E1: the audited admin override).
-  if (!force && !opts.allowLive && manifest.archived !== true) {
+  // (#1341). `?force=true` does NOT bypass this refusal - force is
+  // scoped to the alias / live-ref blockers above (maintainer call
+  // on #1436); the explicit `?permanent=true` delete route
+  // (allowLive) stays the way to hard-delete a live item.
+  if (!opts.allowLive && manifest.archived !== true) {
     const notArchived: PurgeNotArchived = {
       code: 'NOT_ARCHIVED',
       error: `${handle.label} "${name}" is not archived - archive it first`,
