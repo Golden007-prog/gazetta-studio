@@ -7,6 +7,43 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%238b5cf6'/%3E%3Crect x='7' y='7' width='8' height='8' rx='2' fill='white'/%3E%3Crect x='17' y='7' width='8' height='8' rx='2' fill='white' opacity='.6'/%3E%3Crect x='7' y='17' width='8' height='8' rx='2' fill='white' opacity='.6'/%3E%3Crect x='17' y='17' width='8' height='8' rx='2' fill='white' opacity='.3'/%3E%3C/svg%3E">
 </head>
 <body>
+  <div id="browser-too-old" style="display:none;font-family:system-ui,sans-serif;padding:2rem;line-height:1.5">
+    This browser is too old for the Gazetta admin. Use Chrome or Edge 111+, Firefox 114+ or Safari 16.4+.
+  </div>
+  <script>
+    // ES5 by design: this must parse and run in browsers too old for the
+    // bundle. Every probe below passes on each supported browser
+    // (Chrome/Edge 111+, Firefox 114+, Safari 16.4+):
+    //   structuredClone          Chrome 98  / Firefox 94  / Safari 15.4
+    //   Array.prototype.findLast Chrome 97  / Firefox 104 / Safari 15.4
+    //   AbortSignal.timeout      Chrome 103 / Firefox 100 / Safari 16.0
+    //   class static block       Chrome 94  / Firefox 93  / Safari 16.4
+    // No probe matches the exact minimum versions; the message is a graceful
+    // degradation for browsers well outside the supported range, not a hard
+    // version gate.
+    (function () {
+      var ok =
+        typeof window.structuredClone === 'function' &&
+        typeof Array.prototype.findLast === 'function' &&
+        typeof window.AbortSignal === 'function' &&
+        typeof window.AbortSignal.timeout === 'function';
+      if (ok) {
+        try {
+          ok = !!new Function('class A { static {} }');
+        } catch (e) {
+          ok = false;
+        }
+      }
+      if (!ok) {
+        var el = document.getElementById('browser-too-old');
+        if (el) el.style.display = 'block';
+      }
+    })();
+  </script>
+  <script nomodule>
+    // Runs only where ES modules are unsupported at all.
+    document.getElementById('browser-too-old').style.display = 'block';
+  </script>
   <div id="app"></div>
   <script type="module" src="/src/client/main.ts"></script>
 </body>
