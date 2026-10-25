@@ -100,7 +100,7 @@ Restore **always returns to draft** — even if the item was approved when archi
 
 ### Purge
 
-Permanently delete an archived item. Purging an item that is not archived returns `409 NOT_ARCHIVED` and writes nothing; archive it first. Blocked when:
+Permanently delete an archived item. Purging an item that is not archived returns `409 NOT_ARCHIVED` and writes nothing, even with `?force=true`; archive it first (the explicit `DELETE /api/{kind}/:name?permanent=true` route remains the way to hard-delete a live item). Blocked when:
 
 - Other archives have `aliasOf: <target>` (alias-pointers)
 - Live pages/fragments reference `<target>` directly
