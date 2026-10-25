@@ -142,7 +142,7 @@ Decided: maintainer, 2026-10-24 (#1416)
 | 1 | **Demo video** | Recorded by Playwright at each release | Fleet; you approve the script once | ✓ |
 | 1 | **Release notes page** | A GitHub Release per version, drafted from merged PRs, breaking changes first; the site's page and the npm README link to it | Fleet; you edit | — |
 | 1 | **Honest comparison** | 2–3 named alternatives, facts re-checked monthly by a bot | Fleet; you approve the wording | ✓ |
-| 1 | **Codespaces / StackBlitz button** | StackBlitz only if a one-hour test passes (`sharp`, Node 22) | Fleet | Partly |
+| 1 | **StackBlitz button, Codespaces as fallback** | Opens a site made with `gazetta init`, from the first release candidate on (below) | Fleet | Partly |
 | 1 | **Console.dev** | Email hello@console.dev (no form) within a week or two of the release; requires "beta" or "preview" visible on the site | You submit | ✓ |
 | 1 | Lists: awesome-cloudflare-selfhosted ("Blogs, CMS and docs"), awesome-cloudflare (zhuima), awesome-jamstack (CMS) | Their own contribution rules (own projects allowed if stated; awesome-cloudflare-selfhosted asks that it's "complete enough to use") | Fleet prepares; you OK each PR | ✓ |
 | 1 | awesome-selfhosted | First release more than 4 months old, working install docs, maintained; **its rules forbid AI agents from opening the issue or PR or writing the entry** | You write and submit it | ✓ |
@@ -165,6 +165,17 @@ Decided: maintainer, 2026-10-24 (#1416)
 | none | Bytes (sponsorship only, which is paid); Hacktoberfest 2026 ("Pull requests and merge requests will no longer count"; re-check in October 2027); awesome-cms (needs more than 50 stars); jamstack.org's CMS list and awesome-headless-cms (Gazetta isn't headless); awesome-hono (inactive since 2023) | — | — | ✓ |
 
 Decided: maintainer, 2026-10-24 (#1266)
+
+**Trying the admin.** The Stage 1 try button opens StackBlitz on a site made with `gazetta init`, from the first release candidate on (a check on 2026-10-24 found the released 0.8.0 runs there); "Open in Codespaces" is the fallback, on the visitor's own GitHub allowance. No hosted demo of the admin: a demo running in the browser is revisited when Stage 2's launch traffic would justify the work.
+
+Decided: maintainer, 2026-10-25 (#1416)
+
+| Rejected | Why |
+|---|---|
+| A public live admin | Needs moderation and resets, and the admin can't run in a Worker today; Payload's public demo is gone and Directus is reviewing its sandbox |
+| Per-visitor sandboxes on Cloudflare Containers | The $5/month Workers Paid plan, about 60–90 sessions a month included |
+| A demo running in the browser now | The admin API, templates and storage would have to run in the browser first |
+| Codespaces first | Visitors need a GitHub account and use their own allowance |
 
 The door for coding agents covers gazetta.studio only, as part of the site; the site's docs come from the repo's Markdown anyway. Gazetta generating `llms.txt` and Markdown copies for every site it publishes stays Deferred in ROADMAP (decided 2026-10-23, #1179) until there's evidence that AI platforms read them, or an operator asks. `seo-plan.md` calls llms.txt "too early", and this research found no measure of its value either: 11 of 14 CMS sites serve one.
 
