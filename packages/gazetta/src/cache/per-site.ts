@@ -109,14 +109,28 @@ export function forSite(inner: AdminCache, siteName: string): AdminCache {
     async stats(): Promise<CacheStats> {
       // Stats are global to the underlying provider — there's no
       // honest way to slice them per-site without scanning every
-      // entry, which defeats the cache. Surface the inner stats
-      // verbatim; operators interpret them with the knowledge that
-      // shared backing services pool stats across all sites.
+      // entry, which defeats the cache. Surface the inner stats;
+      // operators interpret them with the knowledge that shared
+      // backing services pool stats across all sites.
       const innerStats = inner.stats
       if (!innerStats) {
         return { hits: 0, misses: 0, size: 0 }
       }
-      return innerStats.call(inner)
+      const stats = await innerStats.call(inner)
+      // The inner provider records lastInvalidation.prefix in its
+      // own (wrapped) terms. Strip the site prefix so the stats
+      // route and the invalidation stream show the same
+      // consumer-facing prefix (#1400).
+      if (stats.lastInvalidation) {
+        const unwrapped = unwrap(stats.lastInvalidation.prefix)
+        if (unwrapped !== null) {
+          return {
+            ...stats,
+            lastInvalidation: { ...stats.lastInvalidation, prefix: unwrapped },
+          }
+        }
+      }
+      return stats
     },
   }
 }
