@@ -29,6 +29,8 @@ import { assembleEsi, parseCacheComment } from '../assemble.js'
 import { archiveResponse } from '../runtime/archive-response.js'
 import { fetchFragmentEntries } from '../runtime/fragment-fetch.js'
 import { stateFolderPath } from '../state-folders.js'
+import { isPublicSitePath } from '../public-site-path.js'
+import { assetMimeForPath, dispositionFor, ifNoneMatches, parseAssetUrlInput } from '../assets/serve-shared.js'
 
 export interface CloudflareR2WorkerOptions {
   /** R2 bucket binding name (default: 'SITE_BUCKET') */
@@ -207,6 +209,12 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
   app.get('/pages/*', async c => serveStatic(c, c.env[bindingName], true))
   app.get('/fragments/*', async c => serveStatic(c, c.env[bindingName]))
 
+  // Published assets (content-addressed uploads) — R2-native equivalent
+  // of the node asset route (`assets/serve-route.ts`), which the worker
+  // can't reuse because that module imports the sharp adapter and node
+  // stream interop. Same serving contract (#1330).
+  app.get('/assets/*', async c => servePublishedAsset(c, c.env[bindingName]))
+
   // Page serving with ESI assembly + Cache API
   app.get('*', async c => {
     const request = c.req.raw
@@ -296,4 +304,106 @@ async function serveStatic(c: any, bucket: R2Bucket, checkArchive = false) {
       'Cache-Control': 'public, max-age=31536000, immutable',
     },
   })
+}
+
+// ---------------------------------------------------------------------------
+// Published asset serving (#1330)
+// ---------------------------------------------------------------------------
+
+/** Where assets live, relative to the bucket root. Mirrors serve-route.ts. */
+const ASSETS_ROOT = 'assets'
+
+/**
+ * The sharp adapter's policy (`transforms/sharp.ts` IMMUTABLE_CACHE),
+ * inlined because importing the adapter here would drag sharp into the
+ * worker bundle. Hash-in-path is content-addressed: new bytes, new URL.
+ */
+const ASSET_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+
+/**
+ * `GET /assets/*` from R2. Mirrors the node route's contract:
+ * content-addressed ETag with weak-comparison 304, byte ranges (206) for
+ * media seek, adapter cache policy, `nosniff` + disposition, public-path
+ * gate so manifests and dot-paths answer 404. R2 reports the full object
+ * size on ranged reads, so Content-Range gets exact bounds here.
+ */
+async function servePublishedAsset(c: any, bucket: R2Bucket) {
+  const url = new URL(c.req.url)
+  let path: string
+  try {
+    path = decodeURIComponent(url.pathname.replace(/^\/assets\//, ''))
+  } catch {
+    return c.text('Invalid asset path', 400)
+  }
+  if (/[\u0000-\u001f\u007f]/.test(path) || path.includes('..') || path.startsWith('/')) {
+    return c.text('Invalid asset path', 400)
+  }
+
+  // Private storage (manifests, dot-paths) answers 404 like a missing
+  // file — one rule shared with every other server (#1330).
+  if (!isPublicSitePath(path)) {
+    return c.text('Not found', 404)
+  }
+
+  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+  const mime = assetMimeForPath(path)
+  const urlInput = parseAssetUrlInput(path, ext)
+  const etag = urlInput.hash ? `"${urlInput.hash}"` : undefined
+
+  // Existence before any conditional answer: a matching ETag on a
+  // missing (or deleted) object must 404, not 304. `head` also yields
+  // the object size, so range bounds are exact without reading the body.
+  const key = `${ASSETS_ROOT}/${path}`
+  const head = await bucket.head(key)
+  if (!head) return c.text('Not found', 404)
+  const total = head.size
+
+  if (etag && ifNoneMatches(c.req.header('if-none-match'), etag)) {
+    return new Response(null, { status: 304, headers: assetHeaders(mime, etag) })
+  }
+
+  const range = parseRangeHeader(c.req.header('range'))
+  if (range !== undefined) {
+    if (range.start >= total) {
+      return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } })
+    }
+    const last = Math.min(range.end ?? total - 1, total - 1)
+    const obj = await bucket.get(key, { range: { offset: range.start, length: last - range.start + 1 } })
+    if (!obj) return c.text('Not found', 404) // deleted between head and get
+    const headers = assetHeaders(mime, etag)
+    headers.set('Content-Range', `bytes ${range.start}-${last}/${total}`)
+    headers.set('Accept-Ranges', 'bytes')
+    return new Response(obj.body as ReadableStream, { status: 206, headers })
+  }
+
+  const obj = await bucket.get(key)
+  if (!obj) return c.text('Not found', 404) // deleted between head and get
+  const headers = assetHeaders(mime, etag)
+  headers.set('Accept-Ranges', 'bytes')
+  return new Response(obj.body as ReadableStream, { status: 200, headers })
+}
+
+function assetHeaders(mime: string, etag: string | undefined): Headers {
+  const headers = new Headers({
+    'Content-Type': mime,
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': ASSET_CACHE_CONTROL,
+    'Content-Disposition': dispositionFor(mime),
+    'Access-Control-Allow-Origin': '*',
+  })
+  if (etag) headers.set('ETag', etag)
+  return headers
+}
+
+/**
+ * Parse a byte-range header. Unbounded ends stay undefined (R2 reads to
+ * EOF); suffix ranges (bytes=-N) stay unsupported, same as the node route.
+ */
+function parseRangeHeader(header: string | undefined): { start: number; end?: number } | undefined {
+  const match = header ? /^bytes=(\d+)-(\d+)?$/.exec(header) : null
+  if (!match) return undefined
+  const start = Number.parseInt(match[1]!, 10)
+  const end = match[2] ? Number.parseInt(match[2], 10) : undefined
+  if (end !== undefined && end < start) return undefined
+  return { start, end }
 }

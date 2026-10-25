@@ -532,6 +532,11 @@ The dot disappears when the item matches the target. It refreshes after every sa
 
 ### Publish and deploy
 
+When publishing from the admin, the publish audit keeps each selected translation's
+own manifest path in its findings. Rendered-HTML checks, including broken internal
+links, use that page's selected language. A clean default-language page does not
+hide a broken link in a translation being published.
+
 ```bash
 npx gazetta build                     # build admin UI + custom editors/fields
 npx gazetta publish                   # publish to default target

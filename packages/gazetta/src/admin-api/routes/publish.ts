@@ -170,7 +170,9 @@ export function publishRoutes(
       if (i.kind === 'page' || i.kind === 'fragment') items.push({ kind: i.kind, name: i.name })
     }
     if (items.length === 0) return []
-    const site = await loadSiteFromSource(source)
+    const site = await loadSiteFromSource(source, {
+      templatesDir: templatesDir ?? `${source.projectSiteDir}/templates`,
+    })
     const blocked: Array<{ target: string; issues: Issue[] }> = []
     for (const targetName of targetNames) {
       const targetCfg = source.manifest?.targets?.[targetName]
@@ -1099,7 +1101,9 @@ export function publishRoutes(
     }
 
     const source = await resolve(c.req.query('target'))
-    const site = await loadSiteFromSource(source)
+    const site = await loadSiteFromSource(source, {
+      templatesDir: templatesDir ?? `${source.projectSiteDir}/templates`,
+    })
     const targetCfg = source.manifest?.targets?.[targetName]
     const strict = !!targetCfg?.publishAudit?.strict
 

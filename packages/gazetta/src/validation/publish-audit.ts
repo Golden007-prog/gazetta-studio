@@ -21,6 +21,7 @@
  */
 import type { AdminCache } from '../cache/types.js'
 import type { ContentRoot } from '../content-root.js'
+import { localeFilename } from '../locale.js'
 import { renderPageForAnalysis } from '../render-for-analysis.js'
 import type { Site } from '../site-loader.js'
 import type { StorageProvider } from '../types.js'
@@ -28,6 +29,7 @@ import type { ValidatorRegistry } from './registry.js'
 import type { Issue, RenderedOutputAccess, SavedItem } from './types.js'
 
 export interface RunPublishAuditOptions {
+  /** Publish-list names may include a `:locale` suffix for a translation. */
   items: ReadonlyArray<{ kind: 'page' | 'fragment'; name: string }>
   site: Site
   contentRoot: ContentRoot
@@ -50,14 +52,26 @@ export async function runPublishAudit(opts: RunPublishAuditOptions): Promise<Iss
   // anything else is rejected by the route's body schema, but be defensive.
   const savedItems: SavedItem[] = []
   for (const i of items) {
+    const [name, locale] = i.name.split(':')
+    const localeIdentity = locale ? { locale } : {}
     if (i.kind === 'page') {
-      const page = site.pages.get(i.name)
+      const page = locale ? site.pageLocales.get(name)?.locales.get(locale) : site.pages.get(name)
       if (!page) continue
-      savedItems.push({ kind: 'page', name: i.name, itemPath: `${page.dir}/page.json` })
+      savedItems.push({
+        kind: 'page',
+        name,
+        ...localeIdentity,
+        itemPath: `${page.dir}/${localeFilename('page', locale ?? null)}`,
+      })
     } else if (i.kind === 'fragment') {
-      const frag = site.fragments.get(i.name)
+      const frag = locale ? site.fragmentLocales.get(name)?.locales.get(locale) : site.fragments.get(name)
       if (!frag) continue
-      savedItems.push({ kind: 'fragment', name: i.name, itemPath: `${frag.dir}/fragment.json` })
+      savedItems.push({
+        kind: 'fragment',
+        name,
+        ...localeIdentity,
+        itemPath: `${frag.dir}/${localeFilename('fragment', locale ?? null)}`,
+      })
     }
   }
   if (savedItems.length === 0) return []
@@ -67,7 +81,7 @@ export async function runPublishAudit(opts: RunPublishAuditOptions): Promise<Iss
       ? {
           async htmlFor(item: SavedItem) {
             if (item.kind !== 'page') return null
-            const out = await renderPageForAnalysis(item.name, { site, cache, templatesDir })
+            const out = await renderPageForAnalysis(item.name, { site, cache, templatesDir, locale: item.locale })
             return out?.html ?? null
           },
         }
