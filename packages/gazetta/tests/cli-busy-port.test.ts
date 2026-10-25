@@ -104,10 +104,12 @@ function holdPort(port: number): Promise<void> {
 }
 
 function freePort(): Promise<void> {
-  return new Promise(r => holder!.close(() => {
-    holder = null
-    r(undefined)
-  }))
+  return new Promise(r =>
+    holder!.close(() => {
+      holder = null
+      r(undefined)
+    }),
+  )
 }
 
 describe('CLI on a busy port (#1184)', () => {
