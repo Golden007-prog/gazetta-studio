@@ -52,6 +52,19 @@ export const MIME_BY_ASSET_EXT: Record<string, string> = {
   pdf: 'application/pdf',
 }
 
+/**
+ * Exact-size ArrayBuffer copy of a served byte range. StorageProviders
+ * may return Node Buffers (the filesystem provider returns
+ * `fs.readFile`'s Buffer as-is), and small files are views over Node's
+ * shared 8KB pool — `buf.slice().buffer` on a Buffer is the deprecated
+ * view-slice, so `.buffer` would expose the whole pool (uninitialized
+ * or unrelated request memory) in the response. The constructor copy
+ * is always exact, including for empty files.
+ */
+export function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return new Uint8Array(bytes).buffer
+}
+
 /** Content-Type for a stored asset path, from its extension. */
 export function assetMimeForPath(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase() ?? ''
