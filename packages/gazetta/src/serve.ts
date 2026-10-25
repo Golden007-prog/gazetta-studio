@@ -18,7 +18,7 @@ import type { SiteManifest, StorageProvider, TargetType } from './types.js'
 import { assembleEsi, parseCacheComment } from './assemble.js'
 import { isPublicSitePath } from './public-site-path.js'
 import { assetServeRoutes } from './assets/serve-route.js'
-import { assetMimeForPath } from './assets/serve-shared.js'
+import { assetMimeForPath, exactArrayBuffer } from './assets/serve-shared.js'
 import { archiveGoneResponse, archiveResponse } from './runtime/archive-response.js'
 import { aliasTargetIssue, parseArchiveMarker } from './runtime/archive-marker.js'
 import { deriveRoute, fillRouteParams } from './runtime/derive-route.js'
@@ -306,7 +306,7 @@ export function createServer(options: ServeOptions) {
         }
         try {
           const bytes = await storage.readBytes(requestPath.slice(1))
-          return new Response(bytes.slice().buffer as ArrayBuffer, {
+          return new Response(exactArrayBuffer(bytes), {
             headers: {
               'Content-Type': contentType,
               'Cache-Control': staticFileCacheControl(requestPath),
