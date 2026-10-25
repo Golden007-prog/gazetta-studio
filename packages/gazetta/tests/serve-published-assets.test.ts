@@ -58,7 +58,7 @@ describe('ESI gazetta serve (createServer)', () => {
       headers: { Range: 'bytes=0-3' },
     })
     expect(res.status).toBe(206)
-    expect(res.headers.get('content-range')).toMatch(/^bytes 0-3\//)
+    expect(res.headers.get('content-range')).toBe(`bytes 0-3/${JPEG_BYTES.length}`)
     expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(JPEG_BYTES.slice(0, 4)))).toBe(true)
   })
 
@@ -82,6 +82,10 @@ describe('ESI gazetta serve (createServer)', () => {
 // the worker uses. `size` is always the full object size, like real R2.
 function fakeBucket(files: Record<string, Uint8Array>) {
   return {
+    async head(key: string) {
+      const value = files[key]
+      return value === undefined ? null : { size: value.length }
+    },
     async get(key: string, options?: { range?: { offset: number; length?: number } }) {
       const value = files[key]
       if (value === undefined) return null
@@ -177,5 +181,92 @@ describe('gazetta dev (shared asset route)', () => {
     )
     const res = await app.request('/assets/hero.asset.json')
     expect(res.status).toBe(404)
+  })
+})
+
+// Edge cases from sentry's review of #1438: conditionals must not answer
+// for missing objects, unsatisfiable ranges answer 416 (not 500), and
+// encoded null bytes never reach the storage layer.
+
+describe('shared asset route edge cases', () => {
+  const app = () => {
+    const storage = seededStorage()
+    const a = new Hono()
+    a.route(
+      '/',
+      assetServeRoutes(async () => storage),
+    )
+    return a
+  }
+
+  it('answers 416, not 500, when the range start is past the object end', async () => {
+    const res = await app().request('/assets/hero-a3b2c1d4.jpg', {
+      headers: { Range: `bytes=${JPEG_BYTES.length + 5}-${JPEG_BYTES.length + 9}` },
+    })
+    expect(res.status).toBe(416)
+    expect(res.headers.get('content-range')).toBe(`bytes */${JPEG_BYTES.length}`)
+  })
+
+  it('treats a backwards range (bytes=5-3) as no range', async () => {
+    const res = await app().request('/assets/hero-a3b2c1d4.jpg', {
+      headers: { Range: 'bytes=5-3' },
+    })
+    expect(res.status).toBe(200)
+    expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(JPEG_BYTES))).toBe(true)
+  })
+
+  it('clamps an over-long bounded range to the object end', async () => {
+    const res = await app().request('/assets/hero-a3b2c1d4.jpg', {
+      headers: { Range: 'bytes=8-9999' },
+    })
+    expect(res.status).toBe(206)
+    expect(res.headers.get('content-range')).toBe(`bytes 8-${JPEG_BYTES.length - 1}/${JPEG_BYTES.length}`)
+    expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(JPEG_BYTES.slice(8)))).toBe(true)
+  })
+
+  it('answers 206 with exact bounds for an unbounded range', async () => {
+    const res = await app().request('/assets/hero-a3b2c1d4.jpg', {
+      headers: { Range: 'bytes=4-' },
+    })
+    expect(res.status).toBe(206)
+    expect(res.headers.get('content-range')).toBe(`bytes 4-${JPEG_BYTES.length - 1}/${JPEG_BYTES.length}`)
+    expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(JPEG_BYTES.slice(4)))).toBe(true)
+  })
+
+  it('answers 400 for percent-encoded null bytes in the path', async () => {
+    const res = await app().request('/assets/hero-a3b2c1d4%00.jpg')
+    expect(res.status).toBe(400)
+  })
+
+  it('answers 400 for other encoded control characters in the path', async () => {
+    const res = await app().request('/assets/hero-a3b2c1d4%1f.jpg')
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('worker edge cases', () => {
+  it('answers 404, not 304, for a matching ETag on a missing asset', async () => {
+    const res = await seededWorker()('/assets/missing-a3b2c1d4.jpg', { 'If-None-Match': '"a3b2c1d4"' })
+    expect(res.status).toBe(404)
+  })
+
+  it('answers 416, not 500, when the range start is past the object end', async () => {
+    const res = await seededWorker()('/assets/hero-a3b2c1d4.jpg', {
+      Range: `bytes=${JPEG_BYTES.length + 5}-${JPEG_BYTES.length + 9}`,
+    })
+    expect(res.status).toBe(416)
+    expect(res.headers.get('content-range')).toBe(`bytes */${JPEG_BYTES.length}`)
+  })
+
+  it('clamps an over-long bounded range to the object end', async () => {
+    const res = await seededWorker()('/assets/hero-a3b2c1d4.jpg', { Range: 'bytes=8-9999' })
+    expect(res.status).toBe(206)
+    expect(res.headers.get('content-range')).toBe(`bytes 8-${JPEG_BYTES.length - 1}/${JPEG_BYTES.length}`)
+    expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(JPEG_BYTES.slice(8)))).toBe(true)
+  })
+
+  it('answers 400 for percent-encoded null bytes in the path', async () => {
+    const res = await seededWorker()('/assets/hero-a3b2c1d4%00.jpg')
+    expect(res.status).toBe(400)
   })
 })
