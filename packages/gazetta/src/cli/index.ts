@@ -658,7 +658,7 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
   const prePublishManifest = await loadSiteManifestForCli(siteDir)
   if (prePublishManifest?.targets && Object.keys(prePublishManifest.targets).length === 1) {
     console.error(`\n  Error: This site has one target, so there's nowhere to publish to.`)
-    console.error(`  Add a target in site.config.ts: https://gazetta.studio/docs/getting-started\n`)
+    console.error(`  Add a target in site.config.ts: https://gazetta.studio/docs\n`)
     process.exit(1)
   }
 
