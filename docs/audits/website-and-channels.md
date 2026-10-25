@@ -116,6 +116,15 @@ Decided: maintainer, 2026-10-24 (#1416)
 | EmDash, Payload, Strapi | Strapi's users ask most for moving content between environments, but it replaces the Git-based family |
 | EmDash, Payload, Keystatic | Keystatic as the strict "no database" peer instead of TinaCMS |
 
+**No features page yet.** The first screen keeps the one claim above; a list of features (translations, themes, assets, hooks) would put it beside ten others, and some don't work for a newcomer yet (images end to end; undo on a publish destination, #1092). Features show instead in the docs pages (getting-started's six new pages, the translations section), in the Stage 1 honest comparison's fact table, in the demo video, and in the site saying it's built and published with Gazetta. gazetta.studio gets a second language only when there's an audience for it. Revisit at Stage 2, when the features a visitor would click work for a newcomer.
+
+Decided: maintainer, 2026-10-25 (#1416)
+
+| Rejected | Why |
+|---|---|
+| A features page now | First homepages at release were one sentence, one command and links (htmx, Bun); it would also advertise features a newcomer can't use yet |
+| Translating gazetta.studio to show translations | Proof only if someone reads the second language |
+
 **Revisit** when the first issues from people outside the project arrive after Stage 1 opens, and when users (not contributors) answer #1277.
 
 Decided: maintainer, 2026-10-24 (#1416)
