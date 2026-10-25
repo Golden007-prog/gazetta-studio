@@ -21,7 +21,7 @@ import { buildHooksRegistry, createAdminApp } from '../admin-api/index.js'
 import { parseValidateFlags } from './validate-flags.js'
 import { logDefaultedPublicTargets } from '../validation/validators/public-storage-config.js'
 import { parseArgs } from './args.js'
-import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
+import { authTrustOf, exitOnListenError, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
 import { devNotFound } from './dev-not-found.js'
 import { isInside } from './is-inside.js'
 import { isArchived } from '../archive-helpers.js'
@@ -1129,6 +1129,7 @@ async function runAdmin(siteDir: string, port: number, hostFlag?: string) {
       console.log()
     },
   )
+  exitOnListenError(server, port)
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
@@ -1170,6 +1171,7 @@ async function runServe(siteDir: string, port: number, targetName?: string, host
     console.log(`  ${c.dim('┃')} Local    ${c.cyan(`http://localhost:${port}/`)}`)
     console.log()
   })
+  exitOnListenError(server, port)
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
@@ -2028,6 +2030,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     }
     console.log()
   })
+  exitOnListenError(nodeServer, port)
 
   // ---- File watching ----
   // Watch site dir for content changes (JSON manifests + site.config.ts).
