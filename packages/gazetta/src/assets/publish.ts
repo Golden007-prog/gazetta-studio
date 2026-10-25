@@ -17,8 +17,8 @@
 import { mapLimit } from '../concurrency.js'
 import type { ContentRoot } from '../content-root.js'
 import type { StorageProvider } from '../types.js'
-import { assetBytePaths, assetStoragePaths } from './asset-paths.js'
-import { readManifest, writeManifest } from './manifest.js'
+import { assetBytePaths, assetManifestPaths, enumerateAssetStoragePaths } from './asset-paths.js'
+import { readManifest } from './manifest.js'
 import { planAssetCopy } from './publish-plan.js'
 
 export interface PublishAssetsInput {
@@ -77,36 +77,46 @@ interface CopyContext {
 }
 
 interface CopyResult {
-  /** True when the asset's bytes were written. False on dedupe-skip. */
+  /** True when any file was written. False when the target was already current. */
   readonly copied: boolean
-  /** Files written for this asset (manifest + primary + variants). 0 on skip. */
+  /** Files written for this asset (manifests + bytes + variants). 0 when already current. */
   readonly files: number
 }
 
 async function copyOneAsset(ctx: CopyContext, name: string): Promise<CopyResult> {
   const sourceManifest = await readManifest(ctx.source, ctx.sourceAssets, name)
-  const sourcePaths = assetStoragePaths(ctx.sourceAssets, sourceManifest)
-  const targetPaths = assetStoragePaths(ctx.targetAssets, sourceManifest)
+  // Scan the source for locale/theme override slices so their manifests,
+  // bytes, and variants travel with the default footprint (#1350).
+  const sourcePaths = await enumerateAssetStoragePaths(ctx.source, ctx.sourceAssets, sourceManifest)
 
-  // Content-addressed dedupe: the hash is in the bytes path, so its
-  // presence on the target proves byte-equivalence. Skip the whole
-  // asset (manifest + bytes + variants).
-  if (await ctx.target.exists(targetPaths.defaultBytes)) return { copied: false, files: 0 }
+  // Re-root a source path under the target's assets root; both sides
+  // share the same relative layout.
+  const retarget = (sourcePath: string) => ctx.targetAssets + sourcePath.slice(ctx.sourceAssets.length)
 
-  await writeManifest(ctx.target, ctx.targetAssets, sourceManifest)
-  let files = 1
+  let files = 0
 
-  // Copy every byte path (default + per-override) preserving structure.
-  // `assetBytePaths` returns default bytes/variants first, then each
-  // override's bytes/variants — both source and target produce the same
-  // ordered list because they're built from the same manifest, so we
-  // can iterate in lockstep.
-  const sourceBytePaths = assetBytePaths(sourcePaths)
-  const targetBytePaths = assetBytePaths(targetPaths)
-  for (let i = 0; i < sourceBytePaths.length; i++) {
-    const stream = await ctx.source.readStream(sourceBytePaths[i]!)
-    await ctx.target.writeStream(targetBytePaths[i]!, stream)
+  // Manifests (default + one per override slice) are small JSON and
+  // change over an asset's life: an alt or focal-point edit, or an
+  // override added after a first publish. Compare content and write
+  // when missing or different; a byte-identical manifest is skipped.
+  for (const sourcePath of assetManifestPaths(sourcePaths)) {
+    const content = await ctx.source.readFile(sourcePath)
+    const existing = await ctx.target.readFile(retarget(sourcePath)).catch(() => null)
+    if (existing === content) continue
+    await ctx.target.writeFile(retarget(sourcePath), content)
     files++
   }
-  return { copied: true, files }
+
+  // Bytes and variants are content-addressed: the hash is in the path,
+  // so presence on the target proves byte-equivalence. Copy only what
+  // is absent. An override added later has fresh paths, so it copies
+  // even when the default bytes were already there.
+  for (const sourcePath of assetBytePaths(sourcePaths)) {
+    if (await ctx.target.exists(retarget(sourcePath))) continue
+    const stream = await ctx.source.readStream(sourcePath)
+    await ctx.target.writeStream(retarget(sourcePath), stream)
+    files++
+  }
+
+  return { copied: files > 0, files }
 }
