@@ -21,6 +21,7 @@ import {
   AssetPathTraversalError,
   AssetSizeExceededError,
 } from './errors.js'
+import { STATE_ROOT } from '../state-folders.js'
 
 /**
  * Default per-asset upload size cap — 50 MB. Sites override per target
@@ -93,7 +94,7 @@ const VALID_NAME = /^[a-z0-9][a-z0-9\-_]*(?:\.[a-z0-9]+)?$/
 const MAX_NAME_LENGTH = 200
 
 /** Reserved name patterns — authors can't upload anything that would collide with internals. */
-const RESERVED_PREFIXES = ['.', '_refs/', '.gazetta/']
+const RESERVED_PREFIXES = ['.', '_refs/', `${STATE_ROOT}/`]
 const RESERVED_SUFFIXES = ['.asset.json']
 
 export interface UploadCandidate {
