@@ -71,39 +71,6 @@ async function collectRefsAcrossItems(input: PlanInput): Promise<CollectedRefs> 
       // Page/fragment manifests have the same `Walkable` shape that
       // `collectAssetRefs` accepts; cast here rather than parse-and-validate
       // since the planner's job is ref discovery, not manifest validation.
-      const manifest = JSON.parse(raw) as Parameters<typeof collectAssetRefs>[0]
-      const itemRefs = collectAssetRefs(manifest)
-      if (itemRefs.size === 0) continue
-      itemsWithRefs.add(item)
-      for (const name of itemRefs) refs.add(name)
-    }
-  }
-  return { refs, itemsWithRefs: [...itemsWithRefs] }
-}
-
-/**
- * The default manifest filename plus every variant of it on storage
- * (page.json + page.fr.json + ..., fragment.json + fragment.fr.json +
- * ...). A missing item directory (unreadable readDir) yields just the
- * default filename so the caller's missing-item tolerance keeps
- * working unchanged.
- */
-async function manifestFilenamesFor(input: PlanInput, itemName: string): Promise<string[]> {
-  const base = manifestFilenameFor(itemName)
-  const stem = base.slice(0, -'.json'.length)
-  let entries: { name: string; isDirectory: boolean }[]
-  try {
-    entries = await input.sourceRoot.storage.readDir(input.sourceRoot.path(itemName))
-  } catch {
-    return [base]
-  }
-  const variants = entries
-    .filter(e => !e.isDirectory && e.name.startsWith(stem + '.') && e.name.endsWith('.json') && e.name !== base)
-    .map(e => e.name)
-    .sort()
-  return [base, ...variants]
-}
-
-function manifestFilenameFor(itemName: string): string {
-  return itemName.startsWith('fragments/') ? 'fragment.json' : 'page.json'
-}
+      // An unparseable manifest is skipped like an unreadable one: one
+      // corrupt locale variant must not abort the target's asset publish.
+      // Warn the way the site loader does when it skips a broken item.
