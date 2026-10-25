@@ -120,7 +120,9 @@ describe('Cross-foundation gap #3 — capability-gap surfaces fire at all four p
   it('Surface #1 (boot validate) — warns once per gapped target with redirect+gone reasons', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const count = warnOnCapabilityGaps(manifest)
+      // The fixture seeds one archived page (pages/old-landing), so the
+      // boot warning fires per #1305's warn-once-archived rule.
+      const count = warnOnCapabilityGaps(manifest, { anyArchived: true })
       expect(count).toBe(1)
       expect(warnSpy).toHaveBeenCalledTimes(1)
       const msg = warnSpy.mock.calls[0][0] as string
