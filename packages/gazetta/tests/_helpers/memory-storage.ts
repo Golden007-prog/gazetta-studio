@@ -30,7 +30,7 @@
  * `dump()` and `seed()` are test-only escape hatches for inspecting
  * and pre-populating storage state.
  */
-import type { DirEntry, StorageProvider } from '../../src/types.js'
+import type { ByteRange, DirEntry, StorageProvider } from '../../src/types.js'
 
 export interface MemoryStorage extends StorageProvider {
   /** Inspect the entire storage map. Bytes are the canonical form. */
@@ -68,12 +68,15 @@ export function memoryStorage(): MemoryStorage {
     async writeBytes(path: string, content: Uint8Array): Promise<void> {
       files.set(path, content)
     },
-    async readStream(path: string): Promise<ReadableStream<Uint8Array>> {
+    async readStream(path: string, range?: ByteRange): Promise<ReadableStream<Uint8Array>> {
       const v = files.get(path)
       if (v === undefined) throw new Error(`ENOENT: ${path}`)
+      // Inclusive start/end, clamped to the stored length — matches the
+      // filesystem provider's createReadStream behavior.
+      const bytes = range ? v.slice(range.start, Math.min(range.end + 1, v.length)) : v
       return new ReadableStream({
         start(controller) {
-          controller.enqueue(v)
+          controller.enqueue(bytes)
           controller.close()
         },
       })
