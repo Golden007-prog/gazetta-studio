@@ -218,6 +218,11 @@ describe('runInit', () => {
     expect(ignored('sites/main/targets/local/404.html')).toBe(true)
     expect(ignored('sites/main/targets/local/site.json')).toBe(true)
     expect(ignored('sites/main/targets/local/index/fragments.json')).toBe(true)
+    // Aggregate indices live at the target root; a page or fragment named
+    // "index" is editable source and stays tracked.
+    expect(ignored('sites/main/targets/local/pages/index/page.json')).toBe(false)
+    expect(ignored('sites/main/targets/local/pages/blog/index/page.json')).toBe(false)
+    expect(ignored('sites/main/targets/local/fragments/index/fragment.json')).toBe(false)
     expect(ignored('sites/main/targets/local/pages/home/.41af7f01.hash')).toBe(true)
     expect(ignored('sites/main/targets/local/pages/home/.41af7f01.hash.1')).toBe(true)
     expect(ignored('sites/main/targets/local/pages/home/.pub-20261023T174905Z')).toBe(true)
