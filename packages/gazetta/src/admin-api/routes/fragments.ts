@@ -13,6 +13,7 @@ import { buildHookContext, dispatchAfterLoad, type HookRegistry } from '../../ho
 import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
 import { FragmentNotFoundError, InvalidLocaleError, saveFragment } from '../../fragments/save.js'
 import { createFragment } from '../../fragments/create.js'
+import { REDIRECT_RESTORE_MESSAGE } from '../../archive-helpers.js'
 
 export interface FragmentRoutesOptions {
   hooks?: HookRegistry
@@ -104,6 +105,10 @@ export function fragmentRoutes(
     }
     if (result.code === 'ARCHIVED_CONFLICT') {
       return c.json({ code: 'ARCHIVED_NAME_CONFLICT' as const, archive: result.archive }, 409)
+    }
+    if (result.code === 'REDIRECT_RESTORE') {
+      // Manual Redirect targeted by restore (#1343).
+      return c.json({ error: REDIRECT_RESTORE_MESSAGE }, 409)
     }
     // INVALID_CONFLICT_MODE — exhaustive narrow.
     return c.json({ error: `Invalid onConflict mode "${result.mode}"` }, 400)
