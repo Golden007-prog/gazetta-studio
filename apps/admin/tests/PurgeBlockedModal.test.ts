@@ -139,6 +139,21 @@ describe('PurgeBlockedModal', () => {
     expect(setAliasSpy).toHaveBeenCalledWith({ kind: 'page', name: 'old' }, null)
   })
 
+  it('hides Restore on alias rows that are Manual Redirects (#1343)', async () => {
+    // Restoring a redirect archive is refused by the backend; the row
+    // keeps Drop alias but must not offer Restore.
+    seedBlocked({
+      aliases: [
+        { kind: 'page', name: 'old-redirect', redirect: true },
+        { kind: 'page', name: 'old-content' },
+      ],
+    })
+    render()
+    await flushPromises()
+    expect(document.querySelector('[data-testid="purge-blocked-restore-old-redirect"]')).toBeNull()
+    expect(document.querySelector('[data-testid="purge-blocked-restore-old-content"]')).not.toBeNull()
+  })
+
   it('Restore button dispatches restoreBlocker on the store', async () => {
     const archive = useArchiveStore()
     const restoreSpy = vi.spyOn(archive, 'restoreBlocker').mockResolvedValue(true)
