@@ -88,22 +88,38 @@ interface CognitoClaims extends JWTPayload {
 }
 
 /**
+ * Upper bound on cached ALB public keys (#1402). An ALB key never
+ * changes for a given kid, so entries need no expiry; the bound only
+ * stops the map from growing by one entry per kid seen for the
+ * process's lifetime. 16 covers a multi-ALB fleet with headroom;
+ * eviction is LRU, so a burst of unknown kids can't flush the keys
+ * steady traffic actually verifies against.
+ */
+export const AWS_COGNITO_KEY_CACHE_MAX = 16
+
+/**
  * Default JWKS factory — fetches AWS's per-kid public key. Each
  * verification call may hit a different kid; the resolver caches
- * downloaded keys to keep verification fast under steady load.
+ * downloaded keys (bounded, LRU) to keep verification fast under
+ * steady load.
  *
  * Operators may want to override this with a `createRemoteJWKSet`
  * variant if they front Cognito directly (without ALB) — that's
  * outside Cut 5's scope; the injection point keeps it open.
  */
-function defaultJwksFactory(region: string): JWTVerifyGetKey {
+export function defaultJwksFactory(region: string): JWTVerifyGetKey {
   const cache = new Map<string, CryptoKey>()
   return async (header: { kid?: string; alg?: string }) => {
     if (!header.kid) {
       throw new AuthenticationError('AWS Cognito JWT has no kid in header')
     }
     const cached = cache.get(header.kid)
-    if (cached) return cached
+    if (cached) {
+      // Refresh recency: Map iteration order is insertion order.
+      cache.delete(header.kid)
+      cache.set(header.kid, cached)
+      return cached
+    }
     const url = `https://public-keys.auth.elb.${region}.amazonaws.com/${encodeURIComponent(header.kid)}`
     const res = await fetch(url)
     if (!res.ok) {
@@ -122,6 +138,10 @@ function defaultJwksFactory(region: string): JWTVerifyGetKey {
       ['verify'],
     )
     cache.set(header.kid, key)
+    if (cache.size > AWS_COGNITO_KEY_CACHE_MAX) {
+      const oldest = cache.keys().next().value
+      if (oldest !== undefined) cache.delete(oldest)
+    }
     return key
   }
 }
