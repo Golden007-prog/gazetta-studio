@@ -81,6 +81,18 @@ describe('ArchivedNameConflictPrompt', () => {
     expect(wrapper.find('[data-testid="conflict-continue-restore"]').exists()).toBe(true)
   })
 
+  it('hides the Restore option for a Manual Redirect archive (#1343)', () => {
+    const wrapper = render({ archive: { ...archive, redirect: true } })
+    expect(wrapper.find('[data-testid="conflict-option-restore"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="conflict-option-replace"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="conflict-option-moveAside"]').exists()).toBe(true)
+  })
+
+  it('defaults to Replace for a Manual Redirect archive', () => {
+    const wrapper = render({ archive: { ...archive, redirect: true } })
+    expect(wrapper.find('[data-testid="conflict-continue-replace"]').exists()).toBe(true)
+  })
+
   it('emits resolve with the default mode (restore) when Continue clicked', async () => {
     const wrapper = render({ archive })
     await wrapper.find('[data-testid="conflict-continue-restore"]').trigger('click')
