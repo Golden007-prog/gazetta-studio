@@ -49,6 +49,11 @@ export type UnarchiveResponse = z.infer<typeof UnarchiveResponseSchema>
 export const AliasPointerSchema = z.object({
   kind: z.enum(['page', 'fragment']),
   name: z.string(),
+  /**
+   * True when this pointer is a Manual Redirect archive — restoring it
+   * is refused (#1343), so clients don't offer Restore for the row.
+   */
+  redirect: z.boolean().optional(),
 })
 export type AliasPointer = z.infer<typeof AliasPointerSchema>
 
