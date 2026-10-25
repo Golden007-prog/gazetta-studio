@@ -31,7 +31,9 @@ import { inspectTarget } from './runtime-capabilities.js'
 
 /**
  * Walk the site's targets at boot; emit a warning per target that
- * has any capability gap. Logs are operator-facing — once
+ * has any capability gap — but only when the site has at least one
+ * archived page (#1305); pass `opts.anyArchived` = false to skip the
+ * walk entirely on a site with nothing archived. Logs are operator-facing — once
  * `design-logging.md`'s structured logger ships, replace `console.warn`
  * with `log.warn({ module: 'admin-api.capability-gap', ... })`.
  *
@@ -40,7 +42,13 @@ import { inspectTarget } from './runtime-capabilities.js'
  *
  * @returns the count of targets with gaps — useful for tests.
  */
-export function warnOnCapabilityGaps(manifest: SiteManifest): number {
+export function warnOnCapabilityGaps(manifest: SiteManifest, opts: { anyArchived?: boolean } = {}): number {
+  // #1305 (decided 2026-10-24): no boot warning on a site without
+  // archived pages - the gap only matters once an archive operation can
+  // hit it, and the archive dialog, site health and the publish check
+  // still surface it from then on. Callers that don't track archive
+  // state keep the previous warn-always behavior.
+  if (opts.anyArchived === false) return 0
   const targets = (manifest.targets ?? {}) as Record<string, TargetConfig>
   let count = 0
   for (const [name, target] of Object.entries(targets)) {
