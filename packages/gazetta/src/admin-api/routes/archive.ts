@@ -103,7 +103,12 @@ import {
   type UnarchiveResponse,
 } from '../schemas/archive.js'
 import type { ComponentManifest, FragmentManifest, PageManifest } from '../../types.js'
-import { archiveReviewMetadata, buildAutoWithdrawEvent, stripReviewStateForRestore } from './archive-review.js'
+import {
+  archiveReviewMetadata,
+  buildAutoWithdrawEvent,
+  resetReviewStateForItem,
+  stripReviewStateForRestore,
+} from './archive-review.js'
 
 type ItemKind = 'page' | 'fragment'
 
@@ -309,21 +314,23 @@ export async function handleArchive(
   // Audit metadata captures aliasOf and (when force bypass) the live
   // refs the operator overrode — forensics finds the broken refs
   // through the bypass list per Q5 E1 audit shape.
-  // Cut 14: also capture priorReviewState if the item was in a non-
-  // draft review state (forward-compat with review-workflow).
-  const archiveMetadata: Record<string, unknown> = { ...archiveReviewMetadata(manifest) }
+  // Cut 14 (fixed in #1344): also capture priorReviewState if the
+  // item has a review sidecar in a non-draft state.
+  const archiveMetadata: Record<string, unknown> = {
+    ...(await archiveReviewMetadata(source.contentRoot, handle.scopeKind, name)),
+  }
   if (aliasOf) archiveMetadata.aliasOf = aliasOf
   if (force) {
     archiveMetadata.forced = true
     const bypassedRefs = collectLiveRefs(handle, site, name)
     if (bypassedRefs.length > 0) archiveMetadata.bypassedRefs = bypassedRefs
   }
-  // Cut 14: when archiving an item in `pending-review`, emit the
-  // synthetic `review-withdraw` event FIRST per design-soft-delete.md
-  // Q9 N-A.2. Approved state (no synthetic withdraw) is captured via
-  // priorReviewState on the archive event itself. Pre-review-workflow,
-  // this returns null and is a no-op.
-  const withdrawEvent = buildAutoWithdrawEvent(manifest, { kind: handle.scopeKind, name })
+  // Cut 14 (fixed in #1344): when archiving an item whose review
+  // sidecar is `pending-review`, emit the synthetic `review-withdraw`
+  // event FIRST per design-soft-delete.md Q9 N-A.2. Approved state (no
+  // synthetic withdraw) is captured via priorReviewState on the archive
+  // event itself. No sidecar means draft: returns null, a no-op.
+  const withdrawEvent = await buildAutoWithdrawEvent(source.contentRoot, handle.scopeKind, name)
   if (withdrawEvent) {
     await c.var.audit.record(withdrawEvent)
   }
@@ -333,6 +340,10 @@ export async function handleArchive(
     scope: { kind: handle.scopeKind, name },
     metadata: Object.keys(archiveMetadata).length > 0 ? archiveMetadata : undefined,
   })
+  // #1344: the archive consumed the item's review state (auto-withdraw
+  // event and/or priorReviewState metadata carry the forensic record);
+  // reset it to draft so a later restore starts clean per Q9 N-B.1.
+  await resetReviewStateForItem(source.contentRoot, handle.scopeKind, name)
   // Background-stage validators (P1, P5) re-run on the archived item.
   // Fire-and-forget per `manifest-save.ts` shape; the scanner emits
   // its own SSE event when the pass completes.
@@ -375,10 +386,16 @@ async function handleUnarchive(
   // Strip the archive fields. Per Q6 lock D1: unarchive = flip the bit.
   // Content + components unchanged from archive time.
   // Cut 14: also strip `reviewState` per design-soft-delete.md Q9 N-B.1
-  // (restore always to draft). Pre-review-workflow this is a no-op.
+  // (restore always to draft). Manifests never carry the field today;
+  // the strip is defensive. The real state lives in the review sidecar
+  // and is reset below (#1344).
   const restored: ComponentManifest = stripReviewStateForRestore(stripArchiveFields(manifest))
 
   await writeManifest(source, handle, name, restored, manifest)
+
+  // #1344: reset the review sidecar so the restored item is in draft
+  // per Q9 N-B.1, regardless of the state it had when archived.
+  await resetReviewStateForItem(source.contentRoot, handle.scopeKind, name)
 
   // Tear down the archive-aliases sidecar — `extract` on a live manifest
   // returns the empty set, so the diff cleans up.
