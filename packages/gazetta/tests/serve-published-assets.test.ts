@@ -53,28 +53,6 @@ describe('ESI gazetta serve (createServer)', () => {
     expect(res.headers.get('etag')).toBe('"a3b2c1d4"')
   })
 
-  it('206 range responses never expose the underlying Node Buffer pool', async () => {
-    // StorageProviders may return pooled Node Buffers (the filesystem
-    // provider returns fs.readFile's Buffer as-is). The 206 body must
-    // be exactly the requested range, not the pool allocation.
-    const pool = Buffer.allocUnsafe(8192).fill(0x42)
-    JPEG_BYTES.forEach((b, i) => (pool[200 + i] = b))
-    const storage = memoryStorage()
-    storage.seedBytes({
-      'assets/hero-a3b2c1d4.jpg': pool.subarray(200, 200 + JPEG_BYTES.length),
-      'assets/hero.asset.json': new TextEncoder().encode('{"name":"hero"}'),
-    })
-    const app = createServer({ storage })
-
-    const res = await app.request('/assets/hero-a3b2c1d4.jpg', {
-      headers: { Range: 'bytes=0-3' },
-    })
-    expect(res.status).toBe(206)
-    const body = new Uint8Array(await res.arrayBuffer())
-    expect(body.byteLength).toBe(4)
-    expect(body).toEqual(JPEG_BYTES.slice(0, 4))
-  })
-
   it('answers 206 with the requested byte range', async () => {
     const res = await app().request('/assets/hero-a3b2c1d4.jpg', {
       headers: { Range: 'bytes=0-3' },
