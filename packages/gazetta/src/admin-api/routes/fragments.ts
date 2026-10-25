@@ -237,7 +237,7 @@ export function fragmentRoutes(
   // See pages.ts for the full rationale; same shape applies here.
   app.delete('/api/fragments/:name', requireCapability('delete:fragments'), editableTarget, async c => {
     const permanent = c.req.query('permanent') === 'true'
-    if (permanent) return handlePurge(c, resolve, FRAGMENT_HANDLE)
+    if (permanent) return handlePurge(c, resolve, FRAGMENT_HANDLE, null, { allowLive: true })
     return handleArchive(c, resolve, FRAGMENT_HANDLE)
   })
 
