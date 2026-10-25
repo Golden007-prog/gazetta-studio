@@ -13,48 +13,52 @@
  *     Author re-submits if review needed. Auto-restoring to `approved`
  *     would let stale content ship without re-validation.
  *
- * # Forward-compat with review-workflow's Tier-3 timeline
+ * # Review state lives in the sidecar, not the manifest (#1344)
  *
- * The review-workflow foundation hasn't shipped. Today's manifests
- * never carry a `reviewState` field; this module's logic is therefore
- * a no-op on every current production save. When review-workflow Cut 6
- * lands and starts writing `reviewState` to manifests, this module
- * activates without code changes.
+ * The review-workflow foundation (Cut 3 of #517) stores per-item
+ * review state at `.gazetta/review/{kind}/{name}/state.json` via
+ * `review/sidecars.ts`; saves read it through the save-gate. This
+ * module originally read a speculative `manifest.reviewState` field
+ * that was never written, so the archive/restore paths silently
+ * no-op'd. The helpers below read the sidecar as the single source
+ * of truth and reset it (clear = back to draft) once the archive
+ * lifecycle has consumed the state; the audit log carries the
+ * forensic record (`priorReviewState`, the auto-withdraw event).
  *
- * Gate is data-driven (`manifest.reviewState` presence), not config-
- * driven (`reviewWorkflow.enabled` flag). The plan's wording around a
- * config flag is one valid implementation; data-driven is honest:
- * "if this item has review state, handle it; else no-op." When
- * review-workflow ships its config field, no flag-check refactor is
- * needed.
+ * Gate is data-driven (sidecar presence), not config-driven
+ * (`reviewWorkflow.enabled` flag): "if this item has review state,
+ * handle it; else no-op."
  *
  * # SOLID lenses
  *
  *   - SRP: this module owns the archive ↔ review-state interaction.
- *     `archive.ts`'s `handleArchive` calls one function (`prepareForArchive`)
- *     and consumes its returned audit events; doesn't replicate state-
- *     machine knowledge.
- *   - DIP: `handleArchive` depends on the helper's typed return shape,
- *     not on review-state field names baked into the route handler.
+ *     `archive.ts`'s `handleArchive` calls the helpers and consumes
+ *     their returned audit events; doesn't replicate state-machine
+ *     or sidecar-path knowledge.
+ *   - DIP: `handleArchive` depends on the helpers' typed return
+ *     shapes, not on review-state storage details baked into the
+ *     route handler.
  *   - OCP: when review-workflow ships its full state machine
- *     (additional states, transitions like `pending-publish`), this
- *     helper extends with new branches; archive route untouched.
+ *     (additional states, transitions like `pending-publish`), the
+ *     helpers extend with new branches; archive route untouched.
  */
-import type { ComponentManifest } from '../../types.js'
+import type { ContentRoot } from '../../content-root.js'
 import type { RecordEventInput } from '../../audit/context.js'
+import type { ComponentManifest } from '../../types.js'
+import { clearReviewSidecar, readReviewSidecar, type ReviewStateKind } from '../../review/index.js'
 
 /**
- * Read `reviewState` from a manifest without committing the field
- * to `ComponentManifest`'s public type. The review-workflow
- * foundation will lock the field's shape when it ships; until then,
- * callers narrow at the read site.
- *
- * Returns the string state when present; `undefined` for live
- * manifests today (every current production manifest).
+ * Read the item's current review state from its sidecar. Returns
+ * `undefined` when no sidecar exists (fresh content; the absence of
+ * a sidecar IS the draft state in the review-workflow data model).
  */
-function readReviewState(manifest: ComponentManifest): string | undefined {
-  const m = manifest as ComponentManifest & { reviewState?: unknown }
-  return typeof m.reviewState === 'string' ? m.reviewState : undefined
+async function readReviewState(
+  contentRoot: ContentRoot,
+  kind: ReviewStateKind,
+  name: string,
+): Promise<string | undefined> {
+  const sidecar = await readReviewSidecar(contentRoot, kind, name)
+  return sidecar?.state
 }
 
 /**
@@ -67,17 +71,18 @@ function readReviewState(manifest: ComponentManifest): string | undefined {
  * Approved state discards as part of the archive event itself
  * (recorded via `priorReviewState` metadata).
  */
-export function buildAutoWithdrawEvent(
-  manifest: ComponentManifest,
-  scope: { kind: 'page' | 'fragment'; name: string },
-): RecordEventInput | null {
-  const priorState = readReviewState(manifest)
+export async function buildAutoWithdrawEvent(
+  contentRoot: ContentRoot,
+  kind: ReviewStateKind,
+  name: string,
+): Promise<RecordEventInput | null> {
+  const priorState = await readReviewState(contentRoot, kind, name)
   if (priorState !== 'pending-review') return null
 
   return {
     action: 'review-withdraw',
     outcome: 'success',
-    scope,
+    scope: { kind, name },
     metadata: {
       autoWithdrawn: true,
       reason: 'archive',
@@ -89,30 +94,57 @@ export function buildAutoWithdrawEvent(
 /**
  * Compute additional metadata for the `archive` audit event capturing
  * the item's prior review state. Returns an empty object for items
- * without review state (current production behavior).
+ * without a review sidecar (no review activity recorded).
  *
  * `priorReviewState` is a non-prescriptive forensic record: the
  * restore-always-to-draft invariant (Q9 N-B.1) means this metadata
  * is never auto-applied on unarchive. It exists so operators can
  * reconstruct "what state did this item have before it was archived?"
- * via audit-log query alone, without re-reading the historical manifest.
+ * via audit-log query alone, without re-reading the historical sidecar.
  */
-export function archiveReviewMetadata(manifest: ComponentManifest): Record<string, unknown> {
-  const priorState = readReviewState(manifest)
+export async function archiveReviewMetadata(
+  contentRoot: ContentRoot,
+  kind: ReviewStateKind,
+  name: string,
+): Promise<Record<string, unknown>> {
+  const priorState = await readReviewState(contentRoot, kind, name)
   if (!priorState) return {}
   return { priorReviewState: priorState }
 }
 
 /**
- * Strip `reviewState` from a restored (unarchived) manifest. Per
- * `design-soft-delete.md` Q9 N-B.1: restore always to draft; the
- * absence of `reviewState` IS the draft state in the
- * review-workflow's data model. Author re-submits if review needed.
+ * Reset the item's review state to draft by tearing down its review
+ * sidecar tree (state file + approver sidecars). Called once the
+ * archive lifecycle has consumed the prior state:
+ *   - archive: state is discarded (pending-review auto-withdraws,
+ *     approved discards); the archived item carries no live review
+ *     state.
+ *   - unarchive + conflict-restore: Q9 N-B.1 restore-always-to-draft.
+ *
+ * The audit events recorded alongside carry the forensic record, so
+ * no history is lost by clearing. Idempotent: no-op when the item has
+ * no sidecar.
+ */
+export async function resetReviewStateForItem(
+  contentRoot: ContentRoot,
+  kind: ReviewStateKind,
+  name: string,
+): Promise<void> {
+  await clearReviewSidecar(contentRoot, kind, name)
+}
+
+/**
+ * Strip `reviewState` from a restored (unarchived) manifest. Today's
+ * manifests never carry this field (review state lives in the
+ * sidecar, see module header); the strip stays as a defensive no-op
+ * so a hand-edited or future manifest can never resurrect a stale
+ * review state past the restore-always-to-draft invariant.
  *
  * Returns the manifest unchanged when no review state was set.
  */
 export function stripReviewStateForRestore(manifest: ComponentManifest): ComponentManifest {
-  if (readReviewState(manifest) === undefined) return manifest
-  const { reviewState: _strip, ...rest } = manifest as ComponentManifest & { reviewState?: unknown }
+  const m = manifest as ComponentManifest & { reviewState?: unknown }
+  if (typeof m.reviewState !== 'string') return manifest
+  const { reviewState: _strip, ...rest } = m
   return rest as ComponentManifest
 }
