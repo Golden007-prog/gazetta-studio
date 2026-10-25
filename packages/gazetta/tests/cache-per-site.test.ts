@@ -86,6 +86,19 @@ describe('forSite key scoping', () => {
     expect(stats?.misses).toBe(1)
     expect(stats?.size).toBe(1)
   })
+
+  it('stats() strips the site prefix from lastInvalidation.prefix (#1400)', async () => {
+    const inner = createMemoryCache()
+    const cache = forSite(inner, 'main')
+    await cache.set('pages:home', 1)
+    await cache.invalidatePrefix('pages:')
+    // Inner records the wrapped prefix (site:main:pages:); the
+    // wrapper surfaces the consumer-facing form so the stats route
+    // matches the invalidation stream and docs/cache.md.
+    const stats = await cache.stats?.()
+    expect(stats?.lastInvalidation?.prefix).toBe('pages:')
+    expect(stats?.lastInvalidation?.source).toBe('local')
+  })
 })
 
 describe('forSite subscribe filtering', () => {
