@@ -335,7 +335,7 @@ async function servePublishedAsset(c: any, bucket: R2Bucket) {
   } catch {
     return c.text('Invalid asset path', 400)
   }
-  if (path.includes('..') || path.startsWith('/')) {
+  if (/[\u0000-\u001f\u007f]/.test(path) || path.includes('..') || path.startsWith('/')) {
     return c.text('Invalid asset path', 400)
   }
 
@@ -350,34 +350,34 @@ async function servePublishedAsset(c: any, bucket: R2Bucket) {
   const urlInput = parseAssetUrlInput(path, ext)
   const etag = urlInput.hash ? `"${urlInput.hash}"` : undefined
 
+  // Existence before any conditional answer: a matching ETag on a
+  // missing (or deleted) object must 404, not 304. `head` also yields
+  // the object size, so range bounds are exact without reading the body.
+  const key = `${ASSETS_ROOT}/${path}`
+  const head = await bucket.head(key)
+  if (!head) return c.text('Not found', 404)
+  const total = head.size
+
   if (etag && ifNoneMatches(c.req.header('if-none-match'), etag)) {
     return new Response(null, { status: 304, headers: assetHeaders(mime, etag) })
   }
 
-  const key = `${ASSETS_ROOT}/${path}`
   const range = parseRangeHeader(c.req.header('range'))
-  const obj = await bucket.get(
-    key,
-    range === undefined
-      ? undefined
-      : range.end === undefined
-        ? { range: { offset: range.start } }
-        : { range: { offset: range.start, length: range.end - range.start + 1 } },
-  )
-  if (!obj) return c.text('Not found', 404)
-
   if (range !== undefined) {
-    const total = obj.size
     if (range.start >= total) {
       return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } })
     }
     const last = Math.min(range.end ?? total - 1, total - 1)
+    const obj = await bucket.get(key, { range: { offset: range.start, length: last - range.start + 1 } })
+    if (!obj) return c.text('Not found', 404) // deleted between head and get
     const headers = assetHeaders(mime, etag)
     headers.set('Content-Range', `bytes ${range.start}-${last}/${total}`)
     headers.set('Accept-Ranges', 'bytes')
     return new Response(obj.body as ReadableStream, { status: 206, headers })
   }
 
+  const obj = await bucket.get(key)
+  if (!obj) return c.text('Not found', 404) // deleted between head and get
   const headers = assetHeaders(mime, etag)
   headers.set('Accept-Ranges', 'bytes')
   return new Response(obj.body as ReadableStream, { status: 200, headers })
