@@ -186,6 +186,20 @@ describe('useArchiveStore — confirmPurge', () => {
     expect(store.blockedAliases).toEqual([{ kind: 'page', name: 'old-landing' }])
     expect(store.blockedLiveRefs).toEqual([{ kind: 'page', name: 'home' }])
   })
+
+  it('surfaces the NOT_ARCHIVED reason on purge of a live item (#1341)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: 'NOT_ARCHIVED', error: 'Page "landing" is not archived - archive it first' }),
+    })
+    const store = useArchiveStore()
+    store.askPurge(live)
+    const ok = await store.confirmPurge()
+    expect(ok).toBe(false)
+    expect(store.status).toBe('error')
+    expect(store.errorMessage).toContain('archive it first')
+  })
 })
 
 describe('useArchiveStore — Cut 12 setAlias + restoreBlocker', () => {
