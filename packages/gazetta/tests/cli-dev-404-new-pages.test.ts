@@ -61,7 +61,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs: number): Pr
 }
 
 describe('gazetta dev 404 page and pages created at runtime (#1318)', () => {
-  it("serves the site's own 404 page, answers new pages without a restart, and only watches the content root", async () => {
+  it("serves the site's own 404 page, answers new pages without a restart, and only logs content-root manifest changes", async () => {
     projectDir = tempDir(`dev-404-new-pages-${Date.now()}`)
     await cp(starterDir, projectDir, { recursive: true })
 
@@ -109,7 +109,9 @@ describe('gazetta dev 404 page and pages created at runtime (#1318)', () => {
       10000,
     )
 
-    // A JSON file outside the content root is not a manifest change.
+    // A JSON file outside the content root is not logged as a manifest
+    // change (its cache invalidation still runs; covered by the
+    // target-switch e2e).
     // Let watcher events from the writes above settle first: they arrive
     // asynchronously, so a baseline taken immediately can still see them.
     await new Promise(r => setTimeout(r, 1500))
