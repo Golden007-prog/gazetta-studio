@@ -71,8 +71,17 @@ function checkUnknownCapabilities(config: AuthConfig): void {
   if (issues.length === 0) return
   const message = issues.join(' ')
   if (config.strict) throw new AuthConfigurationError(message)
-  console.warn(`[gazetta] ${message}`)
+  // The CLI resolves the provider twice per boot (validation SSE gate
+  // + createAdminApp), so dedupe by message: each distinct unknown-
+  // capability issue warns once per process, like Node deprecation
+  // warnings. The strict throw above is not deduped on purpose: a
+  // strict config must fail every construction.
+  const fresh = issues.filter(issue => !warnedUnknownCapabilities.has(issue))
+  for (const issue of fresh) warnedUnknownCapabilities.add(issue)
+  if (fresh.length > 0) console.warn(`[gazetta] ${fresh.join(' ')}`)
 }
+
+const warnedUnknownCapabilities = new Set<string>()
 
 /**
  * Build the configured `AuthIdentityProvider`. Returns the
