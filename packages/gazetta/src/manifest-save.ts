@@ -484,29 +484,66 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
     }
   }
 
-  // Step 5 — history. Record BEFORE the disk write per the
-  // recordWrite first-call invariant (pages.ts:442-456). Baseline
-  // scan reads current disk state (pre-save); recordWrite overlays
-  // the incoming delta to build the snapshot.
-  if (input.source.history) {
-    await recordWrite({
-      history: input.source.history,
-      contentRoot: input.source.contentRoot,
-      operation: 'save',
-      items: [
-        {
-          path: input.source.contentRoot.relative(input.manifestPath),
-          content: serialized,
-        },
-      ],
-    })
-  }
-
-  // Step 6 — storage write. Under strict mode a failing write gets
-  // a second event: the pre-write record already claims the save, so
-  // the 'write-failed' event keeps the log honest (#1393).
+  // Steps 5-9 — the write phase. Under strict mode the whole phase
+  // is one try/catch: the pre-write record already claims the save,
+  // so ANY failure here (history revision, manifest, sidecars,
+  // cache, etag) gets a second 'write-failed' event to keep the log
+  // honest (#1393), not just the manifest write.
+  let echoShape: Record<string, unknown>
+  let newEtag: string
   try {
+    // Step 5 — history. Record BEFORE the disk write per the
+    // recordWrite first-call invariant (pages.ts:442-456). Baseline
+    // scan reads current disk state (pre-save); recordWrite overlays
+    // the incoming delta to build the snapshot.
+    if (input.source.history) {
+      await recordWrite({
+        history: input.source.history,
+        contentRoot: input.source.contentRoot,
+        operation: 'save',
+        items: [
+          {
+            path: input.source.contentRoot.relative(input.manifestPath),
+            content: serialized,
+          },
+        ],
+      })
+    }
+
+    // Step 6 — storage write.
     await input.source.storage.writeFile(input.manifestPath, serialized)
+
+    // Step 7 — sidecars in parallel. Three Usage Sidecar relations
+    // (per `sidecars.md`): asset-refs, fragment-deps, archive-aliases.
+    // Future asset-soft-delete adds a fourth here in one place.
+    const item: ItemRef = input.locale
+      ? {
+          source: input.kind === 'page' ? 'page' : 'fragment',
+          name: input.name,
+          locale: input.locale,
+        }
+      : { source: input.kind === 'page' ? 'page' : 'fragment', name: input.name }
+    await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rebuildAssetRefs(input.source.contentRoot, item, input.before as any, finalManifest),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rebuildFragmentDeps(input.source.contentRoot, item, input.before as any, finalManifest),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rebuildArchiveAliases(input.source.contentRoot, item, input.before as any, finalManifest),
+    ])
+
+    // Step 8 — cache invalidate. Per-kind prefixes from caller. Page
+    // Saves pass ['pages:']; Fragment Saves pass ['fragments:',
+    // 'pages:'] because Fragment References compose into Page
+    // summaries.
+    await Promise.all(input.cacheInvalidatePrefixes.map(p => input.source.cache.invalidatePrefix(p)))
+
+    // Step 9 — recompute save-etag for the new on-disk content. Echo
+    // shape MUST match what the next GET produces — extras (route)
+    // are folded in here so offline replay projection chains work
+    // (design-offline.md Q3).
+    echoShape = { ...finalManifest, ...input.etagExtras }
+    newEtag = await computeSaveEtag(echoShape)
   } catch (err) {
     if (strictPreRecord) {
       await input.audit.record({
@@ -518,38 +555,6 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
     }
     throw err
   }
-
-  // Step 7 — sidecars in parallel. Three Usage Sidecar relations
-  // (per `sidecars.md`): asset-refs, fragment-deps, archive-aliases.
-  // Future asset-soft-delete adds a fourth here in one place.
-  const item: ItemRef = input.locale
-    ? {
-        source: input.kind === 'page' ? 'page' : 'fragment',
-        name: input.name,
-        locale: input.locale,
-      }
-    : { source: input.kind === 'page' ? 'page' : 'fragment', name: input.name }
-  await Promise.all([
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rebuildAssetRefs(input.source.contentRoot, item, input.before as any, finalManifest),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rebuildFragmentDeps(input.source.contentRoot, item, input.before as any, finalManifest),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rebuildArchiveAliases(input.source.contentRoot, item, input.before as any, finalManifest),
-  ])
-
-  // Step 8 — cache invalidate. Per-kind prefixes from caller. Page
-  // Saves pass ['pages:']; Fragment Saves pass ['fragments:',
-  // 'pages:'] because Fragment References compose into Page
-  // summaries.
-  await Promise.all(input.cacheInvalidatePrefixes.map(p => input.source.cache.invalidatePrefix(p)))
-
-  // Step 9 — recompute save-etag for the new on-disk content. Echo
-  // shape MUST match what the next GET produces — extras (route)
-  // are folded in here so offline replay projection chains work
-  // (design-offline.md Q3).
-  const echoShape: Record<string, unknown> = { ...finalManifest, ...input.etagExtras }
-  const newEtag = await computeSaveEtag(echoShape)
 
   // Step 10 — audit success. Records actor + scope + locale (when
   // locale variant). Strict-mode operators check the result.failed
