@@ -209,6 +209,22 @@ describe('runInit', () => {
     expect(ignored('.env.local')).toBe(true)
     expect(ignored('sites/main/targets/local/.gazetta/history/index.json')).toBe(true)
     expect(ignored('package.json')).toBe(false)
+
+    // Publish output lands next to the content in the local target and must
+    // not be committed (#1181): rendered HTML, the publish-time site
+    // manifest, per-item .hash sidecars and .pub-* markers.
+    expect(ignored('sites/main/targets/local/index.html')).toBe(true)
+    expect(ignored('sites/main/targets/local/404/index.html')).toBe(true)
+    expect(ignored('sites/main/targets/local/404.html')).toBe(true)
+    expect(ignored('sites/main/targets/local/site.json')).toBe(true)
+    expect(ignored('sites/main/targets/local/index/fragments.json')).toBe(true)
+    expect(ignored('sites/main/targets/local/pages/home/.41af7f01.hash')).toBe(true)
+    expect(ignored('sites/main/targets/local/pages/home/.41af7f01.hash.1')).toBe(true)
+    expect(ignored('sites/main/targets/local/pages/home/.pub-20261023T174905Z')).toBe(true)
+    // The editable sources and an author's own robots.txt stay tracked.
+    expect(ignored('sites/main/targets/local/robots.txt')).toBe(false)
+    expect(ignored('sites/main/targets/local/pages/home/page.json')).toBe(false)
+    expect(ignored('sites/main/targets/local/fragments/nav/fragment.json')).toBe(false)
   })
 
   it('refuses to init in existing project', { timeout: 60000 }, async () => {
