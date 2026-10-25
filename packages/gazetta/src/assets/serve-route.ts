@@ -161,9 +161,11 @@ export function assetServeRoutes(resolveStorageOrOptions: AssetStorageResolver |
       c.header('Access-Control-Allow-Origin', '*')
       c.header('Accept-Ranges', 'bytes')
       c.header('Content-Range', `bytes ${range.start}-${last}/${size}`)
-      // slice (not subarray) so the ArrayBuffer view covers exactly the
-      // served range — c.body takes ArrayBuffer, not a TypedArray view.
-      return c.body(bytes.slice(range.start, last + 1).buffer as ArrayBuffer, 206)
+      // Copy the range into its own buffer: a Node Buffer's slice()
+      // shares memory, so its .buffer is the whole file or a pooled block.
+      const body = new Uint8Array(last + 1 - range.start)
+      body.set(bytes.subarray(range.start, last + 1))
+      return c.body(body.buffer, 206)
     }
 
     try {

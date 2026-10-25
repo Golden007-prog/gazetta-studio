@@ -50,6 +50,19 @@ async function tinyJpeg(): Promise<Uint8Array> {
 }
 
 describe('assetServeRoutes', () => {
+  it('answers a range with exactly the requested bytes from filesystem storage', async () => {
+    // fs.readFile returns a Buffer; a range must not carry the rest of
+    // the file (or a pooled block) along with it.
+    const bytes = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    await seedAsset('range-a3b2c1d4.jpg', bytes)
+    const app = buildApp()
+
+    const res = await app.request('/assets/range-a3b2c1d4.jpg', { headers: { Range: 'bytes=2-3' } })
+    expect(res.status).toBe(206)
+    expect(res.headers.get('content-range')).toBe('bytes 2-3/10')
+    expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([2, 3])
+  })
+
   it('serves JPEG bytes with correct Content-Type', async () => {
     const bytes = await tinyJpeg()
     await seedAsset('hero-a3b2c1d4.jpg', bytes)
