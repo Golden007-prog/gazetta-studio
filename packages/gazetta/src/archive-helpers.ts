@@ -125,3 +125,25 @@ export function resolveFragmentArchiveAlias(
       `  Q3 flatten-on-rename should make chains > 1 hop impossible; check for hand-edited manifests.`,
   )
 }
+
+/**
+ * True when the manifest is a Manual Redirect archive: archived with an
+ * `aliasOf` and no `template`. Its manifest carries only the archive
+ * fields, so restoring it would strip them and write `{}` — losing the
+ * redirect (#1343). An archived content item that happens to alias has
+ * a `template` and restores normally.
+ */
+export function isManualRedirectArchive(manifest: {
+  archived?: boolean
+  aliasOf?: string
+  template?: string
+}): boolean {
+  return manifest.archived === true && typeof manifest.aliasOf === 'string' && manifest.template === undefined
+}
+
+/**
+ * Refusal message when a restore targets a Manual Redirect (#1343).
+ * Shared by every restore entry point (admin routes, conflict flows,
+ * CLI) so all of them answer the same sentence.
+ */
+export const REDIRECT_RESTORE_MESSAGE = 'This is a redirect: delete it or change where it points'
