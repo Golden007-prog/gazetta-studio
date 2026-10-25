@@ -100,4 +100,24 @@ describe('gazetta publish — redirects rows per target language (#1130)', { tim
     expect(body).toContain('/ar/old  /  410')
     expect(body).toContain('/ja/old  /  410')
   })
+
+  it('deletes _redirects when the last archived page is unarchived and republished (#1426)', async () => {
+    const first = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    expect(first.code).toBe(0)
+    const redirectsPath = join(projectDir, 'sites/main/targets/local/_redirects')
+    await readFile(redirectsPath, 'utf8')
+
+    // Unarchive both archived pages: no rows remain, and the published
+    // file must come down rather than stay live (generated files are
+    // written or deleted, never skipped).
+    for (const name of ['landing', 'old']) {
+      await writeFile(
+        join(projectDir, 'sites/main/targets/local/pages', name, 'page.json'),
+        JSON.stringify({ template: 'page-default', content: {} }),
+      )
+    }
+    const second = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    expect(second.code).toBe(0)
+    await expect(readFile(redirectsPath, 'utf8')).rejects.toThrow()
+  })
 })
