@@ -48,7 +48,11 @@ function recordingStorage(inner: StorageProvider, log: string[]): StorageProvide
   } as StorageProvider
 }
 
-describe('publish generation on the target (#1125)', () => {
+// In-process publishes that render the starter's templates. Alone they take
+// about 0.5 s; in a loaded CI shard (CLI tests spawning processes, \`npm
+// install\` in cli-init) 1.5-2.5 s locally and over 5 s on CI runners,
+// past Vitest's default timeout (#1462).
+describe('publish generation on the target (#1125)', { timeout: 30_000 }, () => {
   let root: string
   let app: Hono
   let writes: string[]

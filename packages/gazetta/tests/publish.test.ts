@@ -791,7 +791,11 @@ describe('findDependentsFromSidecars', () => {
   })
 })
 
-describe('SEO publish integration', () => {
+// In-process publishes that render the starter's templates. Alone they take
+// about 0.5 s; in a loaded CI shard (CLI tests spawning processes, \`npm
+// install\` in cli-init) 1.5-2.5 s locally and over 5 s on CI runners,
+// past Vitest's default timeout (#1462).
+describe('SEO publish integration', { timeout: 30_000 }, () => {
   const projectRoot2 = resolve(import.meta.dirname, '../../../examples/starter')
   const starterDir = resolve(projectRoot2, 'sites/main/targets/local')
   const templatesDir = resolve(projectRoot2, 'templates')
