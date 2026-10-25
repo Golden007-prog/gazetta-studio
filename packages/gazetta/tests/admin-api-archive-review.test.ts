@@ -1,5 +1,8 @@
 /**
- * Cut 14 — route-level integration tests for review-workflow ↔ archive.
+ * Cut 14 — route-level integration tests for review-workflow ↔ archive,
+ * fixed in #1344 to source review state from the review sidecar
+ * (`.gazetta/review/{kind}/{name}/state.json`) instead of a speculative
+ * `manifest.reviewState` field that was never written.
  *
  * Validates the wiring of `archive-review.ts` helpers into
  * `handleArchive` and `handleUnarchive`:
@@ -7,8 +10,11 @@
  *     (per design-soft-delete.md Q9 N-A.2)
  *   - Archive on approved emits archive only, with priorReviewState
  *     metadata (per Q9 — approved discards via metadata)
- *   - Archive on draft (no reviewState) is unchanged
- *   - Unarchive strips reviewState from the manifest (Q9 N-B.1)
+ *   - Archive with no review sidecar is unchanged
+ *   - Archive resets the review sidecar (state consumed; audit carries
+ *     the forensic record)
+ *   - Unarchive strips reviewState from the manifest AND resets the
+ *     review sidecar, leaving the item in draft (Q9 N-B.1)
  *
  * Per rule 26 (test-isolation paranoia): each test gets a fresh
  * `memoryStorage()` + a fresh `createAdminApp`. Audit events are
@@ -19,6 +25,9 @@ import type { Hono } from 'hono'
 import { createAdminApp } from '../src/admin-api/index.js'
 import { createSourceContext } from '../src/admin-api/source-context.js'
 import { createHistoryAuditProvider, type AuditEvent } from '../src/audit/index.js'
+import { createContentRoot } from '../src/content-root.js'
+import { readReviewSidecar } from '../src/review/index.js'
+import type { ReviewSidecar, ReviewState } from '../src/review/types.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
 
 let app: Hono
@@ -62,14 +71,30 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(raw) as Record<string, unknown>
 }
 
+/**
+ * Seed entry for a review sidecar at the design-doc path shape
+ * `.gazetta/review/{kind}/{name}/state.json`. Names used in this file
+ * carry no `/`, so encodeRefName is identity here.
+ */
+function reviewSidecarSeed(kind: 'page' | 'fragment', name: string, state: ReviewState): Record<string, string> {
+  const sidecar: ReviewSidecar = {
+    state,
+    submitter: 'alice@example.com',
+    requiredApprovers: 1,
+    submittedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  return { [`.gazetta/review/${kind}/${name}/state.json`]: JSON.stringify(sidecar) }
+}
+
+async function readSidecar(kind: 'page' | 'fragment', name: string): Promise<ReviewSidecar | null> {
+  return await readReviewSidecar(createContentRoot(storage, ''), kind, name)
+}
+
 describe('Cut 14 — archive on pending-review', () => {
   beforeEach(() => {
     setup({
-      'pages/landing/page.json': JSON.stringify({
-        template: 'page-default',
-        content: {},
-        reviewState: 'pending-review',
-      }),
+      ...reviewSidecarSeed('page', 'landing', 'pending-review'),
     })
   })
 
@@ -122,16 +147,20 @@ describe('Cut 14 — archive on pending-review', () => {
       aliasOf: 'home',
     })
   })
+
+  it('resets the review sidecar once the archive consumed the state (#1344)', async () => {
+    expect(await readSidecar('page', 'landing')).not.toBeNull()
+
+    await app.request('/api/pages/landing/archive', { method: 'POST' })
+
+    expect(await readSidecar('page', 'landing')).toBeNull()
+  })
 })
 
 describe('Cut 14 — archive on approved', () => {
   beforeEach(() => {
     setup({
-      'pages/landing/page.json': JSON.stringify({
-        template: 'page-default',
-        content: {},
-        reviewState: 'approved',
-      }),
+      ...reviewSidecarSeed('page', 'landing', 'approved'),
     })
   })
 
@@ -153,7 +182,7 @@ describe('Cut 14 — archive on approved', () => {
   })
 })
 
-describe('Cut 14 — archive on draft (current production)', () => {
+describe('Cut 14 — archive with no review sidecar (current production)', () => {
   beforeEach(() => setup())
 
   it('emits archive only, no priorReviewState metadata', async () => {
@@ -173,7 +202,7 @@ describe('Cut 14 — archive on draft (current production)', () => {
   })
 })
 
-describe('Cut 14 — unarchive strips reviewState (restore-to-draft)', () => {
+describe('Cut 14 — unarchive restores to draft (Q9 N-B.1)', () => {
   beforeEach(() => {
     setup({
       'pages/landing/page.json': JSON.stringify({
@@ -184,7 +213,17 @@ describe('Cut 14 — unarchive strips reviewState (restore-to-draft)', () => {
         archivedBy: 'alice@example.com',
         reviewState: 'pending-review',
       }),
+      ...reviewSidecarSeed('page', 'landing', 'pending-review'),
     })
+  })
+
+  it('resets the review sidecar, leaving the restored item in draft (#1344)', async () => {
+    expect(await readSidecar('page', 'landing')).not.toBeNull()
+
+    const res = await app.request('/api/pages/landing/unarchive', { method: 'POST' })
+    expect(res.status).toBe(200)
+
+    expect(await readSidecar('page', 'landing')).toBeNull()
   })
 
   it('restored manifest has no reviewState (Q9 N-B.1: always to draft)', async () => {
@@ -224,11 +263,7 @@ describe('Cut 14 — unarchive strips reviewState (restore-to-draft)', () => {
 describe('regression #284 — audit ordering race (direct provider, deterministic)', () => {
   beforeEach(() => {
     setup({
-      'pages/landing/page.json': JSON.stringify({
-        template: 'page-default',
-        content: {},
-        reviewState: 'pending-review',
-      }),
+      ...reviewSidecarSeed('page', 'landing', 'pending-review'),
     })
   })
 
