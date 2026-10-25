@@ -129,6 +129,49 @@ describe('runInit', () => {
     expect(existsSync(join(testDir, 'fragments'))).toBe(false)
   })
 
+  it('scaffold passes its own broken-links check (#1183)', { timeout: 120000 }, async () => {
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    execFileSync('node', [resolve(import.meta.dirname, '../dist/cli/index.js'), 'init', testDir], { stdio: 'pipe' })
+
+    // The scaffold still tells the user where the CMS is, without linking to it.
+    const home = await import('node:fs').then(fs =>
+      fs.readFileSync(join(testDir, 'sites/main/targets/local/pages/home/page.json'), 'utf-8'),
+    )
+    expect(home).toContain('npx gazetta dev')
+    expect(home).toContain('/admin')
+    expect(home).not.toContain('href="/admin"')
+
+    const validate = (extra: string[] = []) =>
+      spawnSync(
+        'node',
+        [
+          resolve(import.meta.dirname, '../dist/cli/index.js'),
+          'validate',
+          'sites/main',
+          '--include-quality',
+          '--severity=warn',
+          ...extra,
+        ],
+        { cwd: testDir, env: { ...process.env, NO_COLOR: '1' }, encoding: 'utf-8' },
+      )
+
+    // An untouched site has no broken links: /admin exists only while
+    // `gazetta dev`/`gazetta admin` runs, so the scaffold must not link to it.
+    const clean = validate()
+    expect(clean.status).toBe(0)
+
+    // broken-links still flags a link to a route that does not exist.
+    const homePath = join(testDir, 'sites/main/targets/local/pages/home/page.json')
+    const parsed = JSON.parse(await import('node:fs').then(fs => fs.readFileSync(homePath, 'utf-8')))
+    parsed.components[2].content.body = '<p><a href="/no-such-page">missing</a></p>'
+    await import('node:fs').then(fs => fs.writeFileSync(homePath, JSON.stringify(parsed, null, 2) + '\n'))
+
+    // Verbose prints the offending link; the default summary only counts it.
+    const broken = validate(['--verbose'])
+    expect(broken.status).toBe(1)
+    expect(broken.stdout + broken.stderr).toContain('/no-such-page: link does not match any page route or asset path')
+  })
+
   it('package.json has correct fields', { timeout: 60000 }, async () => {
     const { execSync } = await import('node:child_process')
     execSync(`node ${resolve(import.meta.dirname, '../dist/cli/index.js')} init ${testDir}`, { stdio: 'pipe' })
