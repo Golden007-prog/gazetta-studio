@@ -10,10 +10,12 @@
  *     (page.fr.json) is collected by the planner and copied
  *  4. a metadata edit (alt) after a first publish updates the
  *     target's default manifest on the next publish
+ *  5. a corrupt locale manifest is skipped like an unreadable file
+ *     instead of aborting the publish
  *
  * Real filesystem storage, same harness as publish-assets.test.ts.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -144,6 +146,30 @@ describe('publishAssets - locale overrides (#1350)', () => {
     if (!result.ok) return
     expect(result.copiedAssets).toBe(1)
     expect(existsSync(join(targetDir, `assets/hero-${manifest.hash}.jpg`))).toBe(true)
+  })
+
+  it('skips a corrupt locale manifest instead of aborting the publish', async () => {
+    const { manifest } = await seedSourceAsset('hero', await jpeg(1000, 500))
+    await seedSourceAsset('footer', await jpeg(600, 300))
+    await seedSourcePage('home', { hero: { _asset: 'hero' } })
+    // Invalid JSON in the French variant: the variant is skipped like
+    // an unreadable file, so the publish still succeeds, the default
+    // manifest's ref lands, and refs carried only by the corrupt
+    // variant stay undiscovered (same as before locale-aware planning).
+    await writeFile(join(sourceDir, 'pages/home/page.fr.json'), '{ "footer": { _asset: "footer" ')
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await publishAssets({ ...roots(), itemNames: ['pages/home'] })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.copiedAssets).toBe(1)
+      expect(existsSync(join(targetDir, `assets/hero-${manifest.hash}.jpg`))).toBe(true)
+      expect(existsSync(join(targetDir, 'assets/footer.asset.json'))).toBe(false)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Warning: skipping page "home" locale "fr"'))
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('updates the target manifest when the alt changes after the first publish', async () => {
