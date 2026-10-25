@@ -900,6 +900,13 @@ export interface StorageProvider {
    * storage can default to private.
    */
   readonly kind?: StorageKind
+  /**
+   * On-disk root for filesystem providers (the absolute path the provider
+   * is anchored at). Lets local tooling such as the dev server's file
+   * watcher map changed paths to the content root; remote providers
+   * leave it unset.
+   */
+  readonly root?: string
   readFile(path: string): Promise<string>
   readDir(path: string): Promise<DirEntry[]>
   exists(path: string): Promise<boolean>
