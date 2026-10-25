@@ -45,6 +45,7 @@ import { requireEditableTarget } from '../middleware/editable-target.js'
 import { lookupManifest } from '../lookup-manifest.js'
 import type { AuditEnv } from '../middleware/audit.js'
 import { rebuildArchiveAliases } from '../../archive-aliases.js'
+import { isManualRedirectArchive, REDIRECT_RESTORE_MESSAGE } from '../../archive-helpers.js'
 import { rebuildAssetRefs } from '../../assets/asset-deps.js'
 import { rebuildFragmentDeps } from '../../fragment-deps.js'
 import type { ItemRef } from '../../dep-sidecars.js'
@@ -335,6 +336,9 @@ async function handleArchivedConflict(
           ...(existing.archivedAt ? { archivedAt: existing.archivedAt } : {}),
           ...(existing.archivedBy ? { archivedBy: existing.archivedBy } : {}),
           ...(existing.aliasOf ? { aliasOf: existing.aliasOf } : {}),
+          // Manual Redirect archives cannot be restored (#1343) — tell
+          // the client so the prompt doesn't offer Restore.
+          ...(isManualRedirectArchive(existing) ? { redirect: true } : {}),
         },
       },
       409,
@@ -342,6 +346,11 @@ async function handleArchivedConflict(
   }
 
   if (onConflict === 'restore') {
+    // Restoring a Manual Redirect would strip its manifest to `{}` and
+    // lose the redirect (#1343) — refuse; delete or re-point instead.
+    if (isManualRedirectArchive(existing)) {
+      return c.json({ error: REDIRECT_RESTORE_MESSAGE }, 409)
+    }
     await unarchiveExisting(source, binding, from, existing)
     await c.var.audit.record({
       action: 'unarchive',
