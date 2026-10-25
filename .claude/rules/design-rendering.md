@@ -432,7 +432,7 @@ How rendering composes with each of the other 12 foundational dimensions plus th
 
 ### Review (#6)
 - Review state doesn't block publishing: only publish approval does, on targets that require it; the publish panel marks rows that aren't approved (`design-review-workflow.md`, 2026-10-25 item 7).
-- Dynamic targets: pending-review pages can render at request time on the source target only; other targets can't fetch them.
+- A published page renders on its target the same way whatever its review state.
 - Render-for-analysis runs against any state (validates draft + pending-review + approved).
 
 ### Hooks (#7) — design pass pending
