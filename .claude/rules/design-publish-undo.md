@@ -121,6 +121,24 @@ Decided: maintainer, 2026-10-23 (#1220)
 | Leave added items in place | The new page stays live after "undo". |
 | A separate removal path for undo only | A second way to change a target; the same step serves future source-deletion propagation. |
 
+**A failed run stops there.** When a target's render run fails (its setup failed, or every item failed), nothing after it runs for that target, from either caller: no sitemap, no publish generation, no purge. A failed run wrote no pages, so a purge would only drop cache that is still valid.
+
+Decided: maintainer, 2026-10-25 (#PR)
+
+| Option | Why rejected |
+|---|---|
+| Keep the CLI's purge of failed targets after the loop | The CLI and the admin would follow different rules in one function, and the purge only drops cache that is still valid. |
+
+**Sitemap hreflang for both callers.** The shared function builds hreflang alternates into `sitemap.xml` as the CLI did, so admin publishes now get them too. For one-domain-per-language targets that's where `design-i18n.md` puts them, and admin publishes were missing them. Two gaps against `design-i18n.md` remain, in [#1431](https://github.com/gazetta-studio/gazetta-studio/issues/1431): path-based targets get a sitemap copy of the hreflang already in each page's `<head>` (Google: allowed, no benefit), and per-domain sitemaps are written as each target publishes instead of after all targets have.
+
+Decided: maintainer, 2026-10-25 (#PR)
+
+| Option | Why rejected |
+|---|---|
+| Match the design exactly in cut 1: sitemap hreflang only for per-domain targets | Changes the CLI's output inside a cut whose spec keeps today's behaviour. |
+| Leave admin sitemaps without hreflang | Per-domain sites keep missing what the design requires, and the CLI and the admin write different sitemaps. |
+| Keep the CLI's behaviour with no follow-up | Leaves the duplicate and the publish-order gap untracked. |
+
 ## UX check
 
 Rule 23: undo looks like publish because it is one; nothing new appears unless something needs attention.
