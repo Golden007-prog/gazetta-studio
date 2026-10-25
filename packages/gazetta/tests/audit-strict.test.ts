@@ -18,7 +18,8 @@
  *   - strict + throwing provider: POST /api/publish refused
  *   - strict + throwing provider: POST /api/assets refused
  *   - strict + write fails after the record: a second event with
- *     outcome 'write-failed' is recorded
+ *     outcome 'write-failed' is recorded (manifest write AND
+ *     history write - the write phase is one try/catch)
  *   - strict: false + throwing provider: the save succeeds (fail-open
  *     default pinned)
  *
@@ -71,7 +72,14 @@ function wrapStorage(inner: MemoryStorage, throwOn: (path: string) => boolean): 
   }
 }
 
-function buildApp(opts: { strict: boolean; failAuditWrites?: boolean; failContentWrite?: boolean }): {
+const HISTORY_PREFIX = '.gazetta/history/'
+
+function buildApp(opts: {
+  strict: boolean
+  failAuditWrites?: boolean
+  failContentWrite?: boolean
+  failHistoryWrite?: boolean
+}): {
   app: Hono
   sourceStorage: MemoryStorage
   targetStorage: MemoryStorage
@@ -81,6 +89,7 @@ function buildApp(opts: { strict: boolean; failAuditWrites?: boolean; failConten
   const sourceStorage = wrapStorage(inner, path => {
     if (opts.failAuditWrites && path.startsWith(AUDIT_PREFIX)) return true
     if (opts.failContentWrite && path === HOME_PAGE) return true
+    if (opts.failHistoryWrite && path.startsWith(HISTORY_PREFIX)) return true
     return false
   })
   const targetStorage = memoryStorage()
@@ -226,6 +235,52 @@ describe('admin.audit.strict enforcement (#1393)', { timeout: 30000 }, () => {
     expect(saves).toHaveLength(2)
     // /api/audit returns newest-first and both events can share a
     // timestamp, so compare as a set.
+    expect(saves.map(e => e.outcome).sort()).toEqual(['success', 'write-failed'])
+  })
+
+  it('refuses a streaming publish with typed AUDIT_FAILED before the stream opens', async () => {
+    const { app, targetStorage } = buildApp({ strict: true, failAuditWrites: true })
+
+    const res = await app.request(
+      '/api/publish/stream',
+      {
+        method: 'POST',
+        headers: { ...ADMIN_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: ['pages/home'], targets: ['staging'] }),
+      },
+      FROM_PROXY,
+    )
+    expect(res.status).toBe(500)
+    const body = (await res.json()) as { code: string }
+    expect(body.code).toBe('AUDIT_FAILED')
+
+    // Nothing reached the target.
+    expect(targetStorage.dump().size).toBe(0)
+  })
+
+  it('records write-failed when the history write fails after the record', async () => {
+    const { app, sourceStorage } = buildApp({ strict: true, failHistoryWrite: true })
+
+    const res = await app.request(
+      '/api/pages/home',
+      {
+        method: 'PUT',
+        headers: { ...ADMIN_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: { title: 'Changed' } }),
+      },
+      FROM_PROXY,
+    )
+    expect(res.status).toBe(500)
+
+    // The manifest never changed...
+    expect(await sourceStorage.readFile(HOME_PAGE)).toBe(seedPage())
+
+    // ...and the failure did not go unrecorded: the write phase is
+    // one try/catch, so a history-write failure gets the same
+    // compensating event as a manifest-write failure.
+    const events = await auditLog(app)
+    const saves = events.filter(e => e.action === 'save')
+    expect(saves).toHaveLength(2)
     expect(saves.map(e => e.outcome).sort()).toEqual(['success', 'write-failed'])
   })
 
