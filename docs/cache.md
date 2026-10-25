@@ -47,6 +47,22 @@ export default defineSite({
 })
 ```
 
+A project can set a shared default in `gazetta.config.ts` instead:
+every site without its own `cache:` inherits `defaults.cache` (a
+site-level `cache:` always wins). Each process re-evaluates
+`gazetta.config.ts` and gets its own instance.
+
+```ts
+// gazetta.config.ts
+import { defineGazetta, memoryCache } from 'gazetta'
+
+export default defineGazetta({
+  defaults: {
+    cache: memoryCache({ maxEntries: 5000 }),
+  },
+})
+```
+
 ## Multi-instance deployments
 
 Most v1 deployments are single-instance: `gazetta serve` on one VPS,
