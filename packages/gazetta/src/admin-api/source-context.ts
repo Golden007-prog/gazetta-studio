@@ -91,7 +91,7 @@ export interface SourceContext {
   readonly cache: AdminCache
   /**
    * Optional callback fired with the first site successfully loaded
-   * through `loadSiteFromSource` for this context — once per process
+   * through `loadSiteFromSource` for this context, once per process
    * (#1305's deferred boot warning: `gazetta admin` doesn't load the
    * site at boot, so its capability-gap warning waits for the first
    * request that loads one). Set by the admin boot path; routes never
