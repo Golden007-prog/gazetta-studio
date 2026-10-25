@@ -120,7 +120,7 @@ Settled when review-workflow moved to a planner issue (#1433), against the share
 5. **The publish-pending queue is its own cut, after cut 13** (cut 21). Cut 17 covers pending reviews only, as locked in #1407.
 6. **Out of v1:** the `publish:{target}-emergency` bypass capability, and queuing review actions offline for replay (Future directions). Review actions need the server, like publish.
 
-Decided: maintainer, 2026-10-25 (#PR)
+Decided: maintainer, 2026-10-25 (#1434)
 
 | Rejected | Why |
 |---|---|
