@@ -111,7 +111,7 @@ Carries per-site concerns:
 ```ts
 import { defineSite, filesystemStorage, r2Storage } from 'gazetta'
 import { slackHook } from '@example/slack-notify'
-import autoSlugify from './admin/hooks/auto-slugify'
+import { autoSlugify } from './admin/hooks/auto-slugify'
 
 export default defineSite({
   name: 'main',
@@ -263,7 +263,7 @@ Operator runs once per site. Generated TS preserves comments via TS comments; pr
 There is no plugin runtime ([ADR-0009](../../docs/adr/0009-no-plugin-runtime-factory-contributions.md)): a package exports one factory per extension surface, and the operator invokes each in the right typed array, inline in `defineSite()`:
 
 ```ts
-import autoSlugify from './admin/hooks/auto-slugify'
+import { autoSlugify } from './admin/hooks/auto-slugify'
 import { slackHook, slackRoute } from '@example/slack-notify'
 import linkChecker from '@example/link-checker'
 
