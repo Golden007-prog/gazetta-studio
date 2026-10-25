@@ -52,6 +52,8 @@ export interface ArchiveTarget {
 export interface PurgeBlocker {
   kind: 'page' | 'fragment'
   name: string
+  /** True when the blocker is a Manual Redirect archive — restore is refused (#1343). */
+  redirect?: boolean
 }
 
 interface ArchiveSuccess {
