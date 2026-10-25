@@ -376,7 +376,7 @@ The API's `GET /api/templates` reads from `{projectRoot}/templates/`, not from t
 
 ## Platform Considerations
 
-**Platform support:** Gazetta is tested on macOS and Linux. Windows: Node.js handles path
+**Platform support:** Gazetta is tested on macOS and Linux; Windows runs an end-to-end smoke test on pushes to `main` (`ci.yml`). Contributors on Windows run the tests in WSL (`CONTRIBUTING.md`). Windows: Node.js handles path
 separators via `path.join`, YAML is line-ending agnostic. Template names are **case-sensitive**
 — `Hero` and `hero` are different templates, even on case-insensitive filesystems.
 Recommendation: use lowercase-kebab-case.

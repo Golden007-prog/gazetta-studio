@@ -62,14 +62,16 @@ conformance — don't reproduce there.
 
 ## Code that builds or compares filesystem paths
 
-CI runs on Linux and macOS only, so Windows path behaviour is never exercised by default. Code that builds, splits or compares filesystem paths (containment checks, mapping a watched file to a content root, separators) gets unit tests that run the logic with `path.win32` as well as `path.posix`: drive-letter case, backslashes, a path on another drive, a lookalike sibling folder (`local` vs `local-old`), and the root itself. Prefer `path.relative` + `isAbsolute` over `startsWith` for "is this file inside that folder": `path.win32.relative` compares case-insensitively.
+Pull-request CI runs on Linux and macOS. Windows runs only the end-to-end smoke job (`init`, `dev`, fetch a page), on pushes to `main` (`ci.yml`), which doesn't reach unit-level path logic. So code that builds or compares filesystem paths gets unit tests that run it with `path.win32` as well as `path.posix`. Cases worth covering include a drive letter in a different case, another drive, a lookalike sibling folder (`local` vs `local-old`) and the root itself. For "is this file inside that folder", `path.relative` + `isAbsolute` is the usual check: `path.win32.relative` compares case-insensitively, `startsWith` doesn't.
 
 Decided: maintainer, 2026-10-25 (#1449)
 
 | Rejected | Why |
 |---|---|
-| A Windows CI leg | Declares native Windows support (a product decision) and would surface existing Windows failures to triage first; revisit if a Windows user asks |
-| No rule; handle Windows paths case by case | #1447's first content-root check used `startsWith`, which a drive-letter case difference breaks on Windows; nothing would catch the next one |
+| No rule; rely on the Windows smoke on `main` | It runs after merge and end to end only: #1447's first content-root check used `startsWith`, which a drive-letter case difference breaks on Windows, and the smoke run wouldn't reach it |
+| A required list of cases, and `path.relative` mandated | The cases differ per change; listed as examples instead |
+
+Windows in the pull-request or unit-test jobs is left open until a Windows user asks.
 
 ## AI-era disciplines
 
