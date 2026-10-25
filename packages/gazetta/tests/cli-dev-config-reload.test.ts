@@ -61,7 +61,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs: number): Pr
 }
 
 describe('gazetta dev config reload (#1353)', () => {
-  it('applies a locale edit from site.config.ts without a restart and keeps the last good config on error', async () => {
+  it('applies locale and target edits from site.config.ts without a restart and keeps the last good config on error', async () => {
     projectDir = tempDir(`dev-config-reload-${Date.now()}`)
     await cp(starterDir, projectDir, { recursive: true })
 
@@ -86,10 +86,51 @@ describe('gazetta dev config reload (#1353)', () => {
 
     await waitFor(async () => (await fetchWithRetry(base, 10000)).includes('lang="fr"'), 20000)
 
+    // Edit the editing target's storage path while the server runs: point
+    // the local target at a copy with different content and assert the
+    // served page follows without a restart.
+    const altDir = resolve(projectDir, 'sites/main/targets/local-alt')
+    await cp(resolve(projectDir, 'sites/main/targets/local'), altDir, { recursive: true })
+    const pagePath = resolve(altDir, 'pages/home/page.json')
+    const page = await readFile(pagePath, 'utf-8')
+    await writeFile(pagePath, page.replace('Welcome to Gazetta', 'Welcome to the Alt Target'))
+    const config2 = await readFile(configPath, 'utf-8')
+    await writeFile(configPath, config2.replace("path: './targets/local'", "path: './targets/local-alt'"))
+    await waitFor(async () => (await fetchWithRetry(base, 10000)).includes('Welcome to the Alt Target'), 20000)
+
+    // Add a locale while the server runs: /de answers without a restart,
+    // resolved from the live manifest by the post-boot locale catch-all.
+    const config3 = await readFile(configPath, 'utf-8')
+    await writeFile(
+      configPath,
+      config3.replace("supported: ['en', 'fr', 'ar', 'ja']", "supported: ['en', 'fr', 'ar', 'ja', 'de']"),
+    )
+    await waitFor(async () => (await fetchWithRetry(`${base}de/`, 10000)).includes('lang="de"'), 20000)
+
+    // A target edit is visible through the admin API without a restart.
+    // environment drives the /api/targets display; the explicit editable
+    // override keeps `local` the editing target despite the non-local
+    // environment (editable defaults to environment === 'local').
+    const config4 = await readFile(configPath, 'utf-8')
+    await writeFile(
+      configPath,
+      config4.replace(
+        "storage: filesystemStorage({ path: './targets/local-alt' }),",
+        "storage: filesystemStorage({ path: './targets/local-alt' }),\n      environment: 'staging',\n      editable: true,",
+      ),
+    )
+    await waitFor(async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/admin/api/targets`)
+      if (res.status !== 200) return false
+      const targets = (await res.json()) as Array<{ name: string; environment: string }>
+      return targets.some(t => t.name === 'local' && t.environment === 'staging')
+    }, 30000)
+
     // A config that fails to evaluate keeps serving the last good config.
     await writeFile(configPath, 'export default defineSite({ name: ')
     await waitFor(async () => output.includes('Config reload failed'), 20000)
     const after = await fetchWithRetry(base, 10000)
     expect(after).toContain('lang="fr"')
+    expect(after).toContain('Welcome to the Alt Target')
   }, 120000)
 })
