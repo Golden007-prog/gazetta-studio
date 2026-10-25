@@ -127,18 +127,15 @@ export function resolveFragmentArchiveAlias(
 }
 
 /**
- * True when the manifest is a Manual Redirect archive: archived with an
- * `aliasOf` and no `template`. Its manifest carries only the archive
- * fields, so restoring it would strip them and write `{}` — losing the
- * redirect (#1343). An archived content item that happens to alias has
- * a `template` and restores normally.
+ * True when the manifest is a Manual Redirect archive: archived with no
+ * `template`. Its manifest carries only archive fields (plus `aliasOf`
+ * while the alias is set), so restoring it would strip them and write
+ * `{}` — losing the redirect (#1343). The alias is incidental: dropping
+ * it leaves a template-less archive that must still refuse restore.
+ * An archived content item has a `template` and restores normally.
  */
-export function isManualRedirectArchive(manifest: {
-  archived?: boolean
-  aliasOf?: string
-  template?: string
-}): boolean {
-  return manifest.archived === true && typeof manifest.aliasOf === 'string' && manifest.template === undefined
+export function isManualRedirectArchive(manifest: { archived?: boolean; template?: string }): boolean {
+  return manifest.archived === true && manifest.template === undefined
 }
 
 /**
