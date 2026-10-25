@@ -31,6 +31,7 @@
  */
 import type { ContentRoot } from './content-root.js'
 import { encodeRefName } from './hash.js'
+import { stateFolderPath, type StateFolder } from './state-folders.js'
 
 /**
  * Loose manifest shape for `extract` callers. Page/fragment manifests
@@ -52,8 +53,8 @@ export type ManifestLike = {
  * declaring another constant; this module needs no changes.
  */
 export interface DepRelation {
-  /** Directory name under `.gazetta/`, e.g. `asset-refs`, `fragment-deps`. */
-  readonly rootName: string
+  /** Registered `.gazetta/` index folder for this relation. */
+  readonly rootName: Extract<StateFolder, 'fragment-deps' | 'asset-refs' | 'alias-targets'>
   /**
    * Extract the set of target names this manifest depends on. Pure;
    * implementations must not perform I/O.
@@ -112,12 +113,12 @@ export function filenameToItemRef(filename: string): ItemRef | null {
 
 /** Directory path for one target's sidecars under a relation. */
 function depDir(rel: DepRelation, contentRoot: ContentRoot, targetName: string): string {
-  return contentRoot.path('.gazetta', rel.rootName, encodeRefName(targetName))
+  return contentRoot.path(stateFolderPath(rel.rootName, encodeRefName(targetName)))
 }
 
 /** Path of one sidecar file inside its target's directory. */
 export function depSidecarPath(rel: DepRelation, contentRoot: ContentRoot, targetName: string, item: ItemRef): string {
-  return contentRoot.path('.gazetta', rel.rootName, encodeRefName(targetName), itemRefToFilename(item))
+  return contentRoot.path(stateFolderPath(rel.rootName, encodeRefName(targetName), itemRefToFilename(item)))
 }
 
 /**
