@@ -545,14 +545,9 @@ export function publishRoutes(
         current++
         yield { kind: 'progress', target: targetName, current, total, label: 'site manifest' }
 
-        // 3a. 404.html at the root of a static target: plain hosts show it
-        // for missing paths (#1152).
-        if (isStatic) {
-          const { writeStatic404 } = await import('../../static-404.js')
-          await writeStatic404(targetStorage)
-          totalFiles++
-        }
-
+        // The shared function wrote 404.html for a static target (a
+        // generated file, before the generation and the purge, #1430
+        // review); generatedFiles carries it, so the count stays.
         totalFiles += shared.generatedFiles.length
 
         // Purge outcome, in the route's own log format. Missing token
@@ -562,6 +557,10 @@ export function publishRoutes(
           console.log(`    ${targetName}: cache purged (all)`)
         } else if (shared.purge.kind === 'purged-urls') {
           console.log(`    ${targetName}: cache purged (${shared.purge.urls.join(', ')})`)
+        } else if (shared.purge.kind === 'skipped-no-token') {
+          console.log(`    ${targetName}: purge.apiToken not set, skipping cache purge`)
+        } else if (shared.purge.kind === 'skipped-no-zone') {
+          console.log(`    ${targetName}: zone not found, set purge.zoneId or siteUrl`)
         } else if (shared.purge.kind === 'failed') {
           console.warn(`    ${targetName}: cache purge failed: ${shared.purge.message}`)
         }
