@@ -31,7 +31,7 @@ For plain-static targets, the **host's 404** is the floor: visitors hitting a mi
 
 When a target lacks a capability that an in-flight feature needs, Gazetta surfaces the gap at four uniform points so authors and operators see it before it bites:
 
-1. **Boot config validate** — admin server warns at boot when a target's runtime can't serve required capabilities (e.g., archive operations on a plain-static target).
+1. **Boot config validate** — once the site has archived pages, the admin server warns at boot when a target's runtime can't serve required capabilities (e.g., archive operations on a plain-static target). A site with nothing archived boots without the warning.
 2. **Author-time modal** — feature-specific modals (the archive modal, future scheduling modals) show per-target capability badges with the gap reasons inline.
 3. **Background scanner** — the validation framework's site-health drawer surfaces capability-gap warnings (e.g., `archive-not-supported-on-target`) so operators see issues that have already accumulated.
 4. **Pre-publish gate** — the publish dialog's audit step lists per-target compatibility issues; the operator can promote to error or accept.
