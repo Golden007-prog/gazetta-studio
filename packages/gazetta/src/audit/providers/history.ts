@@ -53,6 +53,7 @@ import type { StorageProvider } from '../../types.js'
 import type { AuditEvent, AuditQuery } from '../types.js'
 import type { AuditProvider } from '../provider.js'
 import { enqueueStorageTask } from '../append-queue.js'
+import { stateFolderPath } from '../../state-folders.js'
 
 export interface HistoryAuditProviderOptions {
   /** Storage provider for the target. Audit events live under `.gazetta/audit/`. */
@@ -66,7 +67,7 @@ export interface HistoryAuditProviderOptions {
   instance: string
 }
 
-const AUDIT_DIR = '.gazetta/audit'
+const AUDIT_DIR = stateFolderPath('audit')
 
 export function createHistoryAuditProvider(opts: HistoryAuditProviderOptions): AuditProvider {
   const { storage, instance } = opts
