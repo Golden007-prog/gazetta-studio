@@ -24,6 +24,7 @@ import { parseArgs } from './args.js'
 import { authTrustOf, resolveListenHost, SERVER_COMMANDS } from './listen-host.js'
 import { devNotFound } from './dev-not-found.js'
 import { isInside } from './is-inside.js'
+import { isArchived } from '../archive-helpers.js'
 import { viteCacheDir } from './vite-cache-dir.js'
 import { isStatePath, STATE_ROOT } from '../state-folders.js'
 
@@ -1537,6 +1538,11 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   const site = await loadSite({ contentRoot: source.contentRoot, templatesDir, manifest })
   const storage = source.storage
 
+  // #1305: the boot capability-gap warning fires only once the site has
+  // an archived page. The boot load above already walked the content, so
+  // the flag costs nothing extra.
+  const anyArchived = [...site.pages.values()].some(page => isArchived(page))
+
   // Live config state, swapped in place when site.config.ts changes on disk
   // (#1353). Request-time handlers read through `live` so an edit takes
   // effect without a restart; boot-time route registration keeps the
@@ -1694,7 +1700,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
   const hookContributions = readHookContributions(manifest)
   if (isDevMode) {
     // Dev mode: mount CMS API inline (same process = shared template cache)
-    cmsApp = await setupCmsApi(app, source, siteDir, templatesDir, adminDir, targetConfigs, hookContributions, manifest)
+    cmsApp = await setupCmsApi(app, source, siteDir, templatesDir, adminDir, targetConfigs, hookContributions, manifest, anyArchived)
   } else if (cmsStaticDir) {
     // Production mode: inline CMS API + static files
     cmsApp = await setupProductionMode(
@@ -1707,6 +1713,7 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
       targetConfigs,
       hookContributions,
       manifest,
+      anyArchived,
     )
   }
 
@@ -2211,6 +2218,7 @@ async function setupCmsApi(
   targetConfigs: Record<string, import('../types.js').TargetConfig> | undefined,
   contributions: ReadonlyArray<import('../hooks/index.js').HookContribution> | undefined,
   manifest: SiteManifest | null,
+  anyArchived: boolean,
 ): Promise<
   Hono & {
     invalidateTemplatesCache(): void
@@ -2249,6 +2257,7 @@ async function setupCmsApi(
     targetConfigs,
     hooks,
     validationScanner,
+    anyArchived,
   })
   // Decorate cmsApp with the template-rescan hook before returning. The
   // file watcher in startServer() invokes this on `.ts/.tsx` changes
@@ -2281,6 +2290,7 @@ async function setupProductionMode(
   targetConfigs: Record<string, import('../types.js').TargetConfig> | undefined,
   contributions: ReadonlyArray<import('../hooks/index.js').HookContribution> | undefined,
   manifest: SiteManifest | null,
+  anyArchived?: boolean,
 ) {
   // Same shape as dev mode — `gazetta serve` reads `admin.hooks`
   // factory contributions from the same site config.
@@ -2305,6 +2315,7 @@ async function setupProductionMode(
     targetConfigs,
     hooks,
     validationScanner,
+    anyArchived,
   })
   mountUserThemeRoute(cmsApp, adminDir)
   app.route('/admin', cmsApp)
