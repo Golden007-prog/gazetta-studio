@@ -132,6 +132,67 @@ describe('POST /api/pages?onConflict=restore', () => {
   })
 })
 
+describe('Manual Redirect restore refusal (#1343)', () => {
+  // A redirect manifest is only archive fields + aliasOf; restoring it
+  // would write `{}` and lose the redirect. Predicate: archived === true
+  // && aliasOf set && no template (an archived content item that happens
+  // to alias has a template and restores normally — covered above).
+  const redirectManifest = JSON.stringify({
+    archived: true,
+    archivedAt: '2026-10-20T10:00:00.000Z',
+    archivedBy: 'tester',
+    aliasOf: 'home',
+  })
+
+  it('POST /api/pages?onConflict=restore on a redirect archive answers 409 + writes nothing', async () => {
+    setup({ 'pages/old-landing/page.json': redirectManifest })
+    const res = await postCreate('old-landing', 'restore')
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('This is a redirect: delete it or change where it points')
+    expect(await storage.readFile('pages/old-landing/page.json')).toBe(redirectManifest)
+  })
+
+  it('POST /api/fragments?onConflict=restore on a redirect archive answers 409 + writes nothing', async () => {
+    setup({ 'fragments/old-promo/fragment.json': redirectManifest })
+    const res = await app.request('/api/fragments?onConflict=restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'old-promo', template: 'card' }),
+    })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('This is a redirect: delete it or change where it points')
+    expect(await storage.readFile('fragments/old-promo/fragment.json')).toBe(redirectManifest)
+  })
+
+  it('ARCHIVED_CONFLICT body marks a redirect archive with `redirect: true`', async () => {
+    setup({ 'pages/old-landing/page.json': redirectManifest })
+    const res = await postCreate('old-landing')
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as {
+      code: string
+      archive: { aliasOf?: string; redirect?: boolean }
+    }
+    expect(body.code).toBe('ARCHIVED_NAME_CONFLICT')
+    expect(body.archive.aliasOf).toBe('home')
+    expect(body.archive.redirect).toBe(true)
+  })
+
+  it('ARCHIVED_CONFLICT body for archived content does not mark `redirect`', async () => {
+    setup()
+    await app.request('/api/pages/home/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aliasOf: 'about' }),
+    })
+    const res = await postCreate('home')
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as { archive: { redirect?: boolean } }
+    expect(body.archive.redirect).toBeUndefined()
+  })
+})
+
 describe('POST /api/pages?onConflict=replace', () => {
   beforeEach(() => setup())
 
