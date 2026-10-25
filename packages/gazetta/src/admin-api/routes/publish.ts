@@ -1,23 +1,18 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { getType, getEnvironment, isEditable, isHistoryEnabled, getHistoryRetention } from '../../types.js'
+import { getType, getEnvironment, isEditable } from '../../types.js'
 import type { StorageProvider, TargetConfig } from '../../types.js'
-import { writePublishGeneration } from '../../publish-generation.js'
 import { stateFolderPath } from '../../state-folders.js'
 import { publishItems, resolveDependencies, findFragmentDependents, findDependentsFromSidecars } from '../../publish.js'
-import { localeFilename, localeFromFilename, isValidLocale } from '../../locale.js'
+import { isValidLocale } from '../../locale.js'
 import type { SourceContextResolver } from '../source-context.js'
 import type { PublishResult } from '../../publish.js'
-import { createCloudflarePurge, lookupCloudflareZoneId } from '../../publish-rendered.js'
 import { loadSiteFromSource } from '../source-context.js'
-import { resolveEnvVars } from '../../targets.js'
 import { isAltAdapterConfigured } from '../../alt/factory.js'
 import { resolveAltConfig } from '../../alt/config.js'
 import { inspectTarget } from '../../runtime/runtime-capabilities.js'
 import { scanTemplates, type TemplateInfo } from '../../templates-scan.js'
 import { createContentRoot } from '../../content-root.js'
-import { createHistoryProvider } from '../../history-provider.js'
-import { recordWrite, type WrittenItem } from '../../history-recorder.js'
 import { requireCapability } from '../middleware/capability.js'
 import { capabilityGrants, type Principal } from '../../auth/index.js'
 import type { AuditEnv } from '../middleware/audit.js'
@@ -34,7 +29,6 @@ import {
 import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
 import { runPublishAudit } from '../../validation/publish-audit.js'
 import type { Issue } from '../../validation/types.js'
-import { trimTrailingSlashes } from '../../url.js'
 import { isSafeItemName } from '../../item-name.js'
 
 /**
@@ -435,87 +429,22 @@ export function publishRoutes(
       const total = 1 + targetItems.length + 1 + (purgeConfig?.type === 'cloudflare' ? 1 : 0)
       yield { kind: 'target-start', target: targetName, total }
 
-      let current = 0
-      // Buffer for publishRun's progress events. The route's outer
-      // generator yields SSE frames; publishRun's onProgress callback
-      // can't yield directly (different generator). Push events into
-      // this queue inside the callback; drain after publishRun resolves.
-      // Order preserved (publishRun runs items sequentially per target).
+      // Buffer for progress events. The route's outer generator yields
+      // SSE frames; the shared publishToTarget call and publishRun's
+      // onProgress callback can't yield directly (different generator).
+      // Events are pushed into this queue inside callbacks and drained
+      // after the call. Order preserved (publishRun runs items
+      // sequentially per target); the event VALUES (current/total) are
+      // computed in the callbacks exactly as before.
       const progressQueue: PublishProgress[] = []
       try {
         let totalFiles = 0
-        const targetRoot = createContentRoot(targetStorage)
 
-        // History must record BEFORE the writes so the baseline
-        // revision (emitted automatically by recordWrite on the first
-        // call against this target) captures pre-publish state.
-        // Otherwise "undo this publish" would restore the post-
-        // publish state and no-op. See pages.ts save handler.
-        if (config && isHistoryEnabled(config)) {
-          try {
-            const history = createHistoryProvider({
-              storage: targetStorage,
-              retention: getHistoryRetention(config),
-            })
-            const items = await collectPublishedItemsForHistory(source.contentRoot, targetRoot, targetItems)
-            await recordWrite({
-              history,
-              contentRoot: targetRoot,
-              operation: 'publish',
-              source: sourceName,
-              items,
-            })
-          } catch (err) {
-            // History is a best-effort audit layer — a write failure
-            // here must not break the publish itself.
-            console.warn(`    ${targetName}: history record failed — ${(err as Error).message}`)
-          }
-        }
+        // current starts at 1: the source-copy tick is consumed inside
+        // the shared function and its 'source files' event is yielded
+        // right after the call with this value.
+        let current = 1
 
-        // 1. Source copy
-        // A locale-qualified item (`pages/about:fr`) names one manifest
-        // variant, not a folder: publishItems would look for a literal
-        // `about:fr` directory and copy nothing, leaving the target's
-        // old translation manifest under its new HTML. Copy the variant
-        // manifest directly; bare items keep the whole-folder copy.
-        const folderItems: string[] = []
-        const variantKeys: string[] = []
-        for (const it of targetItems) {
-          const m = /^(pages|fragments)\/([^:]+):([^:]+)$/.exec(it)
-          if (m) {
-            // The locale part names a file — fail closed on anything
-            // isValidLocale rejects (path traversal, dots, bad shape).
-            if (isValidLocale(m[3])) {
-              variantKeys.push(`${m[1]}/${m[2]}/${localeFilename(m[1] === 'pages' ? 'page' : 'fragment', m[3])}`)
-            }
-          } else {
-            folderItems.push(it)
-          }
-        }
-        const { copiedFiles } = await publishItems(source.contentRoot, targetRoot, folderItems)
-        let variantFiles = 0
-        for (const key of variantKeys) {
-          try {
-            const content = await source.contentRoot.storage.readFile(source.contentRoot.path(key))
-            await targetRoot.storage.writeFile(targetRoot.path(key), content)
-            variantFiles++
-          } catch {
-            // Variant missing on source — publishRun's per-item result
-            // reports the item instead.
-          }
-        }
-        totalFiles += copiedFiles + variantFiles
-        current++
-        yield { kind: 'progress', target: targetName, current, total, label: 'source files' }
-
-        // Cutover (Cut 7 of publish-pipeline-extraction): asset publish +
-        // per-item render loop + dep indices + site manifest now go through
-        // `publishRun`. The route keeps history record (above), source-copy
-        // (publishItems above), sitemap/robots/redirects/purge (below) and
-        // the SSE progress emit. publishRun's onProgress feeds the SSE
-        // generator one progress event per item-done; admin's UI counts
-        // items toward `total`.
-        //
         // Item-string layout (`pages/home:fr`) split into ItemRefs. Static
         // targets emit only page items (fragments are baked); ESI emits
         // both. Static-mode page hash composition (fragmentHashes) is
@@ -557,15 +486,27 @@ export function publishRoutes(
           }
         }
 
-        const { publishRun } = await import('../../publish-run.js')
-        const runResult = await publishRun({
-          items: itemRefs,
-          targets: [targetName],
-          site,
+        // Cutover (publish-undo cut 1, #1426): history record, source
+        // manifest copy, render loop, sitemap/robots/redirects, the
+        // publish generation and the CDN purge all run inside the
+        // shared target-publish function. The route keeps target
+        // iteration, the locale fan-out above, 404.html, SSE progress
+        // emit and the post-publish cache invalidation. Purge scope is
+        // explicit: a fragment publish purges everything, otherwise the
+        // published pages' URLs.
+        const { publishToTarget } = await import('../../publish-target.js')
+        const shared = await publishToTarget({
+          targetName,
+          targetStorage,
+          targetConfig: config,
           sourceRoot: source.contentRoot,
+          sourceName,
+          site,
           siteManifest: source.manifest ?? { name: '(publish)' },
-          targetStorages: new Map([[targetName, targetStorage]]),
+          items: targetItems,
+          itemRefs,
           templateInfos,
+          purgeScope: targetItems.some(i => i.startsWith('fragments/')) ? 'all' : 'items',
           onProgress: ev => {
             if (ev.kind === 'item-done') {
               const label =
@@ -577,13 +518,21 @@ export function publishRoutes(
               progressQueue.push({ kind: 'progress', target: targetName, current, total, label })
             }
           },
+          onHistoryError: message => {
+            // History is a best-effort audit layer - a write failure
+            // here must not break the publish itself.
+            console.warn(`    ${targetName}: history record failed — ${message}`)
+          },
         })
+
+        totalFiles += shared.copiedFiles
+        yield { kind: 'progress', target: targetName, current: 1, total, label: 'source files' }
 
         // publishRun doesn't throw on per-target init failure (assets
         // missing → target failed); surface as the same error the inline
         // path used to throw so the per-target try/catch projects to
         // `target-result success: false`.
-        const tr = runResult.targets.find(t => t.name === targetName)
+        const tr = shared.run
         if (tr?.failed) {
           throw new Error(tr.failureReason ?? 'all items failed')
         }
@@ -604,129 +553,19 @@ export function publishRoutes(
           totalFiles++
         }
 
-        // 3b. Sitemap + robots.txt
-        const siteUrl = config?.siteUrl
-        if (siteUrl) {
-          const { listSidecars } = await import('../../sidecars.js')
-          const { generateSitemap } = await import('../../sitemap.js')
-          const { generateRobotsTxt } = await import('../../robots.js')
-          const targetPageSidecars = await listSidecars(targetStorage, 'pages')
-          const sitemapXml = generateSitemap({
-            siteUrl,
-            pages: targetPageSidecars,
-            systemPages: site.manifest.systemPages,
-          })
-          if (sitemapXml) {
-            await targetStorage.writeFile('sitemap.xml', sitemapXml)
-            totalFiles++
-          }
-          // robots.txt only at domain root — Google ignores it at subpaths.
-          const isRootDeploy = !trimTrailingSlashes(new URL(siteUrl).pathname)
-          if (isRootDeploy) {
-            let robotsTxt: string
-            try {
-              robotsTxt = await source.contentRoot.storage.readFile(source.contentRoot.path('robots.txt'))
-            } catch {
-              robotsTxt = generateRobotsTxt({ siteUrl })
-            }
-            await targetStorage.writeFile('robots.txt', robotsTxt)
-            totalFiles++
-          }
+        totalFiles += shared.generatedFiles.length
+
+        // Purge outcome, in the route's own log format. Missing token
+        // or zone stays silent here, as before; a failure is logged,
+        // not thrown (#1426).
+        if (shared.purge.kind === 'purged-all') {
+          console.log(`    ${targetName}: cache purged (all)`)
+        } else if (shared.purge.kind === 'purged-urls') {
+          console.log(`    ${targetName}: cache purged (${shared.purge.urls.join(', ')})`)
+        } else if (shared.purge.kind === 'failed') {
+          console.warn(`    ${targetName}: cache purge failed: ${shared.purge.message}`)
         }
-
-        // 3c. Host-format redirects file (e.g. _redirects). Per
-        // design-soft-delete.md Q10: plain-static targets without a
-        // worker can't read the per-page HTML marker; this file is the
-        // host glue for archive-driven redirects. Independent of
-        // siteUrl — the format determines whether to emit at all.
-        const redirectsFormat = config?.redirects?.format
-        if (redirectsFormat && redirectsFormat !== 'none') {
-          const { emitRedirects } = await import('../../runtime/redirects-emit.js')
-          const { allPageEntries, deriveRoute } = await import('../../site-loader.js')
-          const { resolveSiteLocales, localeRoutePrefix } = await import('../../locale.js')
-          const archives: { from: string; to?: string }[] = []
-          // One row per published route: a redirect keeps the visitor's
-          // language (#1124). Locale variant entries share the parent's
-          // archive state in v1 (per `design-soft-delete.md` future
-          // directions), so rows expand from the default-locale entry.
-          const publishManifest = source.manifest ?? { name: '(publish)' }
-          const resolvedLoc = resolveSiteLocales(publishManifest)
-          // Rows mirror the static write path (staticPageIndexPath):
-          // default-locale content is always published unprefixed — the
-          // target's locales filter only gates variants — and each
-          // published variant lives at /<locale>/. The site default is
-          // therefore always in the row set, and prefixes never apply
-          // target.locale/defaultPrefix overrides, which the static
-          // write path ignores.
-          const siteDefault = resolvedLoc?.default ?? ''
-          const rowLocales = resolvedLoc
-            ? [siteDefault, ...(config?.locales ?? resolvedLoc.supported).filter(l => l !== siteDefault)]
-            : ['']
-          for (const entry of allPageEntries(site)) {
-            if (entry.page.archived !== true) continue
-            if (entry.locale) continue
-            const baseFrom = deriveRoute(entry.name)
-            const baseTo = entry.page.aliasOf ? deriveRoute(entry.page.aliasOf) : undefined
-            for (const loc of rowLocales) {
-              const prefix = loc
-                ? localeRoutePrefix(loc, { ...resolvedLoc!, default: siteDefault, defaultPrefix: false })
-                : ''
-              const from = baseFrom === '/' ? prefix || '/' : `${prefix}${baseFrom}`
-              // A language with no destination version falls back to the
-              // destination's default-language page (#1124 Q10): static
-              // publish only writes /<locale>/<page> when the page has
-              // that version, while the archived page's own row exists
-              // for every published route.
-              const destEntry = entry.page.aliasOf ? site.pageLocales.get(entry.page.aliasOf) : undefined
-              const destPrefix =
-                loc === '' || loc === siteDefault || (destEntry?.locales.has(loc) ?? false) ? prefix : ''
-              const to =
-                baseTo === undefined ? undefined : baseTo === '/' ? destPrefix || '/' : `${destPrefix}${baseTo}`
-              archives.push(to !== undefined ? { from, to } : { from })
-            }
-          }
-          const result = emitRedirects(redirectsFormat, archives)
-          if (result && result.body !== '') {
-            await targetStorage.writeFile(result.filename, result.body)
-            totalFiles++
-          }
-        }
-
-        // Generation after the content and site files, before the purge,
-        // whether or not a purge is configured (#1125).
-        await writePublishGeneration(targetStorage)
-
-        // 4. Purge CDN cache
         if (purgeConfig?.type === 'cloudflare') {
-          const apiToken = resolveEnvVars(purgeConfig.apiToken)
-          const zoneId =
-            resolveEnvVars(purgeConfig.zoneId) ??
-            (config?.siteUrl && apiToken ? await lookupCloudflareZoneId(config.siteUrl, apiToken) : null)
-          if (apiToken && zoneId) {
-            const purge = createCloudflarePurge(zoneId, apiToken)
-            const hasFragments = targetItems.some(i => i.startsWith('fragments/'))
-            if (hasFragments) {
-              await purge.purgeAll()
-              console.log(`    ${targetName}: cache purged (all)`)
-            } else if (config?.siteUrl) {
-              const siteForUrls = await loadSiteFromSource(source, { templatesDir })
-              const publishedPageNames = new Set(
-                targetItems.filter(i => i.startsWith('pages/')).map(i => i.replace('pages/', '')),
-              )
-              // Collect URLs for all published pages including locale variants
-              const urls: string[] = []
-              const { allPageEntries } = await import('../../site-loader.js')
-              for (const { name, page } of allPageEntries(siteForUrls)) {
-                if (publishedPageNames.has(name)) {
-                  urls.push(`${config.siteUrl}${page.route}`)
-                }
-              }
-              if (urls.length > 0) {
-                await purge.purgeUrls(urls)
-                console.log(`    ${targetName}: cache purged (${urls.join(', ')})`)
-              }
-            }
-          }
           current++
           yield { kind: 'progress', target: targetName, current, total, label: 'cache purge' }
         }
@@ -1317,51 +1156,3 @@ export function publishRoutes(
  * target's rootPath (which is `''` for target-rooted storage, the
  * common case).
  */
-async function collectPublishedItemsForHistory(
-  sourceRoot: import('../../content-root.js').ContentRoot,
-  _targetRoot: import('../../content-root.js').ContentRoot,
-  publishedItems: string[],
-): Promise<WrittenItem[]> {
-  const out: WrittenItem[] = []
-  for (const item of publishedItems) {
-    const m = /^(pages|fragments)\/([^:]+)(?::([^:]+))?$/.exec(item)
-    if (!m) continue
-    const base = m[1] === 'pages' ? 'page' : 'fragment'
-    const dir = `${m[1]}/${m[2]}`
-    const names: string[] = []
-    if (m[3]) {
-      // Locale-qualified: exactly the requested variant's manifest.
-      // Fail closed on an invalid locale — it never reaches a path.
-      if (isValidLocale(m[3])) names.push(localeFilename(base, m[3]))
-    } else {
-      // Bare item: the copy writes the whole folder, so record the
-      // default manifest plus every translation manifest present —
-      // publishRun's collectItemsForHistory rule applied to what the
-      // route's copy actually writes.
-      names.push(localeFilename(base, null))
-      try {
-        const entries = await sourceRoot.storage.readDir(sourceRoot.path(dir))
-        for (const e of entries) {
-          if (e.isDirectory) continue
-          const locale = localeFromFilename(e.name, base)
-          if (locale && isValidLocale(locale)) names.push(localeFilename(base, locale))
-        }
-      } catch {
-        // Folder missing on source — the default-manifest read below
-        // skips the item the same way.
-      }
-    }
-    for (const name of names) {
-      const key = `${dir}/${name}`
-      const sourcePath = sourceRoot.path(key)
-      try {
-        const content = await sourceRoot.storage.readFile(sourcePath)
-        out.push({ path: key, content })
-      } catch {
-        // Item missing on source (unusual — publish normally reads from
-        // source manifests). Skip; snapshot stays as-was for this item.
-      }
-    }
-  }
-  return out
-}
