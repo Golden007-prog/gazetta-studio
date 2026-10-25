@@ -186,7 +186,7 @@ export default defineSite({
 | Production (`NODE_ENV !== 'development'`) | Load once at boot; restart to apply changes |
 | Dev (`NODE_ENV === 'development'`, `gazetta dev`) | File watcher on `gazetta.config.ts` + `sites/*/site.config.ts`; reload on save |
 
-**What a dev reload rebuilds**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle ([ADR-0009](../../docs/adr/0009-no-plugin-runtime-factory-contributions.md)). A reload re-evaluates the config and rebuilds what is built from it at boot: the provider instances (storage, transforms, cache), the hook and validator registries from `admin.hooks` and `admin.validators`, and the targets the admin reads. Follows from ADR-0009 and the dev row above.
+**Dev reload and plugins**: there is no plugin runtime, so nothing has an `init`/`dispose` lifecycle ([ADR-0009](../../docs/adr/0009-no-plugin-runtime-factory-contributions.md)). A reload re-evaluates the config ([#1353](https://github.com/gazetta-studio/gazetta-studio/issues/1353)); which config-built state it rebuilds is not decided here. Follows from ADR-0009.
 
 Production never reloads; a process restart releases everything.
 
