@@ -86,3 +86,8 @@ coverage/
 
 # Vitest blob reports from sharded CI runs
 .vitest/
+
+# npm package README: packages/gazetta's prepack copies the root README.md
+# next to its package.json so `npm publish` ships it and the npm page shows
+# it. The root README is the single source - never commit the copy.
+packages/gazetta/README.md
