@@ -34,84 +34,9 @@ The server watches for changes and reloads automatically. `site.config.ts` edits
 
 A template is a TypeScript function that returns `{ html, css, js }`, with a Zod schema the CMS uses to build the editing form. See [`templates.md`](./templates.md) for the contract, fields, frameworks and composite templates.
 
-## Pages
+## Pages and fragments
 
-A page is a folder with a `page.json` manifest under the editing target's `pages/` root, which `init` sets to `sites/main/targets/local/pages/`. The route is derived from the folder path — `pages/about/` becomes `/about`, and `pages/home/` is served at `/`:
-
-```json
-{
-  "template": "page-layout",
-  "content": {
-    "title": "About",
-    "description": "About our company"
-  },
-  "components": [
-    "@header",
-    {
-      "name": "about-text",
-      "template": "text-block",
-      "content": {
-        "body": "<p>We build composable websites.</p>"
-      }
-    }
-  ]
-}
-```
-
-All components are inline in the page manifest — no separate files. While `gazetta dev` runs, a new page folder is picked up without a restart.
-
-Or create pages in the CMS — click **New page** in the admin UI.
-
-### Dynamic routes
-
-Use `[param]` in the folder name — it becomes `:param` in the route:
-
-A page at `pages/blog/[slug]/page.json` serves `/blog/:slug`:
-
-```json
-{
-  "template": "page-layout",
-  "components": [
-    {
-      "name": "post-body",
-      "template": "text-block",
-      "content": {
-        "body": "<p>First post.</p>"
-      }
-    }
-  ]
-}
-```
-
-String entries in `components` must be fragment references starting with `@`; an inline component is an object with `name`, `template` and `content`.
-
-Templates receive route params:
-
-```ts
-const template: TemplateFunction<Content> = ({ content, params }) => ({
-  html: `<h1>${content?.title ?? params?.slug}</h1>`,
-  ...
-})
-```
-
-## Fragments
-
-Fragments are shared components reusable across pages. They live in `fragments/` and are referenced with `@`:
-
-```json
-{
-  "template": "nav",
-  "content": {
-    "brand": "My Site",
-    "links": [
-      { "label": "Home", "href": "/" },
-      { "label": "About", "href": "/about" }
-    ]
-  }
-}
-```
-
-Reference in any page with `"@header"`. Update the fragment once — every page reflects it.
+Pages define routes and fragments share components between pages. See [Pages and fragments](./pages-and-fragments.md) for manifests, dynamic routes and fragment references.
 
 ## CMS editor
 
@@ -353,35 +278,7 @@ There is no default target for `publish`: with several targets it asks which one
 
 The publish mode comes from the target's [`type`](./targets.md#type): `dynamic` pages keep ESI placeholders that a worker (or `gazetta serve`) assembles at request time; `static` pages are fully assembled at publish time.
 
-### Custom 404 page
-
-`gazetta init` already created a `pages/404/` page. It's served with a 404 status when a route doesn't match, and the URL stays as-is — no redirect.
-
-The starter 404 uses the `page-layout` template with just a title and description. To add body content, add inline components in `pages/404/page.json` (a bare string must be a fragment reference starting with `@`, and `init` creates only a `@header` fragment):
-
-```json
-// pages/404/page.json
-{
-  "template": "page-layout",
-  "content": {
-    "title": "Page Not Found",
-    "description": "The page you're looking for doesn't exist."
-  },
-  "components": [
-    {
-      "name": "message",
-      "template": "text-block",
-      "content": { "body": "<p>Nothing here. <a href=\"/\">Back to the homepage</a>.</p>" }
-    }
-  ]
-}
-```
-
-Works with both `gazetta serve` and Cloudflare Workers. Fragments are assembled normally.
-
-The 404 page stays out of `sitemap.xml` only while `systemPages: ['404']` lists it in `site.config.ts` — `init` sets that up.
-
-On a static target, every publish also copies the published 404 page to `404.html` at the target root, which Cloudflare Pages, Netlify and GitHub Pages show for missing paths. Until `pages/404` is published to a target, its `404.html` is a minimal "Page not found" page.
+For missing-route handling and the starter 404 page, see [Custom 404 page](./pages-and-fragments.md#custom-404-page).
 
 ## Customize admin appearance
 
@@ -464,48 +361,7 @@ Overriding `--p-primary-color` cascades to some downstream tokens
 each shade. A future JS preset API will solve this — until then, CSS
 overrides handle the common cases.
 
-## Site structure
-
-```
-my-project/
-  package.json
-  admin/                     # custom editors + fields (shared across sites)
-    editors/
-      hero.tsx
-    fields/
-      brand-color.tsx
-  templates/                 # developer-created templates (shared across sites)
-    hero/index.ts
-    nav/index.ts
-    page-layout/index.ts
-  sites/
-    main/
-      site.config.ts         # site manifest + targets
-      targets/
-        local/               # the local filesystem target's content root
-          fragments/         # shared components
-            header/fragment.json
-          pages/             # routable pages
-            home/
-              page.json      # all components inline
-            about/
-              page.json
-            blog/
-              [slug]/page.json   # dynamic route
-```
-
-Templates and admin customizations are at the project root, shared across all sites.
-`site.config.ts` sits at `sites/{name}/`; the pages and fragments a site serves live in its
-editing target's content root, which `init` sets to `sites/{name}/targets/local/`.
-
-## Indexing localized pages
-
-Each locale file (for example `page.fr.json`) is a complete page manifest. Its own
-`metadata.robots` controls indexing in both rendered HTML and the published sitemap:
-`"noindex"` excludes that locale URL without excluding the default page, and an omitted
-`robots` value permits indexing even if the default page is `noindex`. An ordinary
-publish also corrects a previously published locale's stale indexing flag, even when its
-content hash has not changed; `--force` is not required.
+For the project layout and locale variants, see [Site structure](./pages-and-fragments.md#site-structure) and [Indexing localized pages](./pages-and-fragments.md#indexing-localized-pages).
 
 ## Next steps
 
