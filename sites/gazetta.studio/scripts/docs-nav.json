@@ -66,6 +66,11 @@
           "description": "Page and fragment manifests, routes, translations, custom 404 pages and project layout."
         },
         {
+          "file": "customize-editor.md",
+          "label": "Customize the editor",
+          "description": "Custom editor and field mount contracts, embedded forms, admin CSS themes and token overrides."
+        },
+        {
           "file": "migration.md",
           "label": "Migration",
           "description": "Move templates from plain string URLs to asset references."
