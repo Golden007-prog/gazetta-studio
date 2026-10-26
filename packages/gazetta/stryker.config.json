@@ -40,5 +40,6 @@
   },
   "_comment_thresholds": "break:0 means no threshold enforcement yet — need to see the baseline score first. Raise once stable.",
   "timeoutMS": 60000,
+  "dryRunTimeoutMinutes": 15,
   "tempDirName": ".stryker-tmp"
 }
