@@ -115,7 +115,7 @@
     "jsdom": "^29.1.1",
     "marked": "^18.1.1",
     "music-metadata": "^11.12.3",
-    "nanoid": "^5.1.11",
+    "nanoid": "^6.0.2",
     "openai": "^6.37.0",
     "postcss": "^8.5.31",
     "postcss-prefix-selector": "^2.2.1",
