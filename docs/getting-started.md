@@ -242,28 +242,42 @@ import { createRoot, type Root } from 'react-dom/client'
 import { DefaultEditorForm } from 'gazetta/editor'
 import type { EditorMount } from 'gazetta/types'
 
-function HeroEditor({ content, schema, onChange }) {
-  const [data, setData] = useState(content)
-  const handleChange = (c) => { setData(c); onChange(c) }
+function HeroEditor(props: {
+  content: Record<string, unknown>
+  schema: Record<string, unknown>
+  theme: 'dark' | 'light'
+  fieldsBaseUrl?: string
+  onPickAsset?: (options: { accept?: string[]; currentAssetName?: string | null }) => Promise<{ _asset: string } | null>
+  onChange: (content: Record<string, unknown>) => void
+}) {
+  const [data, setData] = useState(props.content)
+  const handleChange = (c: Record<string, unknown>) => { setData(c); props.onChange(c) }
 
   return (
     <div>
       {/* Your custom preview */}
       <div style={{ padding: '1.5rem', background: 'linear-gradient(135deg, #667eea, #764ba2)', borderRadius: 8, color: '#fff', textAlign: 'center', marginBottom: '1rem' }}>
-        <h2>{data.title || 'Untitled'}</h2>
-        {data.subtitle && <p style={{ opacity: 0.85 }}>{data.subtitle}</p>}
+        <h2>{(data.title as string) || 'Untitled'}</h2>
+        {typeof data.subtitle === 'string' && data.subtitle && <p style={{ opacity: 0.85 }}>{data.subtitle}</p>}
       </div>
 
-      {/* Default form for the fields */}
-      <DefaultEditorForm schema={schema} content={data} onChange={handleChange} />
+      {/* Default form for the fields. Forward every prop so custom
+          fields (fieldsBaseUrl) and the asset picker (onPickAsset)
+          keep working inside it. */}
+      <DefaultEditorForm {...props} content={data} onChange={handleChange} />
     </div>
   )
 }
 
-const roots = new WeakMap()
+const roots = new WeakMap<HTMLElement, Root>()
 const editor: EditorMount = {
   mount(el, props) {
-    const root = createRoot(el); roots.set(el, root)
+    // mount() runs again on each value change — reuse the root.
+    let root = roots.get(el)
+    if (!root) {
+      root = createRoot(el)
+      roots.set(el, root)
+    }
     root.render(<HeroEditor {...props} />)
   },
   unmount(el) { roots.get(el)?.unmount(); roots.delete(el) },
@@ -280,8 +294,15 @@ Templates without a custom editor use the default auto-generated form.
 |------|------|-------------|
 | `content` | `Record<string, unknown>` | Current content values |
 | `schema` | `Record<string, unknown>` | JSON Schema for the template |
-| `theme` | `'dark' \| 'light'` | Current admin theme |
+| `theme` | `'dark' \| 'light'` | Admin theme at mount time |
+| `fieldsBaseUrl` | `string` (optional) | Base URL for loading custom field modules |
+| `onPickAsset` | `(options) => Promise<{ _asset: string } \| null>` (optional) | Opens the asset picker; resolves on confirm, `null` on cancel |
 | `onChange` | `(content) => void` | Call when content changes |
+
+Forward `fieldsBaseUrl` and `onPickAsset` to `DefaultEditorForm` — without them,
+custom fields render "No fields base URL configured" and asset fields can't open
+the picker. `theme` is the admin theme when the editor mounted; a theme switch
+doesn't remount it, so follow switches with the CSS tokens, not the prop.
 
 ### Embedding the default form
 
@@ -311,16 +332,16 @@ const PRESETS = [
   { label: 'Coral', value: '#f97066' },
 ]
 
-function BrandColorPicker({ value, theme, onChange }) {
+function BrandColorPicker({ value, theme, onChange }: { value: string; theme: 'dark' | 'light'; onChange: (v: string) => void }) {
   const [color, setColor] = useState(value || '#667eea')
-  const handleChange = (v) => { setColor(v); onChange(v) }
+  const handleChange = (v: string) => { setColor(v); onChange(v) }
 
   return (
     <div>
       <div style={{ height: 48, borderRadius: 8, background: color }} />
       <div style={{ display: 'flex', gap: '0.375rem' }}>
         {PRESETS.map(p => (
-          <button key={p.value} onClick={() => handleChange(p.value)}
+          <button key={p.value} type="button" onClick={() => handleChange(p.value)}
             style={{ width: 28, height: 28, borderRadius: 6, background: p.value, border: 'none', cursor: 'pointer' }} />
         ))}
       </div>
@@ -329,10 +350,15 @@ function BrandColorPicker({ value, theme, onChange }) {
   )
 }
 
-const roots = new WeakMap()
+const roots = new WeakMap<HTMLElement, Root>()
 const brandColor: FieldMount = {
   mount(el, { value, theme, onChange }) {
-    const root = createRoot(el); roots.set(el, root)
+    // mount() runs again on each value change — reuse the root.
+    let root = roots.get(el)
+    if (!root) {
+      root = createRoot(el)
+      roots.set(el, root)
+    }
     root.render(<BrandColorPicker value={String(value ?? '')} theme={theme} onChange={onChange} />)
   },
   unmount(el) { roots.get(el)?.unmount(); roots.delete(el) },
@@ -358,14 +384,21 @@ export const schema = z.object({
 The `brand-color` field widget loads automatically when editing a component that uses
 the `banner` template. Other fields in the schema use the default form inputs.
 
+Custom fields apply to top-level schema properties only today — a property inside a
+nested `z.object(...)` or a `z.array(...)` item keeps the default input.
+
 ### What custom fields receive
 
 | Prop | Type | Description |
 |------|------|-------------|
 | `value` | `unknown` | Current field value |
 | `schema` | `Record<string, unknown>` | JSON Schema for this property |
-| `theme` | `'dark' \| 'light'` | Current admin theme |
+| `theme` | `'dark' \| 'light'` | Admin theme at mount time (see note below) |
 | `onChange` | `(value) => void` | Call when the value changes |
+
+`theme` is the admin theme when the field mounted — a theme switch doesn't remount
+it, and the default is `'dark'`. To follow switches, style with the CSS tokens
+(`var(--color-*)` or your own) instead of branching on the prop.
 
 ### Custom fields + custom editors
 
@@ -472,8 +505,12 @@ Use it to:
 .dark {
   --p-primary-color: #a78bfa;
   --color-danger-bg: #2a0a0a;
+  --color-env-prod-bg: #3a2a10;
 }
 ```
+
+A `:root`-only override applies in both themes — the light `--color-env-prod-bg`
+above would sit behind dark-mode text without its `.dark` counterpart.
 
 **Define custom tokens for custom editors and fields** — pick a prefix you own:
 
@@ -489,14 +526,22 @@ Use it to:
 }
 ```
 
-Your custom editor consumes via `var(--myapp-json-key)`. Tokens are globally
-available before any editor mounts.
+Your custom editor consumes via `var(--myapp-json-key)`. `theme.css` is appended
+after the app mounts so its declarations win the cascade; the admin doesn't wait
+for it to load, so first paint can precede it.
+
+`theme.css` reliably overrides the global tokens above. PrimeVue component tokens
+(`--p-button-*`, `--p-dialog-*`) behave differently: PrimeVue injects them when
+each component first mounts, which is after `theme.css` loads, so at the same
+specificity they win over your file. For component tokens use a more specific
+selector than PrimeVue's own, e.g. `.p-button { ... }` loses to PrimeVue's
+injected rule, while `html .p-button { ... }` holds.
 
 ### Reserved prefixes
 
 | Prefix | Owner | What you can do |
 |---|---|---|
-| `--p-*` | PrimeVue (595 tokens) | Override existing — don't add new |
+| `--p-*` | PrimeVue | Override existing — don't add new |
 | `--color-*` | Gazetta semantic layer | Override existing — don't add new |
 | Anything else | You | Pick a prefix you own (`--myapp-*`, `--mycorp-*`) |
 
