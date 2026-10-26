@@ -48,6 +48,7 @@ import { z } from 'zod'
 export const ErrorCodeSchema = z.enum([
   'AI_ADAPTER_FAILED',
   'AI_ADAPTER_UNAVAILABLE',
+  'ARCHIVED',
   'ARCHIVED_NAME_CONFLICT',
   'ASSET_MANIFEST_NOT_FOUND',
   'BAD_REQUEST',
