@@ -227,7 +227,12 @@ export function createWorker(options?: CloudflareR2WorkerOptions) {
 
     const requestPath = new URL(c.req.url).pathname
 
-    const result = await findPage(bucket, requestPath, locales)
+    // Strip a trailing slash so /about/ resolves like /about, matching
+    // gazetta serve and gazetta dev. Same response, no redirect; the query
+    // string is untouched and `/` itself is unchanged (#1491).
+    const normalizedPath = requestPath !== '/' && requestPath.endsWith('/') ? requestPath.slice(0, -1) : requestPath
+
+    const result = await findPage(bucket, normalizedPath, locales)
     if (!result) {
       const notFound = await findPage(bucket, '/404')
       if (notFound && !archiveResponse(notFound.html)) {
