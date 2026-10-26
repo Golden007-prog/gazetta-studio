@@ -40,19 +40,18 @@ import { z } from 'zod'
 import type { TemplateFunction } from 'gazetta'
 
 export const schema = z.object({
-  title: z.string(),
-  subtitle: z.string().optional(),
+  title: z.string().describe('Page title'),
+  subtitle: z.string().optional().describe('Subtitle text'),
 })
 
-type Content = z.infer<typeof schema>
-
-const template: TemplateFunction<Content> = ({ content }) => ({
+const template: TemplateFunction = ({ content = {} }) => ({
   html: `<section class="hero">
-  <h1>${content?.title ?? ''}</h1>
-  <p>${content?.subtitle ?? ''}</p>
+  <h1>${content.title ?? ''}</h1>
+  <p>${content.subtitle ?? ''}</p>
 </section>`,
-  css: `.hero { padding: 4rem 2rem; text-align: center; }
-.hero h1 { font-size: 2.5rem; }`,
+  css: `.hero { text-align: center; padding: 4rem 0; }
+.hero h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.hero p { color: #666; font-size: 1.25rem; }`,
   js: '',
 })
 
@@ -72,8 +71,10 @@ export default template
 
 Templates can use any framework that SSR's to HTML:
 
-**React:**
+**React** — save the template as `templates/<name>/index.tsx` and import React: `.tsx` templates are compiled with a JSX transform that needs React in scope:
 ```tsx
+// templates/card/index.tsx
+import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 const template: TemplateFunction<Content> = ({ content }) => ({
@@ -83,7 +84,7 @@ const template: TemplateFunction<Content> = ({ content }) => ({
 })
 ```
 
-**Vue 3:**
+**Vue 3** — needs `npm install vue` first; `init` doesn't install Vue:
 ```ts
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
@@ -119,7 +120,7 @@ ${children.map(c => c.css).join('\n')}`,
 
 ## Pages
 
-A page is a folder with a `page.json` manifest. The route is derived from the folder path — `pages/about/` becomes `/about`:
+A page is a folder with a `page.json` manifest. The route is derived from the folder path — `pages/about/` becomes `/about`, and `pages/home/` is served at `/`:
 
 ```json
 {
@@ -136,8 +137,7 @@ A page is a folder with a `page.json` manifest. The route is derived from the fo
       "content": {
         "body": "<p>We build composable websites.</p>"
       }
-    },
-    "@footer"
+    }
   ]
 }
 ```
@@ -150,13 +150,24 @@ Or create pages in the CMS — click **New page** in the admin UI.
 
 Use `[param]` in the folder name — it becomes `:param` in the route:
 
+A page at `pages/blog/[slug]/page.json` serves `/blog/:slug`:
+
 ```json
-// pages/blog/[slug]/page.json → /blog/:slug
 {
-  "template": "blog-post",
-  "components": ["article"]
+  "template": "page-layout",
+  "components": [
+    {
+      "name": "post-body",
+      "template": "text-block",
+      "content": {
+        "body": "<p>First post.</p>"
+      }
+    }
+  ]
 }
 ```
+
+String entries in `components` must be fragment references starting with `@`; an inline component is an object with `name`, `template` and `content`.
 
 Templates receive route params:
 
@@ -186,17 +197,16 @@ Fragments are shared components reusable across pages. They live in `fragments/`
 
 Reference in any page with `"@header"`. Update the fragment once — every page reflects it.
 
-> Note: `@` in YAML must be quoted: `"@header"`.
-
 ## CMS editor
 
 1. Open **http://localhost:3000/admin**
-2. Click a page → see its component tree with live preview
-3. Click any component or fragment → edit its content
-4. Toggle **Edit mode** in the preview toolbar → click components directly in the preview to select them
-5. Edit content → preview updates live as you type
-6. Click **Save** → writes to disk
-7. Click **Publish** → pre-renders and uploads to target
+2. Click a page to preview it
+3. Click a component in the preview to open it for editing
+4. Edit content → preview updates live as you type
+5. Click **Save** → writes to disk
+6. Click **Publish** → pre-renders and uploads to target
+
+The preview toolbar's eye button only shows or hides hover highlights; editing happens on the page's edit route, not behind a toolbar toggle.
 
 The preview shows each page in a sandboxed frame with an origin of its own. Template scripts run there, but can't use cookies, `localStorage`, form submits, pop-ups or dialogs such as `alert()`; on the published site they can.
 
