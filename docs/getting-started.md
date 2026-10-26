@@ -44,10 +44,12 @@ export const schema = z.object({
   subtitle: z.string().optional().describe('Subtitle text'),
 })
 
-const template: TemplateFunction = ({ content = {} }) => ({
+type Content = z.infer<typeof schema>
+
+const template: TemplateFunction<Content> = ({ content }) => ({
   html: `<section class="hero">
-  <h1>${content.title ?? ''}</h1>
-  <p>${content.subtitle ?? ''}</p>
+  <h1>${content?.title ?? ''}</h1>
+  <p>${content?.subtitle ?? ''}</p>
 </section>`,
   css: `.hero { text-align: center; padding: 4rem 0; }
 .hero h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }

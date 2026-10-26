@@ -497,10 +497,12 @@ export const schema = z.object({
   subtitle: z.string().optional().describe('Subtitle text'),
 })
 
-const template: TemplateFunction = ({ content = {} }) => ({
+type Content = z.infer<typeof schema>
+
+const template: TemplateFunction<Content> = ({ content }) => ({
   html: \`<section class="hero">
-  <h1>\${content.title ?? ''}</h1>
-  <p>\${content.subtitle ?? ''}</p>
+  <h1>\${content?.title ?? ''}</h1>
+  <p>\${content?.subtitle ?? ''}</p>
 </section>\`,
   css: \`.hero { text-align: center; padding: 4rem 0; }
 .hero h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
@@ -518,8 +520,10 @@ export const schema = z.object({
   body: z.string().describe('Text content (HTML allowed)'),
 })
 
-const template: TemplateFunction = ({ content = {} }) => ({
-  html: \`<div class="text-block">\${content.body ?? ''}</div>\`,
+type Content = z.infer<typeof schema>
+
+const template: TemplateFunction<Content> = ({ content }) => ({
+  html: \`<div class="text-block">\${content?.body ?? ''}</div>\`,
   css: \`.text-block { line-height: 1.6; margin: 2rem 0; }\`,
   js: '',
 })
@@ -538,11 +542,13 @@ export const schema = z.object({
   })).describe('Navigation links'),
 })
 
-const template: TemplateFunction = ({ content = {} }) => {
-  const links = (content.links ?? []) as Array<{ label: string; href: string }>
+type Content = z.infer<typeof schema>
+
+const template: TemplateFunction<Content> = ({ content }) => {
+  const links = content?.links ?? []
   return {
     html: \`<nav class="nav">
-  <a class="nav-brand" href="/">\${content.brand ?? ''}</a>
+  <a class="nav-brand" href="/">\${content?.brand ?? ''}</a>
   <div class="nav-links">\${links.map(l => \`<a href="\${l.href}">\${l.label}</a>\`).join('\\n    ')}</div>
 </nav>\`,
     css: \`.nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; border-bottom: 1px solid #eee; }
