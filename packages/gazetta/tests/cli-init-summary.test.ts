@@ -56,6 +56,9 @@ describe('gazetta init summary', () => {
     })
 
     expect(code).toBe(0)
+    // Strip ANSI sequences (colours off under CI=true, but clack still emits
+    // cursor-visibility codes; a local TTY run would add colour too).
+    output = output.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
     // The summary names the local target's content root; pre-#1188 it never did.
     expect(output).toContain('targets/local/')
     // ... ordered ahead of the page/fragment entries nested beneath it,
