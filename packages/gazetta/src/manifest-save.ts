@@ -114,6 +114,19 @@ export interface SaveEditLocked {
 }
 
 /**
+ * The target item is archived (soft-deleted). Archived items are
+ * read-only (design-soft-delete.md), so the save refuses before any
+ * validation or write: without the guard the manifest rebuild drops
+ * archived/archivedAt/archivedBy/aliasOf and silently un-archives the
+ * item (#1340).
+ */
+export interface SaveArchived {
+  readonly ok: false
+  readonly code: 'ARCHIVED'
+  readonly message: string
+}
+
+/**
  * Save-delta validation produced blocking issues (per
  * `design-validation.md` four-phase model). Only issues introduced
  * by THIS edit are surfaced — pre-existing site debt is the
@@ -161,6 +174,7 @@ export type SaveResult =
   | SaveOk
   | SaveStale
   | SaveEditLocked
+  | SaveArchived
   | SaveValidationFailed
   | SaveHookCancelled
   | SaveAuditFailed
@@ -600,4 +614,4 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
   }
 
   return { ok: true, etag: newEtag }
-}
+            }
