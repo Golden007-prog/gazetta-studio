@@ -30,7 +30,8 @@
     "knip:json": "knip --reporter json --no-exit-code",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "test:storybook": "vitest run --config vitest.storybook.config.ts"
+    "test:storybook": "vitest run --config vitest.storybook.config.ts",
+    "docs:site": "tsx sites/gazetta.studio/scripts/docs-pages.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
