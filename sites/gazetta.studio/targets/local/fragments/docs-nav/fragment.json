@@ -52,6 +52,10 @@
             "href": "/docs/pages-and-fragments"
           },
           {
+            "label": "Customize the editor",
+            "href": "/docs/customize-editor"
+          },
+          {
             "label": "Migration",
             "href": "/docs/migration"
           },
