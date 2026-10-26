@@ -29,6 +29,7 @@ These are the instructions for any coding agent working in this repository. Clau
 - `docs/targets.md` — Target configuration reference (storage factories, type, environment, editable / public storage, history, siteUrl, cache, secrets)
 - `docs/templates.md` — Template writing guide (contract and schema, template fields, frameworks, composite layouts)
 - `docs/pages-and-fragments.md` - Pages, routes, fragments, translations, custom 404 pages and project layout
+- `docs/customize-editor.md` - Custom editors, field widgets and admin theme overrides
 - `docs/getting-started.md` — Onboarding tutorial
 - `docs/template-assets.md` — Template developer guide for asset references
 - `docs/content-assets.md` — Content author guide for the asset library
