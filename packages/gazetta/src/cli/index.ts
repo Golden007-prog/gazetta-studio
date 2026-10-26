@@ -441,6 +441,12 @@ export default defineSite({
       // environment: 'local' (default); editable: true (default for a
       // private local target); filesystemStorage() defaults path to ./targets/local
     },
+    staging: {
+      storage: filesystemStorage({ path: './dist/staging' }),
+      // Served by \`gazetta serve\`, which never serves \`.gazetta/\`, so history stays private.
+      publicStorage: false,
+      environment: 'staging',
+    },
   },
 })
 `,
