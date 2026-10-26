@@ -46,6 +46,8 @@ interface AssetPickerContext {
 }
 
 function buildThumbnailUrl(summary: AssetSummaryShape): string | null {
+  // Images only: any other asset kind (audio, ...) in an <img> is a broken image.
+  if (!summary.mime.startsWith('image/')) return null
   const ext = extFromMime(summary.mime)
   if (!ext) return null
   return `/assets/${summary.name}-${summary.hash}.${ext}`
@@ -141,7 +143,7 @@ export function AssetEmbeddedWidget(props: WidgetProps) {
             type="button"
             className="gz-asset-widget-clear"
             data-testid="asset-widget-clear"
-            onClick={() => props.onChange({})}
+            onClick={() => props.onChange(undefined)}
           >
             Clear
           </button>
