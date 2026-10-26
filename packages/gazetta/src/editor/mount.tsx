@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import Form from '@rjsf/core'
 import validator from '@rjsf/validator-ajv8'
 import { AssetEmbeddedWidget } from './AssetEmbeddedWidget.js'
+import { AssetEmbeddedField } from './AssetEmbeddedField.js'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { reorderAtPath } from './reorder-at-path.js'
 import { useEditor, EditorContent } from '@tiptap/react'
@@ -26,6 +27,8 @@ interface GzFormContext {
   reorderArray: (path: readonly (string | number)[], fromIndex: number, toIndex: number) => void
   /** Base URL for loading custom field modules (e.g. /admin/@fs/path/to/fields) */
   fieldsBaseUrl?: string
+  /** Base URL of the admin API (e.g. `/admin/api`) for asset summary fetches */
+  assetsApiBase?: string
   /** Current theme — passed to custom field widgets */
   theme?: 'dark' | 'light'
   /**
@@ -374,7 +377,7 @@ function buildUiSchema(jsonSchema: JsonSchema): Record<string, unknown> {
     // `embeddedAsset()` attaches via Zod `.meta()`. Rendered with the
     // asset widget (invokes the picker via formContext.onPickAsset).
     if (assetOptions) {
-      ui[name] = { 'ui:widget': 'embedded-asset' }
+      ui[name] = { 'ui:field': 'embedded-asset' }
       continue
     }
 
@@ -423,6 +426,48 @@ function buildUiSchema(jsonSchema: JsonSchema): Record<string, unknown> {
     }
   }
 
+  // Asset fields nested inside objects and arrays need a ui:field entry
+  // at their own depth (#1345); merge those into the flat results above.
+  for (const [name, prop] of Object.entries(properties)) {
+    if (prop.assetOptions) continue // top-level asset handled in the main loop
+    const nested = buildNestedAssetUi(prop)
+    if (Object.keys(nested).length > 0) {
+      ui[name] = { ...((ui[name] as Record<string, unknown> | undefined) ?? {}), ...nested }
+    }
+  }
+
+  return ui
+}
+
+/**
+ * Collect `ui:field` entries for asset fields nested inside object
+ * properties and array items (#1345). The field's own level is handled
+ * by the caller.
+ */
+function buildNestedAssetUi(prop: JsonSchema): Record<string, unknown> {
+  const ui: Record<string, unknown> = {}
+  if (prop.type === 'object') {
+    const properties = prop.properties as Record<string, JsonSchema> | undefined
+    if (!properties) return ui
+    for (const [subName, subProp] of Object.entries(properties)) {
+      if (subProp.assetOptions) {
+        ui[subName] = { 'ui:field': 'embedded-asset' }
+        continue
+      }
+      const sub = buildNestedAssetUi(subProp)
+      if (Object.keys(sub).length > 0) ui[subName] = sub
+    }
+  }
+  if (prop.type === 'array') {
+    const items = prop.items as JsonSchema | undefined
+    if (!items) return ui
+    if (items.assetOptions) {
+      ui.items = { 'ui:field': 'embedded-asset' }
+    } else {
+      const sub = buildNestedAssetUi(items)
+      if (Object.keys(sub).length > 0) ui.items = sub
+    }
+  }
   return ui
 }
 
@@ -1128,6 +1173,12 @@ export interface DefaultEditorFormProps {
    * abstract Promise-returning shape.
    */
   onPickAsset?: (options: { accept?: string[]; currentAssetName?: string | null }) => Promise<{ _asset: string } | null>
+  /**
+   * Base URL of the admin API (e.g. `/admin/api`) — used by the asset
+   * field widget to fetch asset summaries. Supplied by the admin; the
+   * editor package can't derive it reliably from the page URL.
+   */
+  assetsApiBase?: string
 }
 
 /**
@@ -1141,6 +1192,7 @@ export function DefaultEditorForm({
   fieldsBaseUrl,
   theme,
   onPickAsset,
+  assetsApiBase,
 }: DefaultEditorFormProps) {
   const uiSchema = React.useMemo(() => buildUiSchema(jsonSchema as JsonSchema), [jsonSchema])
   const widgets = React.useMemo(() => buildWidgets(jsonSchema as JsonSchema), [jsonSchema])
@@ -1212,8 +1264,8 @@ export function DefaultEditorForm({
   )
 
   const formContext: GzFormContext = React.useMemo(
-    () => ({ reorderArray, fieldsBaseUrl, theme, onPickAsset }),
-    [reorderArray, fieldsBaseUrl, theme, onPickAsset],
+    () => ({ reorderArray, fieldsBaseUrl, theme, onPickAsset, assetsApiBase }),
+    [reorderArray, fieldsBaseUrl, theme, onPickAsset, assetsApiBase],
   )
 
   return (
@@ -1227,6 +1279,7 @@ export function DefaultEditorForm({
           onChange={handleChange}
           validator={validator}
           widgets={widgets}
+          fields={{ 'embedded-asset': AssetEmbeddedField }}
           templates={customTemplates}
           formContext={formContext}
           liveValidate={false}
@@ -1245,7 +1298,7 @@ export function DefaultEditorForm({
 
 export function createEditorMount(jsonSchema: object): EditorMount {
   return {
-    mount(el, { content, schema, theme, onChange, fieldsBaseUrl, onPickAsset }) {
+    mount(el, { content, schema, theme, onChange, fieldsBaseUrl, onPickAsset, assetsApiBase }) {
       const existing = roots.get(el)
       if (existing) existing.unmount()
 
@@ -1258,6 +1311,7 @@ export function createEditorMount(jsonSchema: object): EditorMount {
           theme={theme}
           fieldsBaseUrl={fieldsBaseUrl}
           onPickAsset={onPickAsset}
+          assetsApiBase={assetsApiBase}
           onChange={onChange}
         />,
       )
