@@ -23,6 +23,10 @@
         "title": "Deploy",
         "items": [
           {
+            "label": "Targets",
+            "href": "/docs/targets"
+          },
+          {
             "label": "Deploy",
             "href": "/docs/deploy"
           },
