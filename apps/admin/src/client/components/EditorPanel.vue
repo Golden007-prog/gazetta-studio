@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { onKeyStroke } from '@vueuse/core'
 import { useEditingStore } from '../stores/editing.js'
 import { useSelectionStore } from '../stores/selection.js'
+import { useSiteStore } from '../stores/site.js'
 import { useThemeStore } from '../stores/theme.js'
 import { useUnsavedGuardStore } from '../stores/unsavedGuard.js'
 import { hashToSelection, fragmentLinkDestinationHash } from '../composables/editorSelection.js'
@@ -23,6 +24,19 @@ import { useConflictDiscard } from '../composables/useConflictDiscard.js'
 
 const editing = useEditingStore()
 const selection = useSelectionStore()
+const site = useSiteStore()
+// An archived item's editor is read-only until restored
+// (design-soft-delete.md: the archive banner above is the management
+// surface; "the editor below is read-only"). Archived state comes from
+// the same site-store summary the banner reads. inert keeps the fields
+// visible while blocking pointer, focus and keyboard interaction, so an
+// archived item's content fields and SEO fields can't be edited (#1340).
+const isArchived = computed(() => {
+  const sel = selection.selection
+  if (!sel || (selection.type !== 'page' && selection.type !== 'fragment')) return false
+  const list = selection.type === 'page' ? site.pages : site.fragments
+  return list.find(item => item.name === sel.name)?.archived === true
+})
 // A redirect or pure archive has no template: the archive banner is all there is.
 const nothingToEdit = computed(() => !!selection.detail && !selection.detail.template)
 const theme = useThemeStore()
@@ -146,7 +160,7 @@ async function handleConflictDiscard() {
         <p>Select a component to edit</p>
       </div>
     </template>
-    <div v-else class="editor-active">
+    <div v-else class="editor-active" :inert="isArchived || undefined">
       <!-- #82 — breadcrumb shows the user-set component name path
            ("home > features > fast") instead of the template-name
            jargon ("feature-card") that authors don't understand.
