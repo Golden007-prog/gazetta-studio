@@ -531,12 +531,12 @@ after the app mounts so its declarations win the cascade; the admin doesn't wait
 for it to load, so first paint can precede it.
 
 `theme.css` reliably overrides the global tokens above. PrimeVue component tokens
-(`--p-button-*`, `--p-dialog-*`) need more care: PrimeVue injects them at runtime
-from each component's own style module (read in `@primevue/core`'s source, not
-verified against a running admin), so at equal specificity the winner depends on
-whether the component's first mount or your file's load lands last. For component
-tokens use a more specific selector than PrimeVue's own — `html .p-button { ... }`
-holds regardless of injection order.
+(`--p-button-*`, `--p-dialog-*`) are order-dependent: PrimeVue injects each
+component's tokens when the component first appears. Components on the first
+screen usually get theirs before `theme.css`, and your override wins; ones that
+first appear later (a dialog opened afterwards, a badge) get theirs after it and
+win instead. To override a component token reliably, use a more specific selector
+than PrimeVue's, e.g. `html .p-button { ... }`.
 
 ### Reserved prefixes
 
