@@ -531,11 +531,12 @@ after the app mounts so its declarations win the cascade; the admin doesn't wait
 for it to load, so first paint can precede it.
 
 `theme.css` reliably overrides the global tokens above. PrimeVue component tokens
-(`--p-button-*`, `--p-dialog-*`) behave differently: PrimeVue injects them when
-each component first mounts, which is after `theme.css` loads, so at the same
-specificity they win over your file. For component tokens use a more specific
-selector than PrimeVue's own, e.g. `.p-button { ... }` loses to PrimeVue's
-injected rule, while `html .p-button { ... }` holds.
+(`--p-button-*`, `--p-dialog-*`) need more care: PrimeVue injects them at runtime
+from each component's own style module (read in `@primevue/core`'s source, not
+verified against a running admin), so at equal specificity the winner depends on
+whether the component's first mount or your file's load lands last. For component
+tokens use a more specific selector than PrimeVue's own — `html .p-button { ... }`
+holds regardless of injection order.
 
 ### Reserved prefixes
 
