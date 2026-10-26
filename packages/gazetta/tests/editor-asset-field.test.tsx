@@ -102,7 +102,7 @@ describe('editor embedded-asset field (#1345)', () => {
     // Clearing must remove the key, not store an empty object: `_asset` is
     // required in the embedded-asset schema, so `{}` fails validation.
     expect(schema.safeParse({ hero: {} }).success).toBe(false)
-    expect(latest.hero).toBeUndefined()
+    expect(latest).toEqual({})
     expect(schema.safeParse(latest).success).toBe(true)
   })
 
@@ -122,9 +122,12 @@ describe('editor embedded-asset field (#1345)', () => {
       await new Promise(r => setTimeout(r, 50))
     })
     // An audio URL in an <img> renders a broken image; non-image assets get
-    // the name + Change button without a thumbnail.
+    // a name-and-type label (not a thumbnail, and not a stuck "Loading...").
     expect(container.querySelector('img')).toBeNull()
     expect(container.querySelector('.gz-asset-widget-name')?.textContent).toBe('clip')
+    const preview = container.querySelector('.gz-asset-widget-preview')
+    expect(preview?.textContent).toContain('Audio · mp3')
+    expect(preview?.textContent).not.toContain('Loading')
   })
 
   it('renders a thumbnail img for an image asset', async () => {
