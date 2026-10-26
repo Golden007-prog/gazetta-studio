@@ -52,7 +52,9 @@ export interface NavGroup {
 }
 export interface DocsBanner {
   text: string
-  /** Security clause tied to securityClauseVersion; {version} is substituted. */
+  /** Always shown, with {version} substituted for the running version. */
+  releaseSentence: string
+  /** Appended to the release sentence only at securityClauseVersion. */
   securityClause: string
   /** The clause ships only while packages/gazetta/package.json is this version. */
   securityClauseVersion: string
@@ -254,12 +256,14 @@ export interface BuildResult {
   problems: DocProblem[]
 }
 
-/** The banner line on every docs page. The security clause is tied to the
- * version it names in docs-nav.json, so it disappears at the next release. */
+/** The banner line on every docs page. The release sentence always shows,
+ * with {version} substituted; the security clause ships only while the
+ * version matches securityClauseVersion, so it disappears at the next release. */
 export function composeBanner(nav: DocsNav, version: string): string {
   const b = nav.banner
-  const clause = version === b.securityClauseVersion ? ` ${b.securityClause.replaceAll('{version}', version)}` : ''
-  return `${b.text}${clause} To follow these docs, ${b.link}.`
+  const sentence = b.releaseSentence.replaceAll('{version}', version)
+  const clause = version === b.securityClauseVersion ? b.securityClause : ''
+  return `${b.text} ${sentence}${clause}. To follow these docs, ${b.link}.`
 }
 
 /** Generates every page.json + the nav fragment, in memory. */
