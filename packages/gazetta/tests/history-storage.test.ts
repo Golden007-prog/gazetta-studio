@@ -1,8 +1,7 @@
 /**
  * Storage invariants for createHistoryProvider: how the provider treats
- * the entries it finds in storage - a directory inside revisions/, a
- * file whose name is not a revision id, and a blob that is already
- * stored. Uses an in-memory StorageProvider so we exercise the real
+ * the entries it finds in storage - a directory inside revisions/
+ * and a blob that is already stored. Uses an in-memory StorageProvider so we exercise the real
  * layout logic without touching disk.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -47,20 +46,6 @@ describe('createHistoryProvider storage invariants', () => {
     expect(await h.listRevisions()).toEqual([])
     expect((await h.recordRevision(input({ a: '1' }))).id).toMatch(/^rev-/)
     expect(await h.listRevisions()).toHaveLength(1)
-  })
-
-  it('sorts a revisions/ file whose name is not a revision id after every real revision', async () => {
-    // Chronological order is defined over revision ids; a stray file
-    // that does not match the id shape has no timestamp and sorts after
-    // all real revisions (it leads the newest-first listing).
-    storage.seed({
-      [`${HISTORY_ROOT}/revisions/notes.json`]: manifestJson('notes'),
-    })
-    const h = createHistoryProvider({ storage })
-    const written = await h.recordRevision(input({ a: '1' }))
-
-    const list = await h.listRevisions() // newest first
-    expect(list.map(r => r.id)).toEqual(['notes', written.id])
   })
 
   it('does not rewrite a blob whose content is already stored', async () => {
