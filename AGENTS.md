@@ -27,6 +27,7 @@ These are the instructions for any coding agent working in this repository. Clau
 - `docs/self-hosted.md` — Self-hosted deployment guide (VPS, Docker, Fly.io)
 - `docs/deploy.md` — Deploy adapter contract reference (factory shape, available adapters, container-host pattern)
 - `docs/targets.md` — Target configuration reference (storage factories, type, environment, editable / public storage, history, siteUrl, cache, secrets)
+- `docs/templates.md` — Template writing guide (contract and schema, template fields, frameworks, composite layouts)
 - `docs/getting-started.md` — Onboarding tutorial
 - `docs/template-assets.md` — Template developer guide for asset references
 - `docs/content-assets.md` — Content author guide for the asset library
