@@ -56,6 +56,11 @@
       "title": "Content and templates",
       "docs": [
         {
+          "file": "templates.md",
+          "label": "Templates",
+          "description": "Write templates: the contract and schema, template fields, frameworks, and composite layouts."
+        },
+        {
           "file": "migration.md",
           "label": "Migration",
           "description": "Move templates from plain string URLs to asset references."
