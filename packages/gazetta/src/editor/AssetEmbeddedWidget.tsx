@@ -23,6 +23,7 @@
  */
 import React from 'react'
 import type { WidgetProps } from '@rjsf/utils'
+import { extFromMime } from '../assets/url.js'
 
 interface AssetRefValue {
   _asset?: string
@@ -40,23 +41,14 @@ interface AssetSummaryShape {
 /** Context the admin supplies — widget depends on the abstract shape. */
 interface AssetPickerContext {
   onPickAsset?: (options: { accept?: string[]; currentAssetName?: string | null }) => Promise<{ _asset: string } | null>
+  /** Admin API base (e.g. `/admin/api`) — preferred source for summary fetches */
+  assetsApiBase?: string
 }
 
 function buildThumbnailUrl(summary: AssetSummaryShape): string | null {
   const ext = extFromMime(summary.mime)
   if (!ext) return null
   return `/assets/${summary.name}-${summary.hash}.${ext}`
-}
-
-function extFromMime(mime: string): string | null {
-  switch (mime) {
-    case 'image/jpeg':
-      return 'jpg'
-    case 'image/png':
-      return 'png'
-    default:
-      return null
-  }
 }
 
 export function AssetEmbeddedWidget(props: WidgetProps) {
@@ -79,8 +71,9 @@ export function AssetEmbeddedWidget(props: WidgetProps) {
     // against the current page (admin SPA served under `/admin/` in prod,
     // `/` in dev-monorepo). The `/admin/api/...` prefix is added by the
     // admin's build — at runtime we fetch relative to the document.
-    const base = resolveAdminBase()
-    fetch(`${base}/api/assets/${encodeURIComponent(assetName)}`, {
+    const ctx = props.formContext as AssetPickerContext | undefined
+    const apiBase = ctx?.assetsApiBase ?? `${resolveAdminBase()}/api`
+    fetch(`${apiBase}/assets/${encodeURIComponent(assetName)}`, {
       headers: { 'Content-Type': 'application/json' },
     })
       .then(async res => {
@@ -143,6 +136,16 @@ export function AssetEmbeddedWidget(props: WidgetProps) {
         <button type="button" className="gz-asset-widget-pick" data-testid="asset-widget-pick" onClick={onPick}>
           {assetName ? 'Change' : 'Pick'}
         </button>
+        {!props.required && assetName && (
+          <button
+            type="button"
+            className="gz-asset-widget-clear"
+            data-testid="asset-widget-clear"
+            onClick={() => props.onChange({})}
+          >
+            Clear
+          </button>
+        )}
       </div>
     </div>
   )
