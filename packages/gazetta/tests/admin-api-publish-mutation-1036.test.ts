@@ -23,16 +23,7 @@ import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
 import type { StorageProvider, TargetConfig } from '../src/types.js'
 
 interface BuildOpts {
-  /** Pre-seeded source storage. When omitted, a fresh empty one is used. */
-  sourceStorage?: MemoryStorage
-  /**
-   * When true, populate `targetConfigs` with `local` + `staging` configs.
-   * Omit to exercise the empty-config short-circuit (publish.ts:153).
-   */
-  withTargetConfigs?: boolean
-  /**
-   * Custom target configs; overrides the `withTargetConfigs` default pair.
-   */
+  /** Target configs; drives the per-target config lookup in the route. */
   targetConfigs?: Record<string, TargetConfig>
   /**
    * Pre-initialized providers (deprecated path). When supplied, `getTargets`
@@ -43,17 +34,9 @@ interface BuildOpts {
 }
 
 function buildApp(opts: BuildOpts = {}): { app: Hono; sourceStorage: MemoryStorage } {
-  const sourceStorage = opts.sourceStorage ?? memoryStorage()
-  const stagingStorage = memoryStorage()
+  const sourceStorage = memoryStorage()
 
-  const targetConfigs =
-    opts.targetConfigs ??
-    (opts.withTargetConfigs
-      ? {
-          local: { storage: sourceStorage, type: 'esi' as const, environment: 'local' as const, editable: true },
-          staging: { storage: stagingStorage, type: 'esi' as const, environment: 'staging' as const },
-        }
-      : undefined)
+  const targetConfigs = opts.targetConfigs
 
   const source = createSourceContext({
     storage: sourceStorage,
@@ -62,10 +45,6 @@ function buildApp(opts: BuildOpts = {}): { app: Hono; sourceStorage: MemoryStora
     manifest: { name: 'test-site', ...(targetConfigs ? { targets: targetConfigs } : {}) },
   })
 
-  // Critically, `targets` (preInitTargets) is NOT passed — that's what
-  // forces `getTargets` down the lazy-init path (line 157) instead of
-  // short-circuiting at line 152. Today's `admin-api-publish-categorization`
-  // suite passes preInitTargets, leaving the lazy-init branch NoCoverage.
   const app = createAdminApp({
     source,
     siteDir: '/test-project',
@@ -117,14 +96,15 @@ describe('publish route — GET /api/targets response mapping (#1036)', () => {
   })
 
   it('applies the documented defaults when a config omits environment, type and alt-text', async () => {
-    // Kills:
-    //   - StringLiteral `''` on the 'local' and 'static' fallbacks —
-    //     with either mutation the omitted-field target reports ''
-    //     instead of the documented default.
-    //   - BooleanLiteral `?? false` -> `?? true` on altText.auto —
-    //     with no alt provider configured anywhere, the resolved
-    //     config is null and the route must surface auto:false so the
-    //     UI doesn't imply auto-fire for an unconfigured target.
+    // Kills the BooleanLiteral `?? false` -> `?? true` mutant on
+    // altText.auto: with no alt provider configured anywhere, the
+    // resolved config is null and the route must surface auto:false so
+    // the UI doesn't imply auto-fire for an unconfigured target. The
+    // 'local'/'static' values asserted here come from the
+    // getEnvironment/getType defaults (types.ts), not the route's
+    // ternary fallbacks — `bare` has a config entry, so those
+    // fallbacks never run in this test (the no-config-entry test
+    // covers them).
     const bareStorage = memoryStorage()
     const { app } = buildApp({
       targetConfigs: { bare: { storage: bareStorage, editable: true } },
