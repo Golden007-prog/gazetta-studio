@@ -126,6 +126,16 @@ export async function savePage(input: SavePageInput): Promise<SaveResult> {
   // a separate `createPage` entry point — Cut 5).
   const defaultPage = input.site.pages.get(input.name)
   if (!defaultPage) throw new PageNotFoundError(input.name)
+
+  // Archived pages are read-only (design-soft-delete.md): refuse
+  // before any validation or write. Without this guard the manifest
+  // assembly below drops archived/archivedAt/archivedBy/aliasOf and
+  // silently un-archives the page (#1340). The archive flags live on
+  // the default page, so locale-variant saves are refused too.
+  if (defaultPage.archived === true) {
+    return { ok: false, code: 'ARCHIVED', message: 'Archived. Restore to edit.' }
+  }
+
   const localeVariant = locale ? input.site.pageLocales.get(input.name)?.locales.get(locale) : undefined
   const page = localeVariant ?? defaultPage
 
