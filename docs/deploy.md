@@ -101,7 +101,7 @@ render deploy        # Render
 
 The Dockerfile's entrypoint is `gazetta serve`. The running container reads from `target.storage` at request time, just like a worker does. Your CI runs `gazetta publish` to write content, and the platform CLI to push the container image.
 
-See [`container-deployment.md`](container-deployment.md) for per-platform Dockerfile + CI recipes (filed as [#213](https://github.com/gazetta-studio/gazetta-studio/issues/213)).
+Per-platform Dockerfile + CI recipes are filed as [#213](https://github.com/gazetta-studio/gazetta-studio/issues/213).
 
 ## Lazy adapter construction
 
@@ -129,7 +129,7 @@ Without `CLOUDFLARE_API_TOKEN`, the site loads but `gazetta deploy production` s
 Two validators surface deploy-related issues at `gazetta validate`:
 
 - **`deploy-target-type-supported`** (error severity) — flags target.type incompatible with adapter.supports. E.g., `type: 'dynamic'` paired with a `['static']`-only adapter.
-- **`target-deploy-coverage`** (info severity) — reminds operators that non-local runtime-constrained targets without a `deploy:` field rely on container-host deploy tooling (linked to [`container-deployment.md`](container-deployment.md)).
+- **`target-deploy-coverage`** (info severity) — reminds operators that non-local runtime-constrained targets without a `deploy:` field rely on container-host deploy tooling (tracked in [#213](https://github.com/gazetta-studio/gazetta-studio/issues/213)).
 
 ## Error messages
 
