@@ -279,7 +279,7 @@ Multi-instance correctness: per-instance files (`events-pod-A.jsonl`, `events-po
 
 ## Strict mode (compliance contexts)
 
-Default is **fail-open**: audit failures never block writes. Per [Universal Provider Requirement #5](.claude/rules/design-plugins.md). Operator's monitoring catches the failure via structured logs.
+Default is **fail-open**: audit failures never block writes. Per [Universal Provider Requirement #5](../.claude/rules/design-plugins.md). Operator's monitoring catches the failure via structured logs.
 
 For HIPAA / SOC 2 contexts where "audit recording confirmed successful" is a hard prerequisite for the write to proceed:
 
