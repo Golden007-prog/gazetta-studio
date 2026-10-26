@@ -131,7 +131,7 @@ my-project/
     theme.css          # optional, user-authored
 ```
 
-Load order: PrimeVue Aura CSS → our `tokens.css` → user's `theme.css` (last, wins cascade). The admin appends the `theme.css` link right after `app.mount()` (`apps/admin/src/client/main.ts`) so it lands after PrimeVue's runtime-injected styles; the server answers an empty stylesheet when the file doesn't exist, Component-scoped PrimeVue tokens (`--p-button-*`) are order-dependent: they inject when each component first appears — before `theme.css` for first-screen components (a `theme.css` override wins there), after it for late-appearing ones like dialogs and badges (the override loses at equal specificity; use a more specific selector).
+Load order: PrimeVue Aura CSS → our `tokens.css` → user's `theme.css` (last, wins cascade). The admin appends the `theme.css` link right after `app.mount()` (`apps/admin/src/client/main.ts`) so it lands after PrimeVue's runtime-injected styles; the server answers an empty stylesheet when the file doesn't exist. Component-scoped PrimeVue tokens (`--p-button-*`) are order-dependent: they inject when each component first appears — before `theme.css` for first-screen components (a `theme.css` override wins there), after it for components that first mount later, like badges (the override loses at equal specificity; use a more specific selector).
 
 User overrides any `--p-*` or `--color-*` token in `:root` and `.dark`, and/or declares custom tokens for their own editors/fields:
 
