@@ -48,6 +48,10 @@
             "href": "/docs/templates"
           },
           {
+            "label": "Pages and fragments",
+            "href": "/docs/pages-and-fragments"
+          },
+          {
             "label": "Migration",
             "href": "/docs/migration"
           },
