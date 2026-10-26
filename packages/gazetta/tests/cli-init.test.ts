@@ -80,3 +80,18 @@ describe('gazetta init site.config.ts', () => {
     expect(text).toContain('Served by `gazetta serve`')
   })
 })
+
+describe('gazetta init package.json', () => {
+  it("depends on a caret range of the CLI's own version, not '*'", { timeout: 120000 }, async () => {
+    execSync(`node ${resolve(import.meta.dirname, '../dist/cli/index.js')} init ${testDir}`, { stdio: 'pipe' })
+    const pkg = JSON.parse(await readFile(join(testDir, 'package.json'), 'utf-8')) as {
+      dependencies: Record<string, string>
+    }
+    const cliPkg = JSON.parse(await readFile(resolve(import.meta.dirname, '../package.json'), 'utf-8')) as {
+      version: string
+    }
+    // A stable CLI version becomes a caret range; a prerelease pins to itself.
+    const expected = cliPkg.version.includes('-') ? cliPkg.version : `^${cliPkg.version}`
+    expect(pkg.dependencies.gazetta).toBe(expected)
+  })
+})
