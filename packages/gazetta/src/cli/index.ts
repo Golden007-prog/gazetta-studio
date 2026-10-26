@@ -423,6 +423,20 @@ async function runInit(dir: string) {
 
   const name = target.split('/').pop() ?? 'my-site'
 
+  // A new site depends on a caret range of the CLI's own version, not '*':
+  // npm's caret on 0.x allows only patch updates, so a breaking minor never
+  // arrives unchosen while fixes still do. A prerelease CLI pins the site to
+  // the prerelease itself.
+  const ownPackageJson = ['../../package.json', '../package.json']
+    .map(candidate => resolve(import.meta.dirname, candidate))
+    .find(candidate => existsSync(candidate))
+  if (!ownPackageJson) {
+    console.error(`\n  Error: could not locate gazetta's own package.json to determine the dependency range\n`)
+    process.exit(1)
+  }
+  const cliVersion = (JSON.parse(readFileSync(ownPackageJson, 'utf-8')) as { version: string }).version
+  const gazettaRange = cliVersion.includes('-') ? cliVersion : `^${cliVersion}`
+
   const files: Record<string, string> = {
     // First write: if init is interrupted, later state is still ignored.
     '.gitignore': `node_modules/\ndist/\n.env\n.env.local\n**/${STATE_ROOT}/\n\n# Publish output under any target dir: rendered HTML, the publish-time\n# site manifest, and transient per-item sidecars (#1181). The editable\n# sources (page.json, fragment.json, an author's robots.txt) stay tracked.\n**/targets/**/.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].hash\n**/targets/**/.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].hash.*\n**/targets/**/.pub-*\n**/targets/**/index.html\n**/targets/**/index.*.html\n**/targets/**/404.html\n**/targets/**/site.json\n**/targets/*/index/\n`,
@@ -598,7 +612,7 @@ export default template
           type: 'module',
           engines: { node: REQUIRED_NODE_FLOOR },
           scripts: { dev: 'gazetta dev' },
-          dependencies: { gazetta: '*', react: '^19.0.0', 'react-dom': '^19.0.0', zod: '^4.0.0' },
+          dependencies: { gazetta: gazettaRange, react: '^19.0.0', 'react-dom': '^19.0.0', zod: '^4.0.0' },
         },
         null,
         2,
