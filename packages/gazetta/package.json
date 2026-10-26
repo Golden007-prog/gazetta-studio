@@ -85,6 +85,7 @@
   "scripts": {
     "build": "tsc",
     "build:admin": "vite build -c ../../apps/admin/vite.config.ts --base /admin/ --outDir ../../packages/gazetta/admin-dist --emptyOutDir ../../apps/admin",
+    "prepack": "node scripts/copy-readme.mjs",
     "prepublishOnly": "npm run build && npm run build:admin",
     "test": "vitest run",
     "test:mutation": "stryker run",
