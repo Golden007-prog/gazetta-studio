@@ -17,7 +17,7 @@ This scaffolds:
 - A home page with a hero and text block
 - A shared header fragment (nav bar)
 - Templates: page-layout, hero, nav, text-block
-- A `local` filesystem target — publish works immediately
+- `local` and `staging` filesystem targets - publish to either works immediately
 
 ## Start the dev server
 
@@ -200,6 +200,22 @@ Reference in any page with `"@header"`. Update the fragment once — every page 
 
 The preview shows each page in a sandboxed frame with an origin of its own. Template scripts run there, but can't use cookies, `localStorage`, form submits, pop-ups or dialogs such as `alert()`; on the published site they can.
 
+## Publish and view your site
+
+In the admin, click **Publish** → pre-renders and uploads to the target. Publish to `local` while you work, then to `staging` to see the site exactly as a server serves it.
+
+`gazetta dev` keeps running on port 3000, so open a second terminal:
+
+```bash
+npx gazetta serve staging --port 3001
+```
+
+Open **http://localhost:3001** - your published home page, served from `sites/main/dist/staging/`. A filesystem target's `path` is relative to the folder that holds `site.config.ts`, so `./dist/staging` resolves under `sites/main/`, not at the project root.
+
+## Put it online
+
+The staging target serves from your own disk. To put the site in front of a real audience, follow the [Cloudflare deployment guide](./cloudflare.md) or the [self-hosted deployment guide](./self-hosted.md) for VPS, Docker, and Fly.io.
+
 ## Custom editors
 
 The CMS auto-generates forms from template schemas using @rjsf. You can replace the
@@ -363,6 +379,8 @@ Each target has a **storage** config (where files go) and an optional **deploy**
 | `filesystem` | Local dev, staging, backups | `path: ./dist/staging` |
 | `azure-blob` | Azure Blob Storage | `connectionString`, `container` |
 
+A filesystem `path` is relative to the folder that holds `site.config.ts`: `./dist/staging` resolves to `sites/main/dist/staging/`, not the project root.
+
 | Deploy adapter | Use case |
 |-------------|----------|
 | `cloudflareWorkersDeploy` | Cloudflare Workers — ESI assembly at the edge |
@@ -383,6 +401,9 @@ export default defineSite({
     },
     staging: {
       storage: filesystemStorage({ path: './dist/staging' }),
+      // Served by `gazetta serve`, which never serves `.gazetta/`, so history stays private.
+      publicStorage: false,
+      environment: 'staging',
     },
     production: {
       type: 'dynamic',
