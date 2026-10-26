@@ -12,22 +12,19 @@ interface HeroContent {
   subtitle?: string
 }
 
-function HeroEditor({
-  content,
-  schema,
-  onChange,
-  theme,
-}: {
+function HeroEditor(props: {
   content: HeroContent
   schema: Record<string, unknown>
   onChange: (content: Record<string, unknown>) => void
   theme: 'dark' | 'light'
+  fieldsBaseUrl?: string
+  onPickAsset?: (options: { accept?: string[]; currentAssetName?: string | null }) => Promise<{ _asset: string } | null>
 }) {
-  const [data, setData] = useState<HeroContent>(content)
+  const [data, setData] = useState<HeroContent>(props.content)
 
   const handleChange = (c: Record<string, unknown>) => {
     setData(c as HeroContent)
-    onChange(c)
+    props.onChange(c)
   }
 
   return (
@@ -47,8 +44,15 @@ function HeroEditor({
         {data.subtitle && <p style={{ fontSize: '1rem', opacity: 0.85, margin: 0 }}>{data.subtitle}</p>}
       </div>
 
-      {/* Default form below */}
-      <DefaultEditorForm schema={schema} content={data as Record<string, unknown>} onChange={handleChange} />
+      {/* Default form below. Forward every prop so custom fields
+          (fieldsBaseUrl) and the asset picker (onPickAsset) keep
+          working inside it. */}
+      <DefaultEditorForm
+        {...props}
+        schema={props.schema}
+        content={data as Record<string, unknown>}
+        onChange={handleChange}
+      />
     </div>
   )
 }
@@ -65,6 +69,8 @@ const editor: EditorMount = {
         schema={props.schema}
         onChange={props.onChange}
         theme={props.theme}
+        fieldsBaseUrl={props.fieldsBaseUrl}
+        onPickAsset={props.onPickAsset}
       />,
     )
   },
