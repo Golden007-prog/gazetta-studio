@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { resolve, join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile, readdir } from 'node:fs/promises'
-import { REQUIRED_NODE_FLOOR } from '../src/node-floor.js'
+import { REQUIRED_NODE_RANGE } from '../src/node-floor.js'
 import { tempDir } from './_helpers/temp.js'
 import { parseArgs } from '../src/cli/args.js'
 
@@ -181,9 +181,9 @@ describe('runInit', () => {
     expect(pkg.type).toBe('module')
     // Must match the repo's root engines floor (single source: src/node-floor.ts).
     // New sites created via `gazetta init` install write-file-atomic transitively;
-    // a looser floor here would surface as a confusing EBADENGINE pointing at
-    // a transitive dep on Node 22.0–22.22.1.
-    expect(pkg.engines.node).toBe(REQUIRED_NODE_FLOOR)
+    // a looser range here would surface as a confusing EBADENGINE pointing at
+    // a transitive dep on Node 22.0–22.22.1, 23.x, 24.0–24.14, or 25.x.
+    expect(pkg.engines.node).toBe(REQUIRED_NODE_RANGE)
     expect(pkg.scripts.dev).toBe('gazetta dev')
     expect(pkg.dependencies.react).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
