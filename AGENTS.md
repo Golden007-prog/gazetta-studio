@@ -39,6 +39,8 @@ These are the instructions for any coding agent working in this repository. Clau
 - `docs/soft-delete.md` — Archive / alias / rename / restore / purge for pages and fragments (UX, API, CLI, capability gaps)
 - `docs/runtime-capabilities.md` — Per-target capability matrix (`redirects`, `gone-status`); `_redirects` host-glue for plain-static deployments
 
+**Site docs pages** under `sites/gazetta.studio/targets/local/pages/docs/` are generated from `docs/` by `npm run docs:site`; nav order, descriptions and the version banner live in `sites/gazetta.studio/scripts/docs-nav.json`. Never edit the generated `page.json` files by hand — CI fails when they drift from the docs.
+
 **Design docs and team rules** live in `.claude/rules/`. Each `design-{feature}.md` records decisions the maintainer made: read the one the issue names (`**Feature**: x` means `design-x.md`) or the one for the code you change, and ask on the issue before changing a decision. `team-preferences.md` holds the numbered team rules that reviews cite. Claude Code loads these files by itself; other agents should open the ones they need.
 
 ## Build & Test
