@@ -71,8 +71,10 @@ describe('createHistoryProvider ordering', () => {
   describe('retention capacity boundary', () => {
     it('runs no eviction pass when the write lands exactly at the retention limit', async () => {
       // At exact capacity there is nothing to evict, so the retention
-      // pass must not run at all: no extra index read, no extra listing
-      // beyond the write's own bookkeeping.
+      // pass must not run at all: a write that reaches the limit does
+      // no more listing than one below it. (The very first write is
+      // not compared: creating the revisions directory skips one
+      // listing in id allocation.)
       const inner = memoryStorage()
       let listings = 0
       const counting: MemoryStorage = {
@@ -84,19 +86,23 @@ describe('createHistoryProvider ordering', () => {
         dump: () => inner.dump(),
         seed: entries => inner.seed(entries),
       }
-      const h = createHistoryProvider({ storage: counting, retention: 2 })
+      const h = createHistoryProvider({ storage: counting, retention: 3 })
 
       await h.recordRevision(input({ a: '1' }))
 
       listings = 0
       await h.recordRevision(input({ a: '2' }))
+      const belowLimit = listings
 
-      // The second write reaches exact capacity: three listings for the
-      // write's own bookkeeping (id allocation, cache refresh, retention
-      // check) and no more. A retention pass would add a fourth listing
-      // for the cache rewrite it must not do.
-      expect(listings).toBe(3)
-      expect((await h.listRevisions()).map(r => r.id)).toHaveLength(2)
+      listings = 0
+      await h.recordRevision(input({ a: '3' }))
+
+      // The third write lands exactly at the limit: it lists the folder
+      // no more than the second, which was below it. An eviction pass
+      // would add one more listing for the index rewrite it must not
+      // do.
+      expect(listings).toBe(belowLimit)
+      expect((await h.listRevisions()).map(r => r.id)).toHaveLength(3)
     })
   })
 })
