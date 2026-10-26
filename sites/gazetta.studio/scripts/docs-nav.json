@@ -1,9 +1,10 @@
 {
   "banner": {
-    "text": "These docs describe Gazetta's `main` branch.",
-    "securityClause": "The latest release on npm, {version}, is older and works differently in places, and it lacks security fixes made since.",
+    "link": "[run Gazetta from `main`](https://github.com/gazetta-studio/gazetta-studio#quick-start)",
+    "releaseSentence": "The latest release on npm, {version}, is older and works differently in places",
+    "securityClause": ", and it lacks security fixes made since",
     "securityClauseVersion": "0.8.0",
-    "link": "[run Gazetta from `main`](https://github.com/gazetta-studio/gazetta-studio#quick-start)"
+    "text": "These docs describe Gazetta's `main` branch."
   },
   "groups": [
     {
