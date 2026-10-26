@@ -139,13 +139,13 @@ npm run build            # build all packages
 
 ## Documentation
 
-- **[Getting Started](docs/getting-started.md)** — create a site, write templates, add pages and fragments
-- **[CONTEXT.md](CONTEXT.md)** — the project's vocabulary: pages, fragments, targets and the rest
+- **[Getting Started](https://github.com/gazetta-studio/gazetta-studio/blob/main/docs/getting-started.md)** — create a site, write templates, add pages and fragments
+- **[CONTEXT.md](https://github.com/gazetta-studio/gazetta-studio/blob/main/CONTEXT.md)** — the project's vocabulary: pages, fragments, targets and the rest
 - **Design docs** — `.claude/rules/design-*.md`, one per feature, with the decisions behind it
 
 ## Contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to pick an issue, run the tests and open a PR.
+Contributions are welcome. [CONTRIBUTING.md](https://github.com/gazetta-studio/gazetta-studio/blob/main/CONTRIBUTING.md) explains how to pick an issue, run the tests and open a PR.
 
 How did you find Gazetta, and are you using it for anything? Tell us in [this discussion](https://github.com/gazetta-studio/gazetta-studio/discussions/1277).
 
