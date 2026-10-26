@@ -1,4 +1,4 @@
-## Cache
+# Cache
 
 How Gazetta caches admin reads — what the default does, when to swap
 providers, and how to monitor cache health.
