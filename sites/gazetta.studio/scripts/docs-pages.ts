@@ -50,8 +50,17 @@ export interface NavGroup {
   title: string
   docs: NavDoc[]
 }
+export interface DocsBanner {
+  text: string
+  /** Security clause tied to securityClauseVersion; {version} is substituted. */
+  securityClause: string
+  /** The clause ships only while packages/gazetta/package.json is this version. */
+  securityClauseVersion: string
+  /** Markdown link to the run-from-main steps. */
+  link: string
+}
 export interface DocsNav {
-  banner: string
+  banner: DocsBanner
   groups: NavGroup[]
   internal: { file: string; title: string }[]
   removed: string[]
@@ -235,6 +244,8 @@ export function rewriteLinks(markdown: string, ctx: RewriteContext): { markdown:
 export interface BuildOptions {
   docsDir: string
   nav: DocsNav
+  /** Gazetta package version, read from packages/gazetta/package.json by the CLI. */
+  version: string
 }
 
 export interface BuildResult {
@@ -243,8 +254,16 @@ export interface BuildResult {
   problems: DocProblem[]
 }
 
+/** The banner line on every docs page. The security clause is tied to the
+ * version it names in docs-nav.json, so it disappears at the next release. */
+export function composeBanner(nav: DocsNav, version: string): string {
+  const b = nav.banner
+  const clause = version === b.securityClauseVersion ? ` ${b.securityClause.replaceAll('{version}', version)}` : ''
+  return `${b.text}${clause} To follow these docs, ${b.link}.`
+}
+
 /** Generates every page.json + the nav fragment, in memory. */
-export function buildDocsPages({ docsDir, nav }: BuildOptions): BuildResult {
+export function buildDocsPages({ docsDir, nav, version }: BuildOptions): BuildResult {
   const files = new Map<string, unknown>()
   const problems: DocProblem[] = []
   const published = nav.groups.flatMap(g => g.docs)
@@ -285,7 +304,7 @@ export function buildDocsPages({ docsDir, nav }: BuildOptions): BuildResult {
     problems.push(...linkProblems)
 
     const body =
-      `> ${nav.banner}\n\n${markdown.trimEnd()}\n\n---\n\n` +
+      `> ${composeBanner(nav, version)}\n\n${markdown.trimEnd()}\n\n---\n\n` +
       `[Edit this page on GitHub](${GITHUB_REPO}/edit/main/docs/${doc.file})\n`
 
     const slug = slugOf(doc)
@@ -349,6 +368,7 @@ interface CliOptions {
   docsDir: string
   siteDir: string
   agentsMd: string
+  version?: string
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -366,6 +386,7 @@ function parseArgs(argv: string[]): CliOptions {
     else if (arg === '--docs-dir') opts.docsDir = resolve(argv[++i])
     else if (arg === '--site-dir') opts.siteDir = resolve(argv[++i])
     else if (arg === '--agents-md') opts.agentsMd = resolve(argv[++i])
+    else if (arg === '--version') opts.version = argv[++i]
     else {
       console.error(`Unknown argument: ${arg}`)
       process.exit(2)
@@ -380,7 +401,15 @@ function main(): void {
   const nav = JSON.parse(readFileSync(navPath, 'utf8')) as DocsNav
   const published = nav.groups.flatMap(g => g.docs)
 
-  const { files, problems } = buildDocsPages({ docsDir: opts.docsDir, nav })
+  const version =
+    opts.version ??
+    (
+      JSON.parse(readFileSync(join(opts.siteDir, '..', '..', 'packages', 'gazetta', 'package.json'), 'utf8')) as {
+        version: string
+      }
+    ).version
+
+  const { files, problems } = buildDocsPages({ docsDir: opts.docsDir, nav, version })
   const errors: string[] = problems.map(p => `docs/${p.file}${p.line ? `:${p.line}` : ''}: ${p.message}`)
 
   // Every top-level docs/*.md must be accounted for by the nav.
@@ -411,7 +440,7 @@ function main(): void {
   const expectedFolders = new Set(published.filter(d => d.file !== INDEX_FILE).map(d => slugOf(d)))
   if (existsSync(pagesDocsDir)) {
     for (const entry of readdirSync(pagesDocsDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && !expectedFolders.has(entry.name)) {
+      if (entry.isDirectory() && !expectedFolders.has(entry.name) && !nav.removed.includes(entry.name)) {
         errors.push(
           `targets/local/pages/docs/${entry.name}/ does not belong to a published doc — delete the folder or add the doc to scripts/docs-nav.json`,
         )
@@ -443,7 +472,7 @@ function main(): void {
   // Write mode: prune stray folders, then write changed files.
   if (existsSync(pagesDocsDir)) {
     for (const entry of readdirSync(pagesDocsDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && !expectedFolders.has(entry.name)) {
+      if (entry.isDirectory() && !expectedFolders.has(entry.name) && !nav.removed.includes(entry.name)) {
         rmSync(join(pagesDocsDir, entry.name), { recursive: true, force: true })
         console.log(`pruned targets/local/pages/docs/${entry.name}/`)
       }
