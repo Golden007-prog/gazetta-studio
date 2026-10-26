@@ -414,120 +414,7 @@ it, and the default is `'dark'`. To follow switches, style with the CSS tokens
 
 > **Deploying to Cloudflare?** See the [Cloudflare deployment guide](./cloudflare.md).
 > **Self-hosting?** See the [self-hosted deployment guide](./self-hosted.md) for VPS, Docker, and Fly.io.
-
-### Target types
-
-Each target has a **storage** config (where files go) and an optional **deploy** adapter (how the platform serves them — see [`deploy.md`](./deploy.md) for the full reference):
-
-| Storage factory | Use case | Config |
-|------|----------|--------|
-| `r2Storage()` | Cloudflare R2 | `accountId`, `bucket`, `accessKeyId`, `secretAccessKey` |
-| `s3Storage()` | AWS S3, MinIO | `endpoint`, `bucket`, `accessKeyId`, `secretAccessKey` |
-| `filesystemStorage()` | Local dev, staging, backups | `path: ./dist/staging` |
-| `azureBlobStorage()` | Azure Blob Storage | `connectionString`, `container` |
-
-A filesystem `path` is relative to the folder that holds `site.config.ts`: `./dist/staging` resolves to `sites/main/dist/staging/`, not the project root.
-
-R2 and S3 need `npm install @aws-sdk/client-s3 @aws-sdk/lib-storage`; Azure needs `npm install @azure/storage-blob`. These are optional peer dependencies, so you install only what your storage needs.
-
-| Deploy adapter | Use case |
-|-------------|----------|
-| `cloudflareWorkersDeploy` | Cloudflare Workers — ESI assembly at the edge |
-| (none) | No platform deploy — just publish content to storage (container hosts use platform CLIs; see [#213](https://github.com/gazetta-studio/gazetta-studio/issues/213)) |
-
-### Credentials
-
-The storage and deploy keys the examples below use. (Admin sign-in is separate; see [`auth.md`](./auth.md).)
-
-R2 uses S3-compatible API tokens. Create one at [dash.cloudflare.com](https://dash.cloudflare.com)
-→ R2 → Manage R2 API Tokens → Create API Token. Pick "Object Read & Write" scoped to
-your bucket. The dashboard shows the access key ID and secret access key once — copy
-both.
-
-**Workers deploy:** Also create a Cloudflare API token at
-[dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
-with these permissions:
-
-| Permission | Access |
-|-----------|--------|
-| Account / Workers Scripts | Edit |
-| Account / R2 | Edit |
-| User / User Details | Read |
-| User / Memberships | Read |
-| Zone / Workers Routes | Edit |
-| Zone / Cache Purge | Purge |
-| Zone / Zone | Read |
-
-**Environment variables:** Create a `.env` file in your site directory (gitignored) for secrets:
-
-```
-R2_ACCESS_KEY_ID=your-r2-access-key
-R2_SECRET_ACCESS_KEY=your-r2-secret-key
-CLOUDFLARE_API_TOKEN=your-api-token
-```
-
-The CLI loads `.env` automatically. In CI, env vars are set directly — `.env` is skipped whenever `CI` is set to any non-empty value.
-
-Values in site.config.ts reference env vars directly via `process.env.VAR_NAME!` — they're resolved at evaluation time.
-
-### Configure targets
-
-```ts
-// site.config.ts
-import { cloudflareWorkersDeploy, defineSite, filesystemStorage, r2Storage } from 'gazetta'
-
-export default defineSite({
-  name: 'My Site',
-  targets: {
-    local: {
-      storage: filesystemStorage(),
-      editable: true,                      // the target you edit; its storage stays private
-    },
-    staging: {
-      storage: filesystemStorage({ path: './dist/staging' }),
-      // Served by `gazetta serve`, which never serves `.gazetta/`, so history stays private.
-      publicStorage: false,
-      environment: 'staging',
-    },
-    production: {
-      type: 'dynamic',
-      environment: 'production',           // admin UI requires confirmation before publishing
-      storage: r2Storage({
-        accountId: 'your-cloudflare-account-id',
-        bucket: 'my-site',
-        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-      }),
-      // Bucket is private; only the worker serves it. Without this, R2 storage counts as public.
-      publicStorage: false,
-      deploy: cloudflareWorkersDeploy({
-        apiToken: process.env.CLOUDFLARE_API_TOKEN!,
-        accountId: 'your-cloudflare-account-id',
-        name: 'my-site',
-        bucket: 'my-site',
-      }),
-      siteUrl: 'https://mysite.com',
-      cache: {
-        browser: 0,
-        edge: 86400,
-        purge: {
-          type: 'cloudflare',
-          apiToken: process.env.CLOUDFLARE_API_TOKEN!,
-        },
-      },
-    },
-  },
-})
-```
-
-### Target environment
-
-The optional `environment` field declares a target's intent — `local`, `staging`, or `production`. The admin UI uses it to:
-
-- Give each destination in the publish dialog a red (`production`) or amber (`staging`) left border
-- Require an explicit confirmation step before publishing to a `production` target
-
-A target without `environment` counts as `local`, so set it on your staging and production targets.
+> **Configuring targets?** See [`targets.md`](./targets.md) for storage factories, environments, caching and secrets.
 
 ### Unpublished change indicators
 
@@ -550,19 +437,7 @@ npx gazetta deploy production         # deploy a target's worker
 
 There is no default target for `publish`: with several targets it asks which one, and in CI it stops until you name one. A site with a single target can't publish at all — that target is the editing source, so publishing would render the site into its own storage. Add a second target in `site.config.ts` first.
 
-The publish mode comes from the target's `type`: an explicit value wins, and the default is `dynamic` only when the deploy adapter bundles a worker.
-
-**`dynamic`:**
-- Pages have ESI placeholders for fragments
-- Fragments are stored separately: a fragment edit shows on every page at request time, and a publish re-renders the fragment itself (and only pages that nest it inside an inline component)
-- Hashed CSS/JS files with immutable caching
-- A worker assembles pages at request time (`gazetta serve` assembles the same ESI for a `dynamic` target without a worker)
-
-**`static`:**
-- Pages are fully assembled — fragments baked in
-- One self-contained HTML file per page
-- CSS/JS inline — no external files
-- A publish re-renders only the pages that use a changed fragment
+The publish mode comes from the target's [`type`](./targets.md#type): `dynamic` pages keep ESI placeholders that a worker (or `gazetta serve`) assembles at request time; `static` pages are fully assembled at publish time.
 
 ### Custom 404 page
 
@@ -593,38 +468,6 @@ Works with both `gazetta serve` and Cloudflare Workers. Fragments are assembled 
 The 404 page stays out of `sitemap.xml` only while `systemPages: ['404']` lists it in `site.config.ts` — `init` sets that up.
 
 On a static target, every publish also copies the published 404 page to `404.html` at the target root, which Cloudflare Pages, Netlify and GitHub Pages show for missing paths. Until `pages/404` is published to a target, its `404.html` is a minimal "Page not found" page.
-
-### Cache configuration
-
-Per target:
-```ts
-cache: {
-  browser: 0,       // max-age — seconds before browser revalidates
-  edge: 86400,      // s-maxage — seconds before edge refetches from storage
-  purge: {          // optional — purge CDN cache after publish
-    type: 'cloudflare',
-    apiToken: process.env.CLOUDFLARE_API_TOKEN!,
-  },
-}
-```
-
-Per page (overrides target):
-```json
-// pages/dashboard/page.json
-{
-  "cache": {
-    "browser": 0
-  }
-}
-```
-
-`browser` and `edge` apply to `dynamic` targets only: the worker reads them from a comment in the published HTML. Static output carries no cache comment, and `gazetta serve` on a static target sends `max-age=0, must-revalidate` for pages, so static caching is up to the host.
-
-Defaults: `browser: 0`, `edge: 86400`. Set `edge: 0` to skip CDN caching entirely (no purge needed).
-
-ETags are automatic — browsers get `304 Not Modified` for unchanged pages.
-
-When `cache.purge` is configured, `gazetta publish` automatically purges the CDN cache after uploading. The zone ID is auto-detected from `siteUrl`.
 
 ## Customize admin appearance
 
