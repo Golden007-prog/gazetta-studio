@@ -5,7 +5,7 @@
  * issue.
  */
 import { execSync } from 'node:child_process'
-import { rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { createJiti } from 'jiti'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -55,5 +55,28 @@ describe('gazetta init site.config.ts', () => {
       scope: { kind: 'cli' },
     })
     expect(issues).toEqual([])
+  })
+
+  it('writes a staging target next to the editing target', { timeout: 120000 }, async () => {
+    execSync(`node ${resolve(import.meta.dirname, '../dist/cli/index.js')} init ${testDir}`, { stdio: 'pipe' })
+    const jiti = createJiti(import.meta.url, {
+      moduleCache: false,
+      alias: { gazetta: resolve(import.meta.dirname, '../src/index.ts') },
+    })
+    const config = (await jiti.import(join(testDir, 'sites/main/site.config.ts'), { default: true })) as {
+      targets: Record<string, TargetConfig>
+    }
+    expect(Object.keys(config.targets).sort()).toEqual(['local', 'staging'])
+    const staging = config.targets.staging
+    // A first publish can go to staging and `gazetta serve staging` shows it.
+    expect(staging.storage.kind).toBe('filesystem')
+    expect(staging.environment).toBe('staging')
+    // Served by `gazetta serve`, which never serves `.gazetta/`, so the
+    // target keeps history while staying private.
+    expect(isPublicStorage(staging)).toBe(false)
+    // Only the editing target is editable.
+    expect(isEditable(staging)).toBe(false)
+    const text = await readFile(join(testDir, 'sites/main/site.config.ts'), 'utf-8')
+    expect(text).toContain('Served by `gazetta serve`')
   })
 })
