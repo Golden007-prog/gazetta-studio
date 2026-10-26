@@ -177,7 +177,7 @@ Decided: maintainer, 2026-10-24 (#1266)
 
 **Which issues are open to contributors.** GitHub's existing `help wanted` label marks an issue a person or an outside agent can take, with the description "A person or outside agent can take it: full spec, acceptance criteria, no design decision open". It's also the label up-for-grabs-style listings recognise (#1275).
 
-Decided: maintainer, 2026-10-26 (relayed by the product owner session)
+Decided: maintainer, 2026-10-26 (#1486)
 
 **Trying the admin.** The Stage 1 try button opens StackBlitz on a site made with `gazetta init`, from the first release candidate on (a check on 2026-10-24 found the released 0.8.0 runs there); "Open in Codespaces" is the fallback, on the visitor's own GitHub allowance. No hosted demo of the admin: a demo running in the browser is revisited when Stage 2's launch traffic would justify the work.
 
@@ -300,7 +300,7 @@ Follows from the generated-pages decision above.
 
 **Theme.** gazetta.studio's docs stay dark-only, like the rest of the site; there's no light mode for the docs alone. A light mode becomes a whole-site item for Stage 2.
 
-Decided: maintainer, 2026-10-26 (relayed by the product owner session)
+Decided: maintainer, 2026-10-26 (#1486)
 
 ### Agent-files experiment (#1273)
 
