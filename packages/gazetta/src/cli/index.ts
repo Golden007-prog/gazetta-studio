@@ -11,7 +11,7 @@ import { resolvePage } from '../resolver.js'
 import { renderPage } from '../renderer.js'
 import { createFilesystemProvider } from '../providers/filesystem.js'
 import { invalidateTemplate, invalidateAllTemplates } from '../template-loader.js'
-import { REQUIRED_NODE_FLOOR } from '../node-floor.js'
+import { REQUIRED_NODE_RANGE } from '../node-floor.js'
 import { isTemplateEventRecent, TEMPLATE_RECENT_CHANGE_WINDOW_MS } from './dev-template-watcher.js'
 // createTargetRegistry is used lazily by admin-api publish routes
 import type { SiteManifest } from '../types.js'
@@ -610,7 +610,7 @@ export default template
           name,
           private: true,
           type: 'module',
-          engines: { node: REQUIRED_NODE_FLOOR },
+          engines: { node: REQUIRED_NODE_RANGE },
           scripts: { dev: 'gazetta dev' },
           dependencies: { gazetta: gazettaRange, react: '^19.0.0', 'react-dom': '^19.0.0', zod: '^4.0.0' },
         },
