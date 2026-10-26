@@ -1645,7 +1645,16 @@ async function runDev(siteDir: string, port: number, hostFlag?: string) {
     const url = new URL(c.req.url)
     if (url.pathname !== '/' && url.pathname.endsWith('/')) {
       url.pathname = url.pathname.slice(0, -1)
-      return app.fetch(new Request(url, c.req.raw), c.env)
+      // Copy the fields across instead of passing c.req.raw as the init:
+      // @hono/node-server's request isn't a native Request, and Node 26's
+      // fetch throws reading its `duplex` getter ("Illegal invocation").
+      const raw = c.req.raw
+      const init: RequestInit & { duplex?: 'half' } = { method: raw.method, headers: raw.headers, signal: raw.signal }
+      if (raw.body) {
+        init.body = raw.body
+        init.duplex = 'half'
+      }
+      return app.fetch(new Request(url, init), c.env)
     }
     return next()
   })
