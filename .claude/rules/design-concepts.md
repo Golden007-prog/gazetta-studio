@@ -128,7 +128,7 @@ templates/
 
 ## Template Exports
 
-A template can export up to three things:
+A template module exports two things (`TemplateModule` in `packages/gazetta/src/types.ts`):
 
 ```ts
 // Required: renderer
@@ -136,10 +136,14 @@ export default (params: { content, children?, params? }) => { html, css, js, hea
 
 // Required: content schema (Zod → converted to JSON Schema for CMS form generation)
 export const schema = z.object({ title: z.string(), ... })
+```
 
-// Optional: custom editor (mount function — framework-agnostic)
-export const editor = {
-  mount(el: HTMLElement, props: { content, onChange }): void
+A custom editor is not a template export. It's a separate file in the project's `admin/editors/`, matched to the template by name (`admin/editors/hero.tsx` or `admin/editors/hero/index.tsx` for `templates/hero/`; `hasEditorFile` in `template-loader.ts`). Editors run in the admin's browser bundle, with the admin's dependencies, while templates run on the server; see `configurations.md` "Modularity". The editor file's default export is an `EditorMount`:
+
+```ts
+// admin/editors/hero.tsx
+export default {
+  mount(el: HTMLElement, props: { content, schema, theme, onChange, ... }): void
   unmount(el: HTMLElement): void
 }
 ```
@@ -150,11 +154,11 @@ The CMS auto-generates editor UIs from component schemas using JSON Schema form 
 (@rjsf). Templates can override with a custom editor via the mount function pattern.
 
 Editor priority:
-1. **Custom editor** — if template exports `editor`, mount it (framework-agnostic)
+1. **Custom editor** — if `admin/editors/` has a file named after the template, mount its default export (framework-agnostic)
 2. **Schema-driven form** — auto-generate form from the Zod schema via @rjsf
 
 The mount function contract follows the single-spa micro-frontend pattern:
-- `mount(el, { content, onChange })` — render editor into the provided DOM element
+- `mount(el, { content, schema, theme, onChange, ... })` — render editor into the provided DOM element (`EditorMount` in `types.ts`)
 - `unmount(el)` — clean up (remove listeners, destroy framework instance)
 - Works with React (`createRoot`), Svelte 5 (`mount`), Vue 3 (`createApp`), or vanilla JS
 
