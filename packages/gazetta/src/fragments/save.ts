@@ -104,6 +104,12 @@ export async function saveFragment(input: SaveFragmentInput): Promise<SaveResult
 
   const defaultFragment = input.site.fragments.get(input.name)
   if (!defaultFragment) throw new FragmentNotFoundError(input.name)
+
+  // Archived fragments are read-only (design-soft-delete.md): refuse
+  // before any validation or write, mirroring the page guard (#1340).
+  if (defaultFragment.archived === true) {
+    return { ok: false, code: 'ARCHIVED', message: 'Archived. Restore to edit.' }
+  }
   const localeVariant = locale ? input.site.fragmentLocales.get(input.name)?.locales.get(locale) : undefined
   const fragment = localeVariant ?? defaultFragment
 
