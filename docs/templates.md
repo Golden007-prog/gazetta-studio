@@ -36,7 +36,7 @@ The renderer calls the default export with a single params object:
 |-------|------|-------------|
 | `content` | `T`, optional | The component's content, validated against `schema` |
 | `children` | `RenderOutput[]`, optional | The rendered output of child components, in order |
-| `params` | `Record<string, string>`, optional | Route parameters, on [dynamic routes](./getting-started.md#dynamic-routes) |
+| `params` | `Record<string, string>`, optional | Route parameters, on [dynamic routes](./pages-and-fragments.md#dynamic-routes) |
 | `locale` | string | Active locale code (e.g. `'fr'`, `'en'`) — always provided by the renderer, defaults to the site's locale or `'en'` |
 
 The function returns a `RenderOutput` or a `Promise<RenderOutput>`.
