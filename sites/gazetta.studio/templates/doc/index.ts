@@ -145,47 +145,8 @@ ${bodyHtml}
   .on-this-page .toc-depth-3 { padding-left: 1rem; }
   .on-this-page a { color: #71717a; }
   .on-this-page a:hover { color: #e4e4e7; }
-}
-@media (prefers-color-scheme: light) {
-  .doc h1 { color: #18181b; }
-  .doc h2 { color: #27272a; }
-  .doc h3, .doc h4 { color: #3f3f46; }
-  .doc .anchor { color: #a1a1aa; }
-  .doc p, .doc li { color: #3f3f46; }
-  .doc strong { color: #18181b; }
-  .doc a { color: #7c3aed; }
-  .doc a:hover { color: #6d28d9; }
-  .doc code { background: #f4f4f5; }
-  .doc pre { border-color: #d4d4d8; }
-  .doc blockquote { background: #f4f4f5; }
-  .doc blockquote p { color: #6d28d9; }
-  .doc th, .doc td { border-bottom-color: #e4e4e7; color: #3f3f46; }
-  .doc th { color: #18181b; }
-  .doc hr { border-top-color: #e4e4e7; }
-}
-@media (prefers-color-scheme: light) and (min-width: 88rem) {
-  .on-this-page-title { color: #52525b; }
-  .on-this-page a { color: #52525b; }
-  .on-this-page a:hover { color: #18181b; }
 }`,
     js: '',
-    head: `<style>
-/* Light mode for the docs pages. The shared site chrome is dark-only; these
-   overrides flip it just here. The html body prefix outranks both the layout's
-   body rule and the scoped data-gz rules; !important only where the original rule uses it. */
-@media (prefers-color-scheme: light) {
-  html body { background: #ffffff; color: #1f2328; }
-  html body .site .navbar-brand { color: #18181b; }
-  html body .site .navbar-links a { color: #3f3f46; }
-  html body .site .navbar-links a:hover { color: #09090b; }
-  html body .site .navbar-cta { background: #e4e4e7; color: #1f2328 !important; }
-  html body .site .navbar-cta:hover { background: #d4d4d8; }
-  html body .site .footer-brand strong { color: #18181b; }
-  html body .site .footer-brand p { color: #6b7280; }
-  html body .site .footer-claude { color: #6b7280; }
-  html body .site .footer-claude:hover { color: #d97757; }
-  html body .site .footer-copy { color: #9ca3af; }
-</style>`,
   }
 }
 
