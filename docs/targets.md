@@ -57,7 +57,7 @@ A target without `environment` counts as `local`, so set it on your staging and 
 
 Whether the admin edits content on this target. The editing source is the first editable target in declaration order, and the CLI refuses to start when no target is editable. Publish destinations don't need `editable` — a read-only target like the starter's `staging` still receives publishes.
 
-Default: `true` when `environment` is `local` (the default), `false` for `staging` and `production` — and always `false` when the storage is public (see `publicStorage` below).
+Default: `false` unless the target's storage is private. A target counts as public until something marks it private (see `publicStorage` below), and a public target is never editable — the default resolves to `false`, and an explicit `editable: true` on public storage is a `gazetta validate` error. So a bare `local: { storage: filesystemStorage() }` is public and not editable, and with no other editable target the CLI refuses to start. Mark the target you edit: `editable: true` on a filesystem-storage target, or `publicStorage: false` as `gazetta init` does. On a private target the default is `true` for `environment: local` and `false` for `staging` and `production`.
 
 An editable filesystem target's storage counts as private automatically — an editing target keeps history, and history must not be publicly reachable.
 
