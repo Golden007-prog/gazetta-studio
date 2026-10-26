@@ -1,5 +1,10 @@
 {
-  "banner": "These docs describe Gazetta's `main` branch. The latest release on npm, 0.8.0, is older and works differently in places, and it lacks security fixes made since. To follow these docs, [run Gazetta from `main`](https://github.com/gazetta-studio/gazetta-studio#quick-start).",
+  "banner": {
+    "text": "These docs describe Gazetta's `main` branch.",
+    "securityClause": "The latest release on npm, {version}, is older and works differently in places, and it lacks security fixes made since.",
+    "securityClauseVersion": "0.8.0",
+    "link": "[run Gazetta from `main`](https://github.com/gazetta-studio/gazetta-studio#quick-start)"
+  },
   "groups": [
     {
       "title": "Start",
@@ -98,8 +103,14 @@
     }
   ],
   "internal": [
-    { "file": "actor-scenarios.md", "title": "Actor scenarios" },
-    { "file": "non-goals.md", "title": "Non-goals" }
+    {
+      "file": "actor-scenarios.md",
+      "title": "Actor scenarios"
+    },
+    {
+      "file": "non-goals.md",
+      "title": "Non-goals"
+    }
   ],
   "removed": []
 }
