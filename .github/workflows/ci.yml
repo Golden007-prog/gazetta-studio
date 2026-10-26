@@ -376,3 +376,35 @@ jobs:
           # Find the downloaded tarball
           TARBALL="$(find packages/gazetta -maxdepth 1 -name 'gazetta-*.tgz' | head -1)"
           GAZETTA_TARBALL="$(pwd)/$TARBALL" npm run smoke
+
+  # Node 26, the Active LTS line from 2026-10-28 (nodejs/Release
+  # schedule.json), which nodejs.org offers new users. Every other job runs
+  # on 22. This one runs what a newcomer meets (the packed tarball through
+  # init → dev → curl) and packages/gazetta's tests, on Ubuntu only. Not a
+  # required check yet; add it to branch protection once it has proved
+  # stable. A separate job, because a node dimension on `smoke`'s matrix
+  # would rename its required checks.
+  node-26:
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/gazetta
+      - run: npm test -w packages/gazetta
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: gazetta-tarball
+          path: packages/gazetta/
+      - name: Smoke test (init → dev → curl)
+        shell: bash
+        run: |
+          TARBALL="$(find packages/gazetta -maxdepth 1 -name 'gazetta-*.tgz' | head -1)"
+          GAZETTA_TARBALL="$(pwd)/$TARBALL" npm run smoke

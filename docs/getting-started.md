@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Gazetta is tested on Node.js 22.22.2 or later in the 22 line. Node 24.15+ and 26+ are also accepted, but not tested. Odd-numbered releases such as 23 and 25 aren't supported.
+- Gazetta is tested on Node.js 22.22.2 or later in the 22 line, and on Node.js 26. Node 24.15+ is also accepted, but not tested. Odd-numbered releases such as 23 and 25 aren't supported.
 - macOS or Linux. On Windows, Gazetta's own tests run only an end-to-end check; use [WSL](https://learn.microsoft.com/windows/wsl/) if you hit problems.
 
 ## Create a site

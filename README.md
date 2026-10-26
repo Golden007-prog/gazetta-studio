@@ -16,7 +16,7 @@ The CMS stores nothing — all content lives in targets (filesystem, S3, Azure B
 ## Quick Start
 
 ```bash
-# Requirements: Gazetta is tested on Node.js 22.22.2 or later in the 22 line. Node 24.15+ and 26+ are also accepted, but not tested. Odd-numbered releases such as 23 and 25 aren't supported.
+# Requirements: Gazetta is tested on Node.js 22.22.2 or later in the 22 line, and on Node.js 26. Node 24.15+ is also accepted, but not tested. Odd-numbered releases such as 23 and 25 aren't supported.
 npm install
 npm run build
 npm run dev
