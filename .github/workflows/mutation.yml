@@ -4,10 +4,11 @@ name: Mutation
 # schedule. Not on PRs — Stryker on the full target set takes ~hours,
 # which is too slow for merge blocking.
 #
-# Result is the report artifact, viewable as HTML. Failure does NOT
-# block anything (continue-on-error) — mutation score is signal, not
-# gate. When the baseline stabilises, consider raising
-# stryker.config.json's `thresholds.break` to enforce a floor.
+# Result is the report artifact, viewable as HTML. A low mutation score
+# does NOT fail the run (continue-on-error on the Stryker step): the
+# score is signal, not gate. When the baseline stabilises, consider
+# raising stryker.config.json's `thresholds.break` to enforce a floor.
+# A run that writes no report does fail, so a broken run shows (#1475).
 on:
   schedule:
     # 03:00 UTC nightly. Off-hours for most contributors.
@@ -22,9 +23,6 @@ permissions:
 jobs:
   stryker:
     runs-on: ubuntu-latest
-    # Never block the scheduler. The summary step below surfaces the
-    # score; humans read the artifact.
-    continue-on-error: true
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,6 +35,10 @@ jobs:
       - run: npm ci
       - run: npm run build -w packages/gazetta
       - name: Run Stryker
+        # Stryker exits non-zero when the score breaks the threshold; that
+        # still writes a report, so it mustn't fail the run. The check at
+        # the end fails it when no report was written (#1475).
+        continue-on-error: true
         working-directory: packages/gazetta
         run: npm run test:mutation
       - name: Upload report
@@ -46,3 +48,9 @@ jobs:
           name: mutation-report
           path: packages/gazetta/reports/mutation
           retention-days: 30
+      - name: Fail when Stryker wrote no report
+        run: |
+          if [ ! -f packages/gazetta/reports/mutation/mutation.html ]; then
+            echo "::error::Stryker wrote no report; see the Run Stryker step."
+            exit 1
+          fi
