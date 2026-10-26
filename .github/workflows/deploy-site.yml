@@ -7,7 +7,7 @@ on:
     paths:
       - 'sites/gazetta.studio/**'
       - 'packages/gazetta/**'
-
+      - 'docs/**'
 # Serialize deploys. A half-published R2 is worse than a queued deploy,
 # so never cancel one in progress.
 concurrency:
