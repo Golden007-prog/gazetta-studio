@@ -1,6 +1,7 @@
 import { watch, onBeforeUnmount, type Ref } from 'vue'
 import type { EditorMount } from 'gazetta/types'
 import { openAssetPicker } from '../api/openAssetPicker.js'
+import { API_BASE } from '../api/_request.js'
 import { plainCopy } from '../drafts/types.js'
 
 export function useEditorMount(
@@ -34,6 +35,7 @@ export function useEditorMount(
       onChange,
       fieldsBaseUrl: fieldsBaseUrl?.value,
       onPickAsset: openAssetPicker,
+      assetsApiBase: API_BASE,
     })
     current = { mount: m, el }
   }
