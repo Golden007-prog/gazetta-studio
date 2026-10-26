@@ -1,0 +1,87 @@
+{
+  "template": "docs-nav",
+  "content": {
+    "groups": [
+      {
+        "title": "Start",
+        "items": [
+          {
+            "label": "Getting started",
+            "href": "/docs"
+          },
+          {
+            "label": "Cloudflare",
+            "href": "/docs/cloudflare"
+          },
+          {
+            "label": "Self-hosted",
+            "href": "/docs/self-hosted"
+          }
+        ]
+      },
+      {
+        "title": "Deploy",
+        "items": [
+          {
+            "label": "Deploy",
+            "href": "/docs/deploy"
+          },
+          {
+            "label": "Template assets",
+            "href": "/docs/template-assets"
+          },
+          {
+            "label": "Content assets",
+            "href": "/docs/content-assets"
+          }
+        ]
+      },
+      {
+        "title": "Content and templates",
+        "items": [
+          {
+            "label": "Migration",
+            "href": "/docs/migration"
+          },
+          {
+            "label": "Transform adapters",
+            "href": "/docs/transform-adapters"
+          },
+          {
+            "label": "Cache",
+            "href": "/docs/cache"
+          },
+          {
+            "label": "Offline",
+            "href": "/docs/offline"
+          }
+        ]
+      },
+      {
+        "title": "Admin and operations",
+        "items": [
+          {
+            "label": "Auth",
+            "href": "/docs/auth"
+          },
+          {
+            "label": "Audit",
+            "href": "/docs/audit"
+          },
+          {
+            "label": "Hooks",
+            "href": "/docs/hooks"
+          },
+          {
+            "label": "Soft delete",
+            "href": "/docs/soft-delete"
+          },
+          {
+            "label": "Runtime capabilities",
+            "href": "/docs/runtime-capabilities"
+          }
+        ]
+      }
+    ]
+  }
+}
