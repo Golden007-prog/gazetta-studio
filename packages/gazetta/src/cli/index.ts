@@ -637,11 +637,12 @@ export default template
   note(
     `${c.bold('templates/')}          ${c.dim('4 templates (hero, nav, page-layout, text-block)')}\n` +
       `${c.bold('admin/')}              ${c.dim('custom editors and fields')}\n` +
-      `${c.bold('sites/main/')}         ${c.dim('site content')}\n` +
-      `  ${c.dim('pages/home/')}       ${c.dim('home page with hero + intro')}\n` +
-      `  ${c.dim('pages/404/')}        ${c.dim('error page')}\n` +
-      `  ${c.dim('fragments/header/')} ${c.dim('shared header nav')}\n` +
+      `${c.bold('sites/main/')}         ${c.dim('the site')}\n` +
       `  ${c.dim('site.config.ts')}    ${c.dim('site config + local target')}\n` +
+      `  ${c.dim('targets/local/')}    ${c.dim('content served by gazetta dev')}\n` +
+      `    ${c.dim('pages/home/')}       ${c.dim('home page with hero + intro')}\n` +
+      `    ${c.dim('pages/404/')}        ${c.dim('error page')}\n` +
+      `    ${c.dim('fragments/header/')} ${c.dim('shared header nav')}\n` +
       `${c.bold('package.json')}`,
     `Created ${c.green(name)}/`,
   )
