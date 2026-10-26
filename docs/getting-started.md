@@ -366,7 +366,7 @@ Each target has a **storage** config (where files go) and an optional **deploy**
 | Deploy adapter | Use case |
 |-------------|----------|
 | `cloudflareWorkersDeploy` | Cloudflare Workers — ESI assembly at the edge |
-| (none) | No platform deploy — just publish content to storage (container hosts use platform CLIs; see [container-deployment.md](./container-deployment.md)) |
+| (none) | No platform deploy — just publish content to storage (container hosts use platform CLIs; see [#213](https://github.com/gazetta-studio/gazetta-studio/issues/213)) |
 
 ### Configure targets
 
@@ -648,5 +648,5 @@ content hash has not changed; `--force` is not required.
 ## Next steps
 
 - Browse the [starter example](../examples/starter/) for more templates
-- Read the [design document](design.md) for architecture details
+- Read the [architecture document](../.claude/rules/architecture.md) for architecture details
 - Check out the [contributing guide](../CONTRIBUTING.md) to get involved
