@@ -536,7 +536,7 @@ for it to load, so first paint can precede it.
 (`--p-button-*`, `--p-dialog-*`) are order-dependent: PrimeVue injects each
 component's tokens when the component first appears. Components on the first
 screen usually get theirs before `theme.css`, and your override wins; ones that
-first appear later (a dialog opened afterwards, a badge) get theirs after it and
+first mount later (a badge, say) get theirs after it and
 win instead. To override a component token reliably, use a more specific selector
 than PrimeVue's, e.g. `html .p-button { ... }`.
 
