@@ -41,7 +41,8 @@ const fixtureAgents = join(fixtureRoot, 'AGENTS.md')
 const NAV = {
   banner: {
     text: 'Fixture banner.',
-    securityClause: 'Release {version} lacks security fixes.',
+    releaseSentence: 'Release {version} is out',
+    securityClause: ', and it lacks security fixes',
     securityClauseVersion: '0.0.1',
     link: '[run from main](https://example.com/run-from-main)',
   },
@@ -272,13 +273,14 @@ describe('site docs sync check', () => {
         JSON.parse(readFileSync(join(fixtureSite, 'targets/local/pages/docs/other/page.json'), 'utf-8')) as {
           components: { content?: string }[]
         }
-      expect(page().components[2]?.content).toContain('Release 0.0.1 lacks security fixes.')
+      expect(page().components[2]?.content).toContain('Release 0.0.1 is out, and it lacks security fixes.')
       run(fixtureArgs(['--version', '9.9.9']))
       const bumped = page().components[2]?.content ?? ''
       expect(bumped).toContain('Fixture banner.')
+      expect(bumped).toContain('Release 9.9.9 is out.')
       expect(bumped).not.toContain('security fixes')
       run(fixtureArgs())
-      expect(page().components[2]?.content).toContain('Release 0.0.1 lacks security fixes.')
+      expect(page().components[2]?.content).toContain('Release 0.0.1 is out, and it lacks security fixes.')
     },
     SPAWN_TIMEOUT,
   )
