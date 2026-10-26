@@ -41,7 +41,7 @@ The renderer calls the default export with a single params object:
 
 The function returns a `RenderOutput` or a `Promise<RenderOutput>`.
 
-A template module exports only `default` and `schema` — the CMS generates the editing form from `schema`. To replace the form with a custom editor, add a separate file under `admin/editors/`; see [Custom editors](./getting-started.md#custom-editors).
+A template module exports only `default` and `schema` — the CMS generates the editing form from `schema`. To replace the form with a custom editor, add a separate file under `admin/editors/`; see [Custom editors](./customize-editor.md#custom-editors).
 
 ## Template fields
 
