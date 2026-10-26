@@ -119,9 +119,9 @@ Only 8 `:global(.dark)` uses in the entire codebase — not a systemic pattern. 
 
 When refactoring, move these to `tokens.css` with the new `--color-*` names; rewrite mount.tsx and brand-color.tsx to use the new names. No backwards-compat constraint.
 
-## User theming (future)
+## User theming
 
-Site authors will eventually want to customize colors. The planned contract is **static CSS overrides, no API** — simplest path, defers the JS preset layer until the product is mature enough to justify it.
+`admin/theme.css` shipped: site authors customize colors with **static CSS overrides, no API** — simplest path, defers the JS preset layer until the product is mature enough to justify it.
 
 Shape:
 
@@ -131,7 +131,7 @@ my-project/
     theme.css          # optional, user-authored
 ```
 
-Load order: PrimeVue Aura CSS → our `tokens.css` → user's `theme.css` (last, wins cascade). `gazetta dev` / `gazetta serve` injects the link tag when the file exists.
+Load order: PrimeVue Aura CSS → our `tokens.css` → user's `theme.css` (last, wins cascade). The admin appends the `theme.css` link right after `app.mount()` (`apps/admin/src/client/main.ts`) so it lands after PrimeVue's runtime-injected styles; the server answers an empty stylesheet when the file doesn't exist, and component-scoped PrimeVue tokens (`--p-button-*`) inject even later, on each component's first mount.
 
 User overrides any `--p-*` or `--color-*` token in `:root` and `.dark`, and/or declares custom tokens for their own editors/fields:
 
@@ -162,9 +162,9 @@ User overrides any `--p-*` or `--color-*` token in `:root` and `.dark`, and/or d
 
 Users pick their own prefix for custom tokens. One file, one place to look.
 
-**Known limitation — verified live against PrimeVue v4 + Aura:** derived tokens (`--p-primary-hover-color`, `--p-primary-active-color`, `--p-primary-contrast-color`) are emitted as literal hex values, not as `var(--p-primary-color)`. Overriding `--p-primary-color` cascades to some downstream tokens (`--p-button-primary-background` resolves via chained `var()`) but not to sibling shades.
+**Known limitation — verified against PrimeVue v4 + Aura source:** derived tokens are `var()` references to the primary palette shades, not to `--p-primary-color` and not literal hex — `--p-primary-hover-color` resolves to `var(--p-primary-600)`, `--p-primary-active-color` to `var(--p-primary-700)` (`--p-primary-contrast-color` is a literal `#ffffff`). Overriding `--p-primary-color` cascades to direct consumers (`--p-button-primary-background` resolves via chained `var()`) but not to hover/active, which keep tracking the original palette shades.
 
-For a full palette swap, the user must override each shade explicitly. Document this as a known tradeoff of the no-API approach. A future `admin/theme.ts` JS preset bridge (using PrimeVue's `definePreset`) would fix this — deferred until product maturity warrants the added surface area.
+For a full palette swap, the user must override the shade tokens (`--p-primary-500/600/700`, …) or each derived token explicitly. Document this as a known tradeoff of the no-API approach. A future `admin/theme.ts` JS preset bridge (using PrimeVue's `definePreset`) would fix this — deferred until product maturity warrants the added surface area.
 
 ## Don't use
 
