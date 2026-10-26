@@ -272,12 +272,10 @@ function HeroEditor(props: {
 const roots = new WeakMap<HTMLElement, Root>()
 const editor: EditorMount = {
   mount(el, props) {
-    // mount() runs again on each value change — reuse the root.
-    let root = roots.get(el)
-    if (!root) {
-      root = createRoot(el)
-      roots.set(el, root)
-    }
+    // mount() runs once per mount cycle; content updates flow through
+    // onChange and the editor's own state.
+    const root = createRoot(el)
+    roots.set(el, root)
     root.render(<HeroEditor {...props} />)
   },
   unmount(el) { roots.get(el)?.unmount(); roots.delete(el) },
@@ -322,7 +320,7 @@ Create `admin/fields/{field-name}.tsx`:
 
 ```tsx
 // admin/fields/brand-color.tsx
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { FieldMount } from 'gazetta/types'
 
@@ -334,6 +332,10 @@ const PRESETS = [
 
 function BrandColorPicker({ value, theme, onChange }: { value: string; theme: 'dark' | 'light'; onChange: (v: string) => void }) {
   const [color, setColor] = useState(value || '#667eea')
+  // The form calls mount() again with the new value on each change, so
+  // the prop updates under a reused root — sync on undo/redo, revert
+  // and draft restores.
+  useEffect(() => { setColor(value || '#667eea') }, [value])
   const handleChange = (v: string) => { setColor(v); onChange(v) }
 
   return (
