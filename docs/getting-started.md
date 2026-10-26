@@ -554,7 +554,7 @@ The publish mode comes from the target's `type`: an explicit value wins, and the
 
 **`dynamic`:**
 - Pages have ESI placeholders for fragments
-- Fragments are stored separately — a fragment edit shows on every page at request time, and a publish re-renders only the pages that use the changed fragment
+- Fragments are stored separately: a fragment edit shows on every page at request time, and a publish re-renders the fragment itself (and only pages that nest it inside an inline component)
 - Hashed CSS/JS files with immutable caching
 - A worker assembles pages at request time (`gazetta serve` assembles the same ESI for a `dynamic` target without a worker)
 
