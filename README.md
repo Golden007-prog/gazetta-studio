@@ -47,24 +47,28 @@ docs/
 ### Site Structure
 
 ```
-site/
-  site.config.ts         # site config (TS)
+my-project/
   templates/             # developer-created, each with own deps
     hero/index.ts
     header-layout/index.ts
-  fragments/             # shared components
-    header/
-      fragment.json      # template + inline components
-    footer/
-      fragment.json
-  pages/                 # routable components
-    home/
-      page.json          # route + template + inline components
-    about/
-      page.json
-    blog/
-      [slug]/            # dynamic routes
-        page.json
+  sites/
+    main/
+      site.config.ts     # site config (TS)
+      targets/
+        local/           # the local filesystem target's content root
+          fragments/     # shared components
+            header/
+              fragment.json  # template + inline components
+            footer/
+              fragment.json
+          pages/         # routable components
+            home/
+              page.json  # route + template + inline components
+            about/
+              page.json
+            blog/
+              [slug]/    # dynamic routes
+                page.json
 ```
 
 ### Templates
