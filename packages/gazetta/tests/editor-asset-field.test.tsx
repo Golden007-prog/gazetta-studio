@@ -89,8 +89,9 @@ describe('editor embedded-asset field (#1345)', () => {
   })
 
   it('clears an optional asset field via the Clear action', () => {
+    const schema = z.object({ hero: embeddedAsset().optional() })
     let latest: Record<string, unknown> = {}
-    renderForm(z.object({ hero: embeddedAsset().optional() }), { hero: { _asset: 'old-pic' } }, c => {
+    renderForm(schema, { hero: { _asset: 'old-pic' } }, c => {
       latest = c
     })
     const clear = container.querySelector('[data-testid="asset-widget-clear"]') as HTMLButtonElement | null
@@ -98,7 +99,52 @@ describe('editor embedded-asset field (#1345)', () => {
     act(() => {
       clear!.click()
     })
-    expect(latest).toEqual({ hero: {} })
+    // Clearing must remove the key, not store an empty object: `_asset` is
+    // required in the embedded-asset schema, so `{}` fails validation.
+    expect(schema.safeParse({ hero: {} }).success).toBe(false)
+    expect(latest.hero).toBeUndefined()
+    expect(schema.safeParse(latest).success).toBe(true)
+  })
+
+  it('renders no thumbnail img for a non-image asset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ name: 'clip', mime: 'audio/mpeg', hash: 'abcdef12', alt: null }),
+          }) as Response,
+      ),
+    )
+    renderForm(z.object({ hero: embeddedAsset().optional() }), { hero: { _asset: 'clip' } })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+    // An audio URL in an <img> renders a broken image; non-image assets get
+    // the name + Change button without a thumbnail.
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('.gz-asset-widget-name')?.textContent).toBe('clip')
+  })
+
+  it('renders a thumbnail img for an image asset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ name: 'pic', mime: 'image/png', hash: 'abcdef12', alt: null }),
+          }) as Response,
+      ),
+    )
+    renderForm(z.object({ hero: embeddedAsset().optional() }), { hero: { _asset: 'pic' } })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+    const img = container.querySelector('img') as HTMLImageElement | null
+    expect(img).not.toBeNull()
+    expect(img!.getAttribute('src')).toBe('/assets/pic-abcdef12.png')
   })
 
   it('propagates a picked asset to the field, not the form root', async () => {
