@@ -122,7 +122,7 @@ ${children.map(c => c.css).join('\n')}`,
 
 ## Pages
 
-A page is a folder with a `page.json` manifest. The route is derived from the folder path — `pages/about/` becomes `/about`, and `pages/home/` is served at `/`:
+A page is a folder with a `page.json` manifest under the editing target's `pages/` root, which `init` sets to `sites/main/targets/local/pages/`. The route is derived from the folder path — `pages/about/` becomes `/about`, and `pages/home/` is served at `/`:
 
 ```json
 {
@@ -144,7 +144,7 @@ A page is a folder with a `page.json` manifest. The route is derived from the fo
 }
 ```
 
-All components are inline in the page manifest — no separate files.
+All components are inline in the page manifest — no separate files. While `gazetta dev` runs, a new page folder is picked up without a restart.
 
 Or create pages in the CMS — click **New page** in the admin UI.
 
@@ -722,21 +722,24 @@ my-project/
     nav/index.ts
     page-layout/index.ts
   sites/
-    main/                    # site content
+    main/
       site.config.ts         # site manifest + targets
-      fragments/             # shared components
-        header/fragment.json
-      pages/                 # routable pages
-        home/
-          page.json          # all components inline
-        about/
-          page.json
-        blog/
-          [slug]/page.json   # dynamic route
+      targets/
+        local/               # the local filesystem target's content root
+          fragments/         # shared components
+            header/fragment.json
+          pages/             # routable pages
+            home/
+              page.json      # all components inline
+            about/
+              page.json
+            blog/
+              [slug]/page.json   # dynamic route
 ```
 
 Templates and admin customizations are at the project root, shared across all sites.
-Content (pages, fragments, site.config.ts) lives inside `sites/{name}/`.
+`site.config.ts` sits at `sites/{name}/`; the pages and fragments a site serves live in its
+editing target's content root, which `init` sets to `sites/{name}/targets/local/`.
 
 ## Indexing localized pages
 
