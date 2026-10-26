@@ -53,6 +53,14 @@ function buildThumbnailUrl(summary: AssetSummaryShape): string | null {
   return `/assets/${summary.name}-${summary.hash}.${ext}`
 }
 
+/** Human label for a non-image asset, e.g. "Audio · mp3". Null when unknown. */
+function typeLabel(mime: string): string | null {
+  const ext = extFromMime(mime)
+  if (!ext) return null
+  const kind = mime.split('/')[0]
+  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} · ${ext}`
+}
+
 export function AssetEmbeddedWidget(props: WidgetProps) {
   const value = (props.value ?? {}) as AssetRefValue
   const assetName = value._asset ?? null
@@ -102,6 +110,7 @@ export function AssetEmbeddedWidget(props: WidgetProps) {
 
   const accept = readAccept(props.schema)
   const thumbnail = summary ? buildThumbnailUrl(summary) : null
+  const kindLabel = summary && !thumbnail ? typeLabel(summary.mime) : null
 
   async function onPick() {
     const onPickAsset = (props.formContext as AssetPickerContext | undefined)?.onPickAsset
@@ -128,7 +137,9 @@ export function AssetEmbeddedWidget(props: WidgetProps) {
         ) : loadError ? (
           <div className="gz-asset-widget-error">{loadError}</div>
         ) : assetName ? (
-          <div className="gz-asset-widget-empty">Loading…</div>
+          // Non-image assets have no thumbnail: show the kind once the summary
+          // loads instead of sitting on "Loading…" forever.
+          <div className="gz-asset-widget-empty">{summary ? (kindLabel ?? 'No preview') : 'Loading…'}</div>
         ) : (
           <div className="gz-asset-widget-empty">No asset selected</div>
         )}
