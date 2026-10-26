@@ -1,0 +1,105 @@
+{
+  "banner": "These docs describe Gazetta's `main` branch. The latest release on npm, 0.8.0, is older and works differently in places, and it lacks security fixes made since. To follow these docs, [run Gazetta from `main`](https://github.com/gazetta-studio/gazetta-studio#quick-start).",
+  "groups": [
+    {
+      "title": "Start",
+      "docs": [
+        {
+          "file": "getting-started.md",
+          "label": "Getting started",
+          "description": "Install Gazetta, start the dev server and publish your first page."
+        },
+        {
+          "file": "cloudflare.md",
+          "label": "Cloudflare",
+          "description": "Deploy to Cloudflare Workers + R2, with pages assembled at the edge by a Worker."
+        },
+        {
+          "file": "self-hosted.md",
+          "label": "Self-hosted",
+          "description": "Deploy on your own infrastructure: VPS, Docker, Fly.io, or any Node.js host."
+        }
+      ]
+    },
+    {
+      "title": "Deploy",
+      "docs": [
+        {
+          "file": "deploy.md",
+          "label": "Deploy",
+          "description": "The deploy adapter contract, available adapters, and the container-host pattern."
+        },
+        {
+          "file": "template-assets.md",
+          "label": "Template assets",
+          "description": "Use the media library from a template: schema declaration, transforms and URLs."
+        },
+        {
+          "file": "content-assets.md",
+          "label": "Content assets",
+          "description": "Upload, organize and embed assets as a content author."
+        }
+      ]
+    },
+    {
+      "title": "Content and templates",
+      "docs": [
+        {
+          "file": "migration.md",
+          "label": "Migration",
+          "description": "Move templates from plain string URLs to asset references."
+        },
+        {
+          "file": "transform-adapters.md",
+          "label": "Transform adapters",
+          "description": "How asset images reach the browser, and how to swap the transform pipeline."
+        },
+        {
+          "file": "cache.md",
+          "label": "Cache",
+          "description": "What the admin read cache does by default, when to swap providers, and how to monitor cache health."
+        },
+        {
+          "file": "offline.md",
+          "label": "Offline",
+          "description": "What authors see during transient connectivity loss, and how the admin recovers."
+        }
+      ]
+    },
+    {
+      "title": "Admin and operations",
+      "docs": [
+        {
+          "file": "auth.md",
+          "label": "Auth",
+          "description": "Upstream identity plus role-based capability gates for the admin."
+        },
+        {
+          "file": "audit.md",
+          "label": "Audit",
+          "description": "Every save, publish, delete and history-restore recorded as a queryable structured event."
+        },
+        {
+          "file": "hooks.md",
+          "label": "Hooks",
+          "description": "Run code at save, publish and upload moments, in your project or as an npm package."
+        },
+        {
+          "file": "soft-delete.md",
+          "label": "Soft delete",
+          "description": "Archive, alias, rename, restore and purge pages and fragments instead of hard-deleting."
+        },
+        {
+          "file": "runtime-capabilities.md",
+          "label": "Runtime capabilities",
+          "description": "Which features need runtime help from the target, and which targets provide it."
+        }
+      ]
+    }
+  ],
+  "internal": [
+    { "file": "actor-scenarios.md", "title": "Actor scenarios" },
+    { "file": "non-goals.md", "title": "Non-goals" }
+  ],
+  "removed": []
+}
