@@ -109,7 +109,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       if (body.code === 'STALE') throw new StaleSaveError(body.current ?? {}, body.currentEtag ?? '')
       if (body.code === 'ARCHIVED_NAME_CONFLICT') throw new ArchivedNameConflictError(body.archive)
     }
-    throw new Error(body.error ?? `Request failed: ${res.status}`)
+    // Save-route 409s explain themselves in `message` (ARCHIVED,
+    // EDIT_LOCKED); keep the explicit `error` field first.
+    throw new Error(body.error ?? body.message ?? `Request failed: ${res.status}`)
   }
   return res.json()
 }
