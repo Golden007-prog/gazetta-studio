@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,7 +39,12 @@ const fixtureSite = join(fixtureRoot, 'site')
 const fixtureAgents = join(fixtureRoot, 'AGENTS.md')
 
 const NAV = {
-  banner: 'Fixture banner.',
+  banner: {
+    text: 'Fixture banner.',
+    securityClause: 'Release {version} lacks security fixes.',
+    securityClauseVersion: '0.0.1',
+    link: '[run from main](https://example.com/run-from-main)',
+  },
   groups: [
     {
       title: 'Start',
@@ -95,7 +100,17 @@ function writeFixture(): void {
 }
 
 function fixtureArgs(extra: string[] = []): string[] {
-  return ['--docs-dir', fixtureDocs, '--site-dir', fixtureSite, '--agents-md', fixtureAgents, ...extra]
+  return [
+    '--docs-dir',
+    fixtureDocs,
+    '--site-dir',
+    fixtureSite,
+    '--agents-md',
+    fixtureAgents,
+    '--version',
+    '0.0.1',
+    ...extra,
+  ]
 }
 
 beforeAll(() => {
@@ -246,6 +261,44 @@ describe('site docs sync check', () => {
       expect(status).toBe(1)
       expect(stderr).toContain('missing anchor #nope')
       writeFileSync(join(fixtureDocs, 'other.md'), OTHER)
+    },
+    SPAWN_TIMEOUT,
+  )
+  it(
+    'the banner names the Gazetta version and drops its security clause at the next release',
+    () => {
+      run(fixtureArgs())
+      const page = () =>
+        JSON.parse(readFileSync(join(fixtureSite, 'targets/local/pages/docs/other/page.json'), 'utf-8')) as {
+          components: { content?: string }[]
+        }
+      expect(page().components[2]?.content).toContain('Release 0.0.1 lacks security fixes.')
+      run(fixtureArgs(['--version', '9.9.9']))
+      const bumped = page().components[2]?.content ?? ''
+      expect(bumped).toContain('Fixture banner.')
+      expect(bumped).not.toContain('security fixes')
+      run(fixtureArgs())
+      expect(page().components[2]?.content).toContain('Release 0.0.1 lacks security fixes.')
+    },
+    SPAWN_TIMEOUT,
+  )
+
+  it(
+    'a folder listed in the nav removed list is neither flagged nor pruned',
+    () => {
+      run(fixtureArgs())
+      writeFileSync(
+        join(fixtureSite, 'scripts', 'docs-nav.json'),
+        JSON.stringify({ ...NAV, removed: ['old-doc'] }, null, 2),
+      )
+      mkdirSync(join(fixtureSite, 'targets/local/pages/docs/old-doc'), { recursive: true })
+      writeFileSync(join(fixtureSite, 'targets/local/pages/docs/old-doc/page.json'), '{}\n')
+      const check = run(fixtureArgs(['--check']))
+      expect(check.status, `${check.stdout}\n${check.stderr}`).toBe(0)
+      run(fixtureArgs())
+      expect(existsSync(join(fixtureSite, 'targets/local/pages/docs/old-doc/page.json'))).toBe(true)
+      writeFileSync(join(fixtureSite, 'scripts', 'docs-nav.json'), JSON.stringify(NAV, null, 2))
+      rmSync(join(fixtureSite, 'targets/local/pages/docs/old-doc'), { recursive: true, force: true })
     },
     SPAWN_TIMEOUT,
   )
