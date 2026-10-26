@@ -58,13 +58,6 @@ const template: TemplateFunction<Content> = ({ content }) => {
 .docs-nav-group a[aria-current='page'] { color: #a78bfa; font-weight: 500; }
 @media (min-width: 72rem) {
   .docs-nav { position: fixed; top: 4rem; left: max(1rem, calc(50% - 39rem)); width: 15rem; max-height: calc(100vh - 6rem); overflow-y: auto; border-bottom: none; padding: 2.5rem 1rem; }
-}
-@media (prefers-color-scheme: light) {
-  .docs-nav { border-bottom-color: #e4e4e7; }
-  .docs-nav-group h2 { color: #52525b; }
-  .docs-nav-group a { color: #3f3f46; }
-  .docs-nav-group a:hover { color: #18181b; }
-  .docs-nav-group a[aria-current='page'] { color: #7c3aed; }
 }`,
     js: `document.querySelectorAll('.docs-nav a').forEach(function (a) {
   if (a.getAttribute('href') === window.location.pathname) {
