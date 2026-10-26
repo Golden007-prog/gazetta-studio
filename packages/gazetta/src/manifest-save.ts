@@ -614,4 +614,4 @@ export async function saveManifestCore(input: SaveManifestInput): Promise<SaveRe
   }
 
   return { ok: true, etag: newEtag }
-            }
+}
