@@ -55,7 +55,7 @@ A dot disappears when that item matches the chosen target. Comparisons refresh a
 
 ## History, undo and rollback
 
-History belongs to a target. A save records a revision on the target it writes to; a publish records a revision on its destination, when history is enabled there. Publishing does not replace the editing source's history with the destination's history.
+History belongs to a target and is recorded only when history is enabled there. A save records a revision on the target it writes to; a publish records a revision on its destination. Publishing does not replace the editing source's history with the destination's history.
 
 To inspect a target in the admin, switch to it with the active-target control, open that control's menu and choose **View history**. The History panel lists revisions with their operation, time, source for publishes, message and affected items. **Restore** returns to a chosen revision's snapshot; the current revision's button is disabled.
 
