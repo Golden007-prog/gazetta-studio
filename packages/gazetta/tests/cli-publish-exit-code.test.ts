@@ -51,7 +51,7 @@ describe('gazetta publish exit code', { timeout: 120000 }, () => {
   })
 
   it('exits 0 when every item renders', async () => {
-    const res = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    const res = await runCli(projectDir, ['publish', 'staging', 'sites/main', '--force'])
     expect(res.output).not.toContain('RENDER_FAILED')
     expect(res.code).toBe(0)
   })
@@ -67,7 +67,7 @@ describe('gazetta publish exit code', { timeout: 120000 }, () => {
       ),
     )
 
-    const res = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    const res = await runCli(projectDir, ['publish', 'staging', 'sites/main', '--force'])
 
     expect(res.output).toContain('RENDER_FAILED')
     expect(res.output).toMatch(/\d+ failed/)

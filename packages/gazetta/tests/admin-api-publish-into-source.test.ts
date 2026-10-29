@@ -78,6 +78,8 @@ describe('publish route — refuses the editing source as a destination (#1526)'
     const res = await publish(app, ['staging'])
 
     expect(res.status).toBeLessThan(300)
-    expect(await targetStorage.readFile('pages/about/page.json')).toContain('About')
+    // The rendered page, not only the copied manifest: a failed render can
+    // still copy page.json.
+    expect(await targetStorage.exists('about/index.html')).toBe(true)
   })
 })

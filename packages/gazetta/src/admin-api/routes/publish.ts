@@ -374,11 +374,6 @@ export function publishRoutes(
         yield { kind: 'fatal', error: `Unknown target: ${name}` }
         return
       }
-      // Publishing into the source copies the site onto itself (#1526).
-      if (name === source.targetName) {
-        yield { kind: 'fatal', error: `Cannot publish to ${name}: it is the editing source` }
-        return
-      }
     }
 
     const allItems = await resolveDependencies(source.contentRoot, items)
@@ -661,6 +656,11 @@ export function publishRoutes(
     )
     if (itemError) return c.json({ error: itemError }, 400)
 
+    // #1526: publishing into the editing source copies the site onto
+    // itself. Refuse before hooks, the gate or any write.
+    const intoSource = body.targets?.find(t => t === sourceForValidation.targetName)
+    if (intoSource) return c.json({ error: `Cannot publish to ${intoSource}: it is the editing source` }, 400)
+
     // beforePublish hooks per design-hooks.md "Publish lifecycle".
     // Hooks see the requested items + active target; can mutate
     // the item set (drop / reorder / extend) or throw to cancel
@@ -832,6 +832,11 @@ export function publishRoutes(
       sourceForValidation.storage.exists(sourceForValidation.contentRoot.path(p)),
     )
     if (itemError) return c.json({ error: itemError }, 400)
+
+    // #1526: publishing into the editing source copies the site onto
+    // itself. Refuse before hooks, the gate or any write.
+    const intoSource = body.targets?.find(t => t === sourceForValidation.targetName)
+    if (intoSource) return c.json({ error: `Cannot publish to ${intoSource}: it is the editing source` }, 400)
 
     // beforePublish hooks fire BEFORE the SSE stream opens — a
     // cancellation surfaces as a 409 (synchronous) rather than as

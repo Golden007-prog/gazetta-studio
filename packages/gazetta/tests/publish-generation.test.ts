@@ -72,9 +72,13 @@ describe('publish generation on the target (#1125)', { timeout: 30_000 }, () => 
       JSON.stringify({ template: 'footer-layout', content: {} }),
     )
     await mkdir(join(root, 'target'), { recursive: true })
+    await mkdir(join(root, 'preview'), { recursive: true })
 
     const sourceStorage = recordingStorage(createFilesystemProvider(join(root, 'site')), writes)
     const targetStorage = recordingStorage(createFilesystemProvider(join(root, 'target')), writes)
+    // A second destination without a CDN purge (the source can't be one, #1526).
+    const previewStorage = recordingStorage(createFilesystemProvider(join(root, 'preview')), writes)
+    const previewConfig = { storage: previewStorage, type: 'esi' as const, environment: 'staging' as const }
     const targetConfig = {
       storage: targetStorage,
       type: 'esi' as const,
@@ -91,7 +95,7 @@ describe('publish generation on the target (#1125)', { timeout: 30_000 }, () => 
       storage: sourceStorage,
       siteDir: '',
       projectSiteDir: join(root, 'site'),
-      manifest: { name: 'test-site', targets: { local: localConfig, staging: targetConfig } },
+      manifest: { name: 'test-site', targets: { local: localConfig, staging: targetConfig, preview: previewConfig } },
     })
     app = createAdminApp({
       source,
@@ -100,8 +104,9 @@ describe('publish generation on the target (#1125)', { timeout: 30_000 }, () => 
       targets: new Map([
         ['local', sourceStorage],
         ['staging', targetStorage],
+        ['preview', previewStorage],
       ]),
-      targetConfigs: { local: localConfig, staging: targetConfig },
+      targetConfigs: { local: localConfig, staging: targetConfig, preview: previewConfig },
       disableCacheStatsLogger: true,
     })
   })
@@ -134,12 +139,12 @@ describe('publish generation on the target (#1125)', { timeout: 30_000 }, () => 
     const res = await app.request('/api/publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: ['pages/home'], targets: ['local'] }),
+      body: JSON.stringify({ items: ['pages/home'], targets: ['preview'] }),
     })
     expect(res.status).toBeLessThan(300)
     expect(writes).toContain('.gazetta/publish-generation')
     expect(purgeCalls).toEqual([])
-    const value = await readFile(join(root, 'site', '.gazetta', 'publish-generation'), 'utf8')
+    const value = await readFile(join(root, 'preview', '.gazetta', 'publish-generation'), 'utf8')
     expect(value.trim().length).toBeGreaterThan(0)
   })
 })

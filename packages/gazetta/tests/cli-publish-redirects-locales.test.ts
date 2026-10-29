@@ -9,8 +9,9 @@
  * Runs the real CLI against a temp copy of examples/starter (matching
  * cli-publish-exit-code.test.ts). Pages are seeded into the editable
  * local target's storage (sites/main/targets/local/pages/), which is
- * where the CLI reads site content from, and the local target gets a
- * redirects format.
+ * where the CLI reads site content from. The staging target gets a
+ * redirects format and receives the publish: publishing into the editing
+ * source itself is refused (#1526).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { spawn } from 'node:child_process'
@@ -61,7 +62,7 @@ async function seedArchivedPages(projectDir: string): Promise<void> {
 async function addRedirectsFormat(projectDir: string): Promise<void> {
   const configPath = join(projectDir, 'sites/main/site.config.ts')
   const config = await readFile(configPath, 'utf8')
-  const updated = config.replace('local: {', "local: {\n      redirects: { format: 'cloudflare' as const },")
+  const updated = config.replace('staging: {', "staging: {\n      redirects: { format: 'cloudflare' as const },")
   await writeFile(configPath, updated)
 }
 
@@ -83,10 +84,10 @@ describe('gazetta publish — redirects rows per target language (#1130)', { tim
   })
 
   it('writes one _redirects row per published language for archived pages', async () => {
-    const res = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    const res = await runCli(projectDir, ['publish', 'staging', 'sites/main', '--force'])
     expect(res.code).toBe(0)
 
-    const body = await readFile(join(projectDir, 'sites/main/targets/local/_redirects'), 'utf8')
+    const body = await readFile(join(projectDir, 'sites/main/dist/staging/_redirects'), 'utf8')
     expect(body).toContain('/landing  /welcome  301')
     expect(body).toContain('/fr/landing  /fr/welcome  301')
     // welcome has no ar/ja version: those rows point at the
@@ -102,9 +103,9 @@ describe('gazetta publish — redirects rows per target language (#1130)', { tim
   })
 
   it('deletes _redirects when the last archived page is unarchived and republished (#1426)', async () => {
-    const first = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    const first = await runCli(projectDir, ['publish', 'staging', 'sites/main', '--force'])
     expect(first.code).toBe(0)
-    const redirectsPath = join(projectDir, 'sites/main/targets/local/_redirects')
+    const redirectsPath = join(projectDir, 'sites/main/dist/staging/_redirects')
     await readFile(redirectsPath, 'utf8')
 
     // Unarchive both archived pages: no rows remain, and the published
@@ -116,7 +117,7 @@ describe('gazetta publish — redirects rows per target language (#1130)', { tim
         JSON.stringify({ template: 'page-default', content: {} }),
       )
     }
-    const second = await runCli(projectDir, ['publish', 'local', 'sites/main', '--force'])
+    const second = await runCli(projectDir, ['publish', 'staging', 'sites/main', '--force'])
     expect(second.code).toBe(0)
     await expect(readFile(redirectsPath, 'utf8')).rejects.toThrow()
   })
