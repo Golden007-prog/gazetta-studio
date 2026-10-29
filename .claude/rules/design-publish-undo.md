@@ -139,7 +139,7 @@ Decided: maintainer, 2026-10-25 (#1432)
 | Leave admin sitemaps without hreflang | Per-domain sites keep missing what the design requires, and the CLI and the admin write different sitemaps. |
 | Keep the CLI's behaviour with no follow-up | Leaves the duplicate and the publish-order gap untracked. |
 
-**One snapshot per publish.** A publish reads the source once. The audit (the server's publish gate), the history record, the render loop and the manifest copy all use that one loaded copy of the source, and the manifests copied to the target are written from it, not read from storage again. A save that lands while a publish runs isn't published: the target gets exactly what was audited, its HTML, its manifests and the revision undo restores come from the same version, and the newer save shows as an unpublished change for the next publish. Today the gate, the history record, the render and the copy each read the source separately ([#1527](https://github.com/gazetta-studio/gazetta-studio/issues/1527)). The approval gate checks a request's hashes against this snapshot and publishes the snapshot (`design-review-workflow.md` lock 3); that comparison is built in review workflow cut 13.
+**One snapshot per publish.** A publish reads the source once. The audit (the server's publish gate), the history record, the render loop and the manifest copy all use that one loaded copy of the source, and the manifests copied to the target are written from it, not read from storage again. A save that lands after the publish has loaded the source isn't published: the target gets exactly what was audited, its HTML, its manifests and the revision undo restores come from the same version, and the newer save shows as an unpublished change for the next publish. Today the gate, the history record, the render and the copy each read the source separately ([#1527](https://github.com/gazetta-studio/gazetta-studio/issues/1527)). The approval gate checks a request's hashes against this snapshot and publishes the snapshot (`design-review-workflow.md` lock 3); that comparison is built in review workflow cut 13.
 
 Decided: maintainer, 2026-10-29 (#1535)
 
@@ -155,6 +155,10 @@ Replacing an asset deletes the old asset's files. If that happens during a publi
 
 Decided: maintainer, 2026-10-29 (#1535)
 
+The same applies whenever an asset's files are gone mid-publish: a rename, removing a locale override, or deleting an unused asset. The publish checks that every asset its snapshot uses still exists before it records history or copies manifests, so the pages it reports as not published keep their previous manifest, HTML and revision entry.
+
+Decided: maintainer, 2026-10-29 (#1535)
+
 | Option | Why rejected |
 |---|---|
 | Re-check each item's hash before writing and refuse on a mismatch | The author has to publish again, and the HTML and the manifests can still come from different reads. |
@@ -163,6 +167,8 @@ Decided: maintainer, 2026-10-29 (#1535)
 | Assets keep their own read | An alt edit or asset replace during a publish can be published without being audited. |
 | The snapshot loads asset bytes too, so a replace can't affect the publish | Memory grows with asset size (videos, 20,000-asset sites). |
 | Replace keeps the old files until a later cleanup | Changes the media design's delete rule and needs a cleanup command. |
+| Keep today's step order: history and manifests first, assets after | Those pages would have the new manifest and revision but the old HTML until the next publish. |
+| Only replace gets this handling | A rename, an override removal or a delete during a publish would still fail the whole target. |
 
 ## UX check
 
@@ -228,7 +234,7 @@ Non-zero exit when refused, conflicted or a render fails. `--yes` skips the ques
 | 4 | `undoPublish`: comparison with the target's manifests, in-memory site with parallel reads, the Q3 check (schemas, manifests present, assets present), head checks before writing, publish through the shared function with removals and dependents, failed renders kept as changed, forward revision, the undo-of-undo refusal, authorization and approval rules, rollback requests and the undo-latest rule at the approval gate (`design-review-workflow.md` locks 3–5), hook `trigger` and `restoredFrom` | 2, 3, [#1088](https://github.com/gazetta-studio/gazetta-studio/issues/1088), review workflow cuts 12–13 (planner [#1433](https://github.com/gazetta-studio/gazetta-studio/issues/1433)) | api-first | High |
 | 5 | Admin and CLI: the publish panel flow per the UX table, History Restore through the same flow, CLI output and `--yes`, Storybook stories from the table | 4 | component + e2e | Medium |
 | 6 | Docs: "undo restores content, not templates" (History help and docs), `docs/hooks.md` trigger field, alignment note in `design-publishing.md` | 4 | docs | Low |
-| 7 | One snapshot per publish (Q4): the server's publish gate, the history record, the render loop, the manifest copy and the asset manifest copy use one loaded copy of the source; manifests, asset manifests and the revision are written from it instead of read from storage | 1 | api-first | Medium |
+| 7 | One snapshot per publish (Q4): the server's publish gate, the history record, the render loop, the manifest copy and the asset manifest copy use one loaded copy of the source; manifests, asset manifests and the revision are written from it instead of read from storage; before the history record and manifest copy, a check that the snapshot's assets still exist, and pages whose asset is gone are reported as not published while the rest goes ahead | 1 | api-first | Medium |
 
 Cuts 1 and 3 run in parallel. Cut 7 can run alongside cut 2; review workflow cut 13 checks request snapshots against it, so it waits for cut 7 (follows from Q4's one snapshot). Cut 3 landed in #1082 (2026-10-21).
 
