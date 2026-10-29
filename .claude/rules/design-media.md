@@ -1372,6 +1372,108 @@ A summary of M1–M7; it decides nothing new.
 - **Same behaviour in every language:** uploads behave the same in every language (M2); language versions are added from the detail pane (M2, M5).
 - **Failure states:** a clash never replaces, even for two simultaneous uploads (M2); a replace keeps alt, focal point and uses (M3); adding or removing a language version keeps its alt (M4); a rename that would leave a use unedited, or that the caller can't make, is refused before any write, and the permission refusal is made on the server too (M7).
 
+### State tables
+
+The states each UI cut builds, with their exact wording and `data-testid`s, per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md): the cut transcribes its table into the component's `.stories.ts` and builds the component to it. `{id}` is the upload row's id; English is the default language and French the active one where a table needs two.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+#### Replace (cut 1, M3), in the image's detail pane
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| Idle | Button "Replace file"; opens the file chooser, same kind only | `asset-detail-replace` |
+| Wrong kind | "This file is audio; hero is an image. Choose an image." | `replace-kind-error` |
+| Working | "Replacing hero…" | `replace-progress` |
+| Done | The new image, its alt and focal point, and "Check the alt text and focal point still fit the new image." | `replace-note` |
+| Done: links | Edit alt · Edit focal point · Suggest (only with AI alt) | `replace-note-edit-alt`, `replace-note-edit-focal`, `replace-note-suggest` |
+| Done: per-use alt (only if any) | "Used on 3 pages and fragments with their own alt text." | `replace-note-per-use` |
+| Done: dismiss | Dismiss | `replace-note-dismiss` |
+| Failed | "Couldn't replace hero: {reason}. Nothing changed." | `replace-error` |
+
+#### Upload row on a name clash (cut 2, M2)
+
+The language dialog (`AssetUploadPrompt`) is removed.
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| No clash | As today | — |
+| Clash | "Saved as hero-2" | `upload-{id}-renamed` |
+| Clash, same kind | Link "Replace hero instead" | `upload-{id}-replace-original` |
+| Clash, other kind | No link | — |
+| Replacing | "Replacing hero…" | — |
+| Replaced | "Replaced hero. Check its alt text and focal point." and "Open hero"; `hero-2` is removed | `upload-{id}-replaced`, `upload-{id}-open` |
+| Failed | "Couldn't replace hero: {reason}. hero-2 is kept." | `upload-{id}-replace-error` |
+| Another language active | The row's alt field is labelled "Alt text (English)" | `upload-{id}-alt-language` |
+
+#### Alt text per language, in the detail pane (cut 3, M4)
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| Default language active | As today | — |
+| French, no French alt | Label "Alt text (French)"; the field greyed with the English alt; "Using English"; "Copy English to edit" | `alt-editor-language`, `alt-editor-fallback`, `alt-editor-copy-default` |
+| French, own alt | Field editable; "Clear French alt (use English)" | `alt-editor-clear-language` |
+| French, decorative | The same checkbox as today, saved for French only | `alt-editor-decorative` |
+| Suggest with French active | Fills the French alt | `asset-detail-suggest-alt` |
+| No alt in any language | "Not set — admin will warn", as today | `alt-editor-state` |
+
+#### The picker's third step, "This use" (cut 4 for images, M1, M6; cut 6 adds the download fields)
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| Image, both allowed | The step | `picker-this-use` |
+| … alt | "Alt text on this page" (empty = use the image's); "Falls back to: “Sunset over the bay”"; "Decorative on this page" | `picker-use-alt`, `picker-use-alt-fallback`, `picker-use-decorative` |
+| … focal point | "Focal point on this page" with the editor; "Use the image's focal point" | `picker-use-focal`, `picker-use-focal-reset` |
+| `altOverride: false` | No alt fields | — |
+| `focalPointOverride: false` | No focal editor | — |
+| Both off | Step skipped | — |
+| Download (cut 6) | "Link text on this page"; "Description on this page"; each only when its option allows | `picker-use-title`, `picker-use-description` |
+| Buttons | Back; "Use image" / "Use file" | `picker-back`, `asset-picker-confirm` |
+
+#### Rename dialog (cut 5, M7)
+
+All checks run before anything is written; the server repeats the permission check.
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| Entry | Button "Rename" in the detail pane | `asset-detail-rename` |
+| Form | "Rename hero"; "New name"; "Changes 4 pages and fragments: home, about, home (French), @promo"; "Moves the French and Arabic versions too."; Rename · Cancel | `rename-dialog`, `rename-input`, `rename-uses`, `rename-languages`, `rename-confirm`, `rename-cancel` |
+| Not used | "Not used on any page yet." | — |
+| Refused (Rename disabled) | "Can't rename: it's used on pages, and you can't edit pages." (or fragments); "Can't rename: you have unsaved changes on home. Save or discard them first."; "Can't rename: hero has a dark version. Remove it first." | `rename-blocked` |
+| Name | "spring-hero is already used."; "Use lowercase letters, numbers and hyphens." | `rename-name-error` |
+| Working | "Renaming… 2 of 4" | `rename-progress` |
+| Done | "Renamed to spring-hero on 4 pages and fragments." | `rename-done` |
+| Stopped | "Rename stopped: {reason}. Nothing is broken: hero stays until every use moves. Try again." | `rename-error` |
+
+#### Documents (cut 6, M5)
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| Upload row | File icon, name and size; no alt field | `upload-{id}-document` |
+| Not allowed | "brochure.exe isn't a supported file type." (as for other refusals) | — |
+| Library card | File-type icon (PDF, Word, Excel, PowerPoint, ZIP) and size | `asset-card-{name}` |
+| Detail pane: title | "Title" in the active language, like alt; empty: "Using the file name", greyed | `asset-detail-title` |
+| Detail pane: description | "Description" | `asset-detail-description` |
+| Detail pane: download | "Download" | `asset-detail-download` |
+| Detail pane: actions | Replace and Rename as for images | — |
+| Picker | Documents listed when the field's `accept` allows; step 3 per "This use" | — |
+
+#### Fonts (cut 7, M5)
+
+Each preview writes the language's own name in its script, so no sample sentences per language are needed.
+
+| State | What shows | `data-testid` |
+|---|---|---|
+| Upload row: family | "Family name", prefilled from the file name | `upload-{id}-font-family` |
+| Upload row: weight | "Weight": 100–900 or "Variable" | `upload-{id}-font-weight` |
+| Upload row: style | "Style": Normal / Italic | `upload-{id}-font-style` |
+| Upload row: characters | "Characters for" the active language (English) | `upload-{id}-font-language` |
+| Upload row: preview | "English", in the font | `upload-{id}-font-preview` |
+| Detail pane | "Brand Sans", one row per language, its name in its script in the font: English ✓ English; Arabic ✓ العربية | `font-detail`, `font-row-{lang}` |
+| Detail pane: remove | Remove, per language row | `font-remove-{lang}` |
+| Detail pane: add | "+ Add Japanese characters", one per site language without a row | `font-add-{lang}` |
+| Picker | Fonts listed for `fontAsset()` fields; `variable: true` lists variable fonts only | — |
+
 ### Cut sequence
 
 Fixes first, then features: after cuts 1–3 nothing authors do today can lose work.
