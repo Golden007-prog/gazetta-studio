@@ -138,7 +138,7 @@ export default (params: { content, children?, params? }) => { html, css, js, hea
 export const schema = z.object({ title: z.string(), ... })
 ```
 
-A custom editor is not a template export. It's a separate file in the project's `admin/editors/`, matched to the template by name (`admin/editors/hero.tsx` or `admin/editors/hero/index.tsx` for `templates/hero/`; `hasEditorFile` in `template-loader.ts`). Editors run in the admin's browser bundle, with the admin's dependencies, while templates run on the server; see `configurations.md` "Modularity". The editor file's default export is an `EditorMount`:
+A custom editor is not a template export. It's a separate file in the project's `admin/editors/`, matched to the template by name (`admin/editors/hero.tsx` or `hero.ts` for `templates/hero/`). Only a flat file loads: `hasEditorFile` in `template-loader.ts` also detects `admin/editors/hero/index.tsx`, but the dev schema route and the production editor build don't load it ([#1532](https://github.com/gazetta-studio/gazetta-studio/issues/1532)). Editors run in the admin's browser bundle, with the admin's dependencies, while templates run on the server; see `configurations.md` "Modularity". The editor file's default export is an `EditorMount`:
 
 ```ts
 // admin/editors/hero.tsx
