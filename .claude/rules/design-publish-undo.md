@@ -151,12 +151,18 @@ So do the asset manifests the publish copies (alt, focal point, overrides); the 
 
 Decided: maintainer, 2026-10-29 (#1535)
 
+Replacing an asset deletes the old asset's files. If that happens during a publish whose snapshot still uses the old asset, the publish goes ahead for everything else and reports the pages using that asset as not published, with the reason; the next publish takes the replacement.
+
+Decided: maintainer, 2026-10-29 (#1535)
+
 | Option | Why rejected |
 |---|---|
 | Re-check each item's hash before writing and refuse on a mismatch | The author has to publish again, and the HTML and the manifests can still come from different reads. |
 | One snapshot plus a re-check that warns a newer save wasn't included | More code for what the unpublished-change dot already shows. |
 | The history record keeps its own read | A save during a publish can land in the revision without having been published, so undo could restore unpublished content. |
 | Assets keep their own read | An alt edit or asset replace during a publish can be published without being audited. |
+| The snapshot loads asset bytes too, so a replace can't affect the publish | Memory grows with asset size (videos, 20,000-asset sites). |
+| Replace keeps the old files until a later cleanup | Changes the media design's delete rule and needs a cleanup command. |
 
 ## UX check
 
