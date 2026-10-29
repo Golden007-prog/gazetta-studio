@@ -377,6 +377,7 @@ export interface ResolvedFontAsset {
 // where `$brand<K>` is `{ [$brand]: { [K]: true } }` (imported below). If
 // Zod v5 changes brand representation, update only this module.
 import type { $brand } from 'zod/v4/core'
+import type { z } from 'zod'
 
 /** True when `T` carries the `embedded` brand. */
 export type HasEmbeddedBrand<T> = T extends $brand<'embedded'> ? true : false
@@ -390,10 +391,12 @@ export type HasFontBrand<T> = T extends $brand<'font'> ? true : false
 // ---------- Content<T> — the type mapper ----------
 
 /**
- * Walks a content type `T` (typically `z.infer<typeof schema>`) and swaps every
+ * Accepts a Zod schema or content type `T` (such as `z.infer<typeof schema>`) and swaps every
  * asset reference type for its resolved counterpart.
  *
  * Mapping rules:
+ * - Zod schema: infer its output shape first
+ * - Union: distribute over each member, preserving null and undefined
  * - branded `embedded` → `ResolvedEmbeddedAsset`
  * - branded `downloadable` → `ResolvedDownloadableAsset`
  * - branded `font` → `ResolvedFontAsset`
@@ -403,14 +406,16 @@ export type HasFontBrand<T> = T extends $brand<'font'> ? true : false
  *
  * Depends only on Zod's `$brand` symbol and the resolved types above. If Zod
  * v5 changes brand representation, update only the `Has*Brand` predicates;
- * the mapper body stays the same.
+ * keep the mapper's direct brand checks in sync. Direct conditional checks
+ * distribute over unions, unlike a boolean helper checked with `extends true`.
  */
-export type Content<T> =
-  HasEmbeddedBrand<T> extends true
+export type Content<T> = T extends z.ZodType
+  ? Content<z.infer<T>>
+  : T extends $brand<'embedded'>
     ? ResolvedEmbeddedAsset
-    : HasDownloadableBrand<T> extends true
+    : T extends $brand<'downloadable'>
       ? ResolvedDownloadableAsset
-      : HasFontBrand<T> extends true
+      : T extends $brand<'font'>
         ? ResolvedFontAsset
         : T extends ReadonlyArray<infer U>
           ? ReadonlyArray<Content<U>>
