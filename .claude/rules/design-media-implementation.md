@@ -25,7 +25,7 @@ branch for diffs).
 | **Foundation: per-target upload size config** | 0.5 day | ✓ step 19 |
 | **Foundation: binary-capable HistoryProvider** | 1.5 days | ✓ step 20 |
 | **Foundation: asset routes wire history (upload + delete)** | 0.5 day | ✓ step 21 |
-| Library UI (grid/table, search, filter, bulk, locale-aware metadata editing) | 1 week | ✓ step 5 (default-only) + ✓ step 24 (locale-aware coverage badges + detail-pane locale section) |
+| Library UI (grid/table, search, filter, bulk, locale-aware metadata editing) | 1 week | ✓ step 5 (default-only) + ✓ step 24 (locale-aware coverage badges + detail-pane locale section); metadata editing in the active language isn't built: design-media.md M4, cut 3 |
 | Asset picker (3-panel modal with resolution-chain UX) | 1 week | ✓ step 6 (default-only) + ✓ step 24 (locale-aware preview chip surfaces); the third step (per-use alt and focal point) isn't built: design-media.md M1, cut 4 |
 | Focal point editor | 2 days | ✓ step 27 — click + drag + hover preview + four aspect-ratio thumbnails (1:1, 16:9, 4:5, 9:16). Hotspot rectangle (Sanity's region model) remains out of v1 |
 | Alt UX (inline upload-list input + library-card no-alt badge + detail-pane editor + `altRequired` save-time enforcement) | 3 days | ✓ step 26 — multi-layer alt UX shipped (upload-list inline, library badge, detail-pane AssetAltEditor, PATCH endpoint). `altRequired` save-time enforcement deferred to v1.5 — schema introspection at save not yet wired |
