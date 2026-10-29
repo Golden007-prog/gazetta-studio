@@ -23,7 +23,10 @@ permissions:
 jobs:
   stryker:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # The full mutant set (about 5,500 mutants) needs about 225 minutes on
+    # ubuntu-latest; at 180 every run from 2026-10-26 was cancelled at 77%.
+    # GitHub's job limit is 360.
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
