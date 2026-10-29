@@ -500,12 +500,12 @@ URLs are always valid during rename — old bytes stay until refs are rewritten.
 
 Rename rewrites all references. No CMS in our research does this automatically; it's distinctive and deliberate. Authors coming from Sanity/Contentful will expect rename to be free metadata — document as deliberate choice.
 
-**v1 limitation — rename refuses on assets with locale/theme overrides** (superseded by M7: rename moves language versions).
+**v1 limitation — rename refuses on assets with locale/theme overrides** (lifted by M7 for language versions; theme versions are still refused).
 The default-only happy path is in v1; full override-aware rename
 (copy each override slice to the new name, rewrite locale manifests,
 delete old slices, all atomically in one history revision) is a
 follow-up. v1 surfaces a typed error pointing the author at "remove
-overrides first." Tracked in design-media-implementation.md → "out of v1."
+overrides first." M7 (cut 5) builds it for language versions; theme versions stay in design-media-implementation.md → "out of v1."
 
 ### Multi-write contract
 
@@ -1232,7 +1232,7 @@ via `POST /api/assets` (the `alt`-prompting upload path).
 
 Seven parts of the editor flow above were unbuilt or undecided on 2026-10-29 ([#1357](https://github.com/gazetta-studio/gazetta-studio/issues/1357); its discovery research compares Sanity, Payload, Strapi, Storyblok, Contentful and Directus). Where these decisions differ from the sections above, these win; the sections above point here.
 
-What the code does today (checked 2026-10-29): `altOverride`, `focalPointOverride`, `titleOverride`, `descriptionOverride` and `variable` are declared (`schema/helpers.ts`) and read nowhere; a same-name upload in the default language silently replaces the image and drops its alt and focal point ([#1349](https://github.com/gazetta-studio/gazetta-studio/issues/1349)); `PATCH /api/assets/:name` has no language, so alt edited with French active, or an AI suggestion accepted then, overwrites the default alt; uploads accept images and audio only (`assets/validate.ts`) and ingest always writes `kind: 'embedded'`; Replace exists only inside the delete flow and Rename has no UI.
+What the code does today (checked 2026-10-29): `altOverride`, `focalPointOverride`, `titleOverride`, `descriptionOverride` and `variable` are declared (`schema/helpers.ts`) and read nowhere; a same-name upload in the default language silently replaces the image and drops its alt and focal point ([#1349](https://github.com/gazetta-studio/gazetta-studio/issues/1349)); `PATCH /api/assets/:name` has no language, so alt edited with French active, or an AI suggestion accepted then, overwrites the default alt; uploads accept images and audio only (`assets/validate.ts`) and ingest always writes `kind: 'embedded'`; replacing an asset with another one exists only inside the delete flow, replacing an asset's own file has no route or UI, and Rename has no UI.
 
 ### M1 — Alt and focal point per use
 
@@ -1260,7 +1260,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 ### M3 — Replace keeps alt and focal point, and asks the author to check them
 
-Replace (detail pane, or the upload row's link) puts a new file of the same kind into the same asset: same name, new hash, alt text, focal point, per-use overrides and uses kept. The result shows the new image with its alt and focal point: "Check the alt text and focal point still fit the new image", with Edit alt, Edit focal point and, when AI alt is set up, Suggest; it mentions pages with their own alt for this image. It goes away when dismissed; nothing is stored. Replace changes no page manifest.
+Replace (detail pane, or the upload row's link) puts a new file of the same kind into the same asset: same name, new hash, alt text, focal point, per-use overrides and uses kept. The result shows the new image with its alt and focal point: "Check the alt text and focal point still fit the new image", with Edit alt, Edit focal point and, when AI alt is set up, Suggest; it mentions pages with their own alt for this image. It goes away when dismissed; nothing is stored. Replace changes no page manifest. It's a new operation on the asset's own file, separate from the delete dialog's "Replace with…", which points every use at another asset and is unchanged.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1274,7 +1274,15 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 ### M4 — Alt text is edited in the active language
 
-As "Asset metadata edits target the active locale" above designs it: with French active, the alt field edits French alt (`hero.asset.fr.json`). Until there is one, the field shows the default alt greyed, "Using English", with "Copy English to edit"; a French alt can be cleared to fall back. AI suggestions write to the active language too. The metadata `PATCH` takes the language like the other asset routes (`?locale=`).
+As "Asset metadata edits target the active locale" above designs it: with French active, the alt field edits French alt (`hero.asset.fr.json`). Until there is one, the field shows the default alt greyed, "Using English", with "Copy English to edit"; a French alt can be cleared to fall back. An AI suggestion accepted in the detail pane fills the active language's alt, like typing. The metadata `PATCH` takes the language in the query, like the locale-bytes and suggest-alt routes (`?locale=`; "Selector parsing").
+
+The upload row is different: an upload creates the image itself (M2), so its alt field and AI auto-fill fill the **default** alt, with the suggestion generated in the default language even when French is active. "Upload always prompts for default-locale alt" (i18n in the editor UX) stands. French alt is added from the detail pane.
+
+Decided: maintainer, 2026-10-29 (#1553)
+
+| Rejected | Why |
+|---|---|
+| The upload row fills the active language's alt | An image uploaded with French active could have French alt and no default, so every other language falls back to none |
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1287,7 +1295,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 ### M5 — Documents and fonts upload now
 
-Documents (PDF, Word, Excel, PowerPoint, ZIP) upload as `kind: downloadable` and fill `downloadable()` fields. Fonts upload as `kind: font` with a short form (family name, weight, style; characters guessed from the active language) and a sample-text preview; each language adds its characters to the same family from the font's detail pane ("+ Add Japanese characters"), as "Fonts: locale manifest ADDS a variant" above designs. The resolver for both already exists.
+Documents (PDF, Word, Excel, PowerPoint, ZIP) upload as `kind: downloadable` and fill `downloadable()` fields. Fonts upload as `kind: font` with a short form (family name, weight, style; characters guessed from the active language) and a sample-text preview; each language adds its characters to the same family from the font's detail pane ("+ Add Japanese characters"), as "Fonts: locale manifest ADDS a variant" above designs. What exists: the resolver's dispatch by kind and the union of per-language font variants. The default manifest has no font fields or document title yet (`schema/types.ts` aliases both to `AssetManifest`), and the resolver uses the asset name as a font's family and a document's title; cuts 6 and 7 add the fields and the resolver reads, so the upload form's values take effect.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1311,7 +1319,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 ### M7 — Rename is all or nothing, checked first
 
-Rename's dialog lists the pages it will change and moves the image's language versions with it, in one revision. If the author can't edit one of those pages, or has unsaved edits on one, it says which and renames nothing ("Can't rename: you can't edit pricing"; "you have unsaved changes on home. Save or discard them first"). This replaces the "v1 limitation" under Rename above.
+Rename's dialog lists the pages it will change and moves the image's language versions with it, in one revision. Theme versions weren't decided here: an asset with a theme version is still refused. If the author can't edit one of those pages, or has unsaved edits on one, it says which and renames nothing ("Can't rename: you can't edit pricing"; "you have unsaved changes on home. Save or discard them first"). For language versions this lifts the "v1 limitation" under Rename above.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1329,13 +1337,17 @@ Decided: maintainer, 2026-10-29 (#1553)
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Replace in place keeping alt, focal point, overrides and uses, with the check note (M3; fixes #1349) | — | api + component | Medium |
-| 2 | Uploads never replace: new name plus the row's "Replace hero instead" link; the language dialog goes (M2) | 1 | component + e2e | Low |
-| 3 | Alt in the active language: `PATCH ?locale=`, "Using English", Copy English, clear; AI writes the active language (M4) | — | api + component | Medium |
+| 2 | Uploads never replace: the server saves an upload under an existing name as the next free name, whatever sent it; the row's "Replace hero instead" link; the language dialog goes (M2) | 1 | api + component + e2e | Low |
+| 3 | Alt in the active language in the detail pane: `PATCH ?locale=`, "Using English", Copy English, clear, AI suggestions there; the upload row keeps the default alt and suggests in the default language (M4) | — | api + component | Medium |
 | 4 | Per-use alt and focal point in the picker's third step, with `altOverride` and `focalPointOverride` (M1, M6) | — | component + e2e | Medium-high |
-| 5 | Rename, all or nothing, with language versions (M7) | 1 | api + component | High |
+| 5 | Rename, all or nothing, with language versions (M7) | — | api + component | High |
 | 6 | Documents and download links, with `titleOverride` and `descriptionOverride` (M5, M6) | — | api + component | Medium |
 | 7 | Fonts: upload form, per-language characters, preview, `variable` (M5, M6) | 6 | api + component | Medium |
 | 8 | Docs: `docs/content-assets.md`, `docs/template-assets.md` | 1–7 | docs | Low |
+
+Cut 2 needs cut 1 because its row link runs Replace; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
+
+Decided: maintainer, 2026-10-29 (#1553)
 
 | Rejected | Why |
 |---|---|

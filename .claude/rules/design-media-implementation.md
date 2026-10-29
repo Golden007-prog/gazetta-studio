@@ -26,11 +26,11 @@ branch for diffs).
 | **Foundation: binary-capable HistoryProvider** | 1.5 days | ✓ step 20 |
 | **Foundation: asset routes wire history (upload + delete)** | 0.5 day | ✓ step 21 |
 | Library UI (grid/table, search, filter, bulk, locale-aware metadata editing) | 1 week | ✓ step 5 (default-only) + ✓ step 24 (locale-aware coverage badges + detail-pane locale section) |
-| Asset picker (3-panel modal with resolution-chain UX) | 1 week | ✓ step 6 (default-only) + ✓ step 24 (locale-aware preview chip surfaces) |
+| Asset picker (3-panel modal with resolution-chain UX) | 1 week | ✓ step 6 (default-only) + ✓ step 24 (locale-aware preview chip surfaces); the third step (per-use alt and focal point) isn't built: design-media.md M1, cut 4 |
 | Focal point editor | 2 days | ✓ step 27 — click + drag + hover preview + four aspect-ratio thumbnails (1:1, 16:9, 4:5, 9:16). Hotspot rectangle (Sanity's region model) remains out of v1 |
 | Alt UX (inline upload-list input + library-card no-alt badge + detail-pane editor + `altRequired` save-time enforcement) | 3 days | ✓ step 26 — multi-layer alt UX shipped (upload-list inline, library badge, detail-pane AssetAltEditor, PATCH endpoint). `altRequired` save-time enforcement deferred to v1.5 — schema introspection at save not yet wired |
 | i18n manifest resolution + fallback chain + asset locale variants | 2 days | ✓ step 17 (resolver) + ✓ step 24 (UI surfaces) |
-| Locale-specific bytes (upload "default vs override" flow, per-locale variant generation, detail-pane locale bytes section, remove-override action) | 1 week | ✓ step 24 — backend (24 backend) + UX (24 UX) |
+| Locale-specific bytes (upload "default vs override" flow, per-locale variant generation, detail-pane locale bytes section, remove-override action) | 1 week | ✓ step 24 — backend (24 backend) + UX (24 UX); the upload "default vs override" dialog goes: design-media.md M2, cut 2 |
 | Picker accept-filter kind-compat enforcement | 1 day | ✓ step 23 |
 | Font asset kind (schema helper, resolver's union-with-unicode-range semantic, upload dialog for font metadata, locale-adds-variant behavior, library font preview) | 3–4 days | ✓ step 17 (resolver dispatch + variant union); upload UI + library preview: design-media.md M5, cut 7 |
 | Animated-image handling (detection via sharp `pages > 1`, first-frame poster extraction, `animated`/`duration` manifest fields) | 2 days | ✓ step 31 — sharp `pages > 1` detection + first-frame PNG poster + `animated`/`frames`/`duration`/`poster` manifest fields. New `UploadAnalyzer` abstraction (peer to `UploadPreprocessor`) provides the open extension seam for audio metadata, PDF page counts, EXIF orientation, etc. |
@@ -108,7 +108,7 @@ Proxy and pin are v1.5 — ship as an additive feature after v1 stabilizes.
 - Video first-frame extraction, PDF first-page rendering, audio waveform thumbnails — all require extra deps (ffmpeg, `pdfjs-dist`)
 - Font subsetting, variable-axis exposure per reference, `@font-face` preload hint generation (v2 typography polish)
 - Transcripts / captions (VTT/SRT) as companion files to audio/video assets
-- Override-aware rename — v1 rename refuses on assets with locale/theme overrides (clear typed error). Full version copies each override slice to the new name, rewrites locale manifests, deletes old slices, all in one history revision. Mechanical to add once an asset commonly carries overrides.
+- Override-aware rename — v1 rename refuses on assets with locale/theme overrides (clear typed error). Language versions: design-media.md M7, cut 5; theme versions stay here. Full version copies each override slice to the new name, rewrites locale manifests, deletes old slices, all in one history revision. Mechanical to add once an asset commonly carries overrides.
 
 ## Asset refs — per-edge sidecar index (v1)
 
