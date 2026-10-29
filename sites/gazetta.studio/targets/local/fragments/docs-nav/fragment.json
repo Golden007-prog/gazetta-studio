@@ -10,6 +10,10 @@
             "href": "/docs"
           },
           {
+            "label": "Publishing",
+            "href": "/docs/publishing"
+          },
+          {
             "label": "Cloudflare",
             "href": "/docs/cloudflare"
           },
