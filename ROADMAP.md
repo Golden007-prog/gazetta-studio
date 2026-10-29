@@ -2,7 +2,7 @@
 
 Forward-looking priorities for Gazetta. What's committed, what's planned, what's parked, what's not happening.
 
-**Updated**: 2026-10-24
+**Updated**: 2026-10-29
 
 ## How to read this
 
@@ -99,7 +99,7 @@ Research by discovery-prep-bot, then a design round with the maintainer where on
 
 - [#1483](https://github.com/gazetta-studio/gazetta-studio/issues/1483) Markdown in the admin: which Markdown support authors and template developers need
 - [#1484](https://github.com/gazetta-studio/gazetta-studio/issues/1484) content trust: whether editors can put markup or script on published pages
-- [#1485](https://github.com/gazetta-studio/gazetta-studio/issues/1485) AI direction: forms, AI helpers in forms, or agents operating the CMS; its answer feeds the MCP design pass ([#49](https://github.com/gazetta-studio/gazetta-studio/issues/49))
+- [#1485](https://github.com/gazetta-studio/gazetta-studio/issues/1485) AI direction: forms, AI helpers in forms, or agents operating the CMS; its answer feeds the MCP server design pass above
 - [#1540](https://github.com/gazetta-studio/gazetta-studio/issues/1540) executable specifications for AI-written code (Dave Farley's four layers)
 - [#1542](https://github.com/gazetta-studio/gazetta-studio/issues/1542) PrimeVue 5 and `@primeuix/themes` 3 are no longer MIT; the admin stays on the MIT 4.x line until a choice is made
 
