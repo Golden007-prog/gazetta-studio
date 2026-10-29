@@ -161,9 +161,24 @@ template renders `<a href="${content.whitepaper.url}" download>${content.whitepa
 The render body becomes conditional:
 
 ```ts
-html: content.image
-  ? `<img src="${content.image.url}" alt="${content.image.alt}">`
-  : '',
+import { z } from 'zod'
+import type { TemplateFunction } from 'gazetta'
+import { embeddedAsset, type Content } from 'gazetta/schema'
+
+export const schema = z.object({
+  image: embeddedAsset({ accept: ['image'] }).optional(),
+  title: z.string(),
+})
+
+const render: TemplateFunction<Content<typeof schema>> = ({ content }) => ({
+  html: content?.image
+    ? `<img src="${content.image.url}" alt="${content.image.alt}">`
+    : '',
+  css: '',
+  js: '',
+})
+
+export default render
 ```
 
 ### Required-alt enforcement
