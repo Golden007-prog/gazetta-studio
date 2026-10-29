@@ -42,3 +42,10 @@ export type Checks =
   | Primitive
   | Unbranded
   | Union
+
+const anySchema = z.any()
+const anyFieldSchema = z.object({ value: z.any() })
+type AnyInput = Assert<Equal<Content<any>, any>>
+type AnySchema = Assert<Equal<Content<typeof anySchema>, any>>
+type AnyField = Assert<Equal<Content<typeof anyFieldSchema>, { value: any }>>
+export type AnyChecks = AnyInput | AnySchema | AnyField
