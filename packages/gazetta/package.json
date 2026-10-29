@@ -116,7 +116,7 @@
     "marked": "^18.1.1",
     "music-metadata": "^12.3.2",
     "nanoid": "^6.0.2",
-    "openai": "^6.37.0",
+    "openai": "^7.45.0",
     "postcss": "^8.5.31",
     "postcss-prefix-selector": "^2.2.1",
     "sharp": "^0.35.5",
