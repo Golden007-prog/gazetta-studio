@@ -114,7 +114,7 @@
     "jose": "^6.2.12",
     "jsdom": "^29.1.1",
     "marked": "^18.1.1",
-    "music-metadata": "^11.12.3",
+    "music-metadata": "^12.3.2",
     "nanoid": "^6.0.2",
     "openai": "^6.37.0",
     "postcss": "^8.5.31",
