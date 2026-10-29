@@ -92,7 +92,7 @@
     "test:coverage": "vitest run --coverage --coverage.provider=v8 --coverage.include='src/**' --coverage.reporter=json-summary --coverage.reporter=text-summary"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0",
+    "@anthropic-ai/sdk": "^1.2.0",
     "@clack/prompts": "^1.8.1",
     "@floating-ui/dom": "^1.8.0",
     "@hello-pangea/dnd": "^18.0.1",

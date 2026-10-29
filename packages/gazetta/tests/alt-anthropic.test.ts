@@ -339,10 +339,10 @@ describe('createAnthropicAltAdapter — AbortSignal', () => {
 })
 
 describe('createAnthropicAltAdapter — auth', () => {
-  it('sends the API key in the x-api-key header', async () => {
+  it('sends the API key as a bearer token', async () => {
     mockResponse('ok')
     const adapter = createAnthropicAltAdapter({ apiKey: 'sk-mytestkey' })
     await adapter.generate(makeInput())
-    expect(captured[0].headers.get('x-api-key')).toBe('sk-mytestkey')
+    expect(captured[0].headers.get('authorization')).toBe('Bearer sk-mytestkey')
   })
 })
