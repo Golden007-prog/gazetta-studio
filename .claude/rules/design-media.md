@@ -1247,7 +1247,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 ### M2 — An upload never replaces an image
 
-Uploading a file whose name matches an existing image saves it under a new name (`hero-2`), and its upload row says so: "Saved as hero-2 · Replace hero instead". The link runs the detail pane's Replace (M3), which keeps alt, focal point and uses, and then deletes the now unused `hero-2`, in one revision. This is the same in every language: a language version is added from the image's detail pane ("+ Add French version"), so the upload zone's language dialog ("Locale-specific bytes at upload" above) goes.
+Uploading a file whose name matches an existing image saves it under a new name (`hero-2`), and its upload row says so: "Saved as hero-2 · Replace hero instead". The link runs the detail pane's Replace (M3), which keeps alt, focal point and uses, and then deletes the now unused `hero-2`, in one revision. Following M3, the row offers Replace only when the new file is the same kind as `hero`. This is the same in every language: a language version is added from the image's detail pane ("+ Add French version"), so the upload zone's language dialog ("Locale-specific bytes at upload" above) goes.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1264,13 +1264,13 @@ The link also removing `hero-2`: Decided: maintainer, 2026-10-29 (#1553)
 |---|---|
 | The link only replaces; `hero-2` stays for the author to delete | Every clash followed by the intended replace leaves an unused entry in the library |
 
-**Known limit.** The server picks the next free name by checking, then writing: storage has no "create only if absent", so two uploads of the same name at the same moment (two tabs, two admin instances, a script) can both take `hero-2`, and one overwrites the other. A storage primitive comes if it ever bites.
+**Known limit.** The server picks the next free name by checking, then writing: storage has no "create only if absent", so two uploads of the same name at the same moment (two tabs, two admin instances, a script) can both take `hero-2`, and one overwrites the other. The gap closes when scheduling cut 2's "create only if absent" write (`ifNoneMatch: '*'`, `design-scheduling-implementation.md`) lands; the name pick then uses it.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
 | Rejected | Why |
 |---|---|
-| Cut 2 adds a create-if-absent write to every storage provider | A new primitive across four providers is out of proportion for this round |
+| Media cut 2 builds the create-if-absent write itself | It's scheduling cut 2's write, designed there; media waits for it rather than building it twice |
 
 ### M3 — Replace keeps alt and focal point, and asks the author to check them
 
@@ -1307,7 +1307,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 |---|---|
 | The upload row fills the active language's alt | An image uploaded with French active could have French alt and no default, so every other language falls back to none |
 
-Adding or removing a language version keeps that language's alt: uploading French bytes keeps the French alt already saved, and removing them deletes only the bytes, keeping the French manifest while it holds alt (as "Remove a locale bytes override" above designs). Today both drop it (`ingest-locale.ts` writes a fresh byte-only manifest; `remove-override.ts` deletes the file). Cut 3 builds this.
+Adding or removing a language version keeps that language's alt: uploading French bytes keeps the French alt already saved, and removing them deletes only the bytes, keeping the French manifest while it holds metadata such as alt (as "Remove a locale bytes override" above designs). Today both drop it (`ingest-locale.ts` writes a fresh byte-only manifest; `remove-override.ts` deletes the file). Cut 3 builds this.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1352,7 +1352,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | Rename what it can and report the rest | Leaves pages pointing at a name that no longer exists |
 | Rename only the display name (Sanity, Contentful) | Reverses the deliberate choice that rename changes the real name and the file name in URLs |
 
-The server makes the same check, before any write, whatever sent the request: it refuses a rename unless the caller can edit pages (`edit:pages`) and fragments (`edit:fragments`) when the asset has uses there. Roles are site-wide in v1 (`design-auth-rbac.md`), so the refusal names the kind of item, not one page.
+The server makes the permission check, before any write, whatever sent the request: it refuses a rename unless the caller can edit pages (`edit:pages`) and fragments (`edit:fragments`) when the asset has uses there. Roles are site-wide in v1 (`design-auth-rbac.md`), so the refusal names the kind of item, not one page.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1365,10 +1365,10 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 A summary of M1–M7; it decides nothing new.
 
-- **Actors:** content authors (upload, replace, alt per language, per-use alt and focal point, rename, documents); template developers (the field options, M6; fonts, M5).
+- **Actors:** content authors (upload, replace, alt per language, per-use alt and focal point, rename, documents, fonts and their per-language characters); template developers (the field options, M6, and the `fontAsset()` and `downloadable()` fields, M5).
 - **Absence as state:** an upload under a free name looks as it does today; the "Saved as hero-2" note shows only on a clash (M2); the Replace check note shows only after a replace and goes when dismissed (M3); "Using English" shows only while a language has no alt of its own (M4).
 - **Same behaviour in every language:** uploads behave the same in every language (M2); language versions are added from the detail pane (M2, M5).
-- **Failure states:** a clash never replaces (M2, with the known limit for simultaneous uploads); a replace keeps alt, focal point and uses (M3); adding or removing a language version keeps its alt (M4); a rename that would leave a use unedited, or that the caller can't make, is refused before any write, on the server too (M7).
+- **Failure states:** a clash never replaces (M2, with the known limit for simultaneous uploads); a replace keeps alt, focal point and uses (M3); adding or removing a language version keeps its alt (M4); a rename that would leave a use unedited, or that the caller can't make, is refused before any write, and the permission refusal is made on the server too (M7).
 
 ### Cut sequence
 
@@ -1384,7 +1384,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
-| 1 | Replace in place keeping alt, focal point, overrides and uses, with the check note (M3; fixes #1349) | #1334 | api + component | Medium |
+| 1 | Replace in place keeping alt, focal point, overrides and uses, with the check note; adds an in-place replace route next to the Admin API's `replace-with` (M3; fixes #1349) | #1334 | api + component | Medium |
 | 2 | Uploads never replace: the server saves an upload under an existing name as the next free name, whatever sent it; the row's "Replace hero instead" link; the language dialog goes (M2) | 1 | api + component + e2e | Low |
 | 3 | Alt in the active language in the detail pane: `PATCH ?locale=`, "Using English", Copy English, clear, AI suggestions there; the upload row keeps the default alt and suggests in the default language; adding or removing a language version keeps its alt (M4) | #1334 | api + component | Medium |
 | 4 | Per-use alt and focal point in the picker's third step, with `altOverride` and `focalPointOverride` (M1, M6) | — | component + e2e | Medium-high |
@@ -1393,13 +1393,14 @@ Decided: maintainer, 2026-10-29 (#1553)
 | 7 | Fonts: upload form, per-language characters, preview, `variable` (M5, M6) | 6 | api + component | Medium |
 | 8 | Docs: `docs/content-assets.md`, `docs/template-assets.md` | 1–7 | docs | Low |
 
-Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
+Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note that their changes reach targets only with `gazetta publish --force` until the hash input is redesigned. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
 | Rejected | Why |
 |---|---|
-| Only a note that until #1334 lands, changes reach targets with `gazetta publish --force` | Cuts 1 and 3 would ship changes authors can't publish |
+| Only a note that until #1334 lands, changes reach targets with `gazetta publish --force` | Cuts 1 and 3 would ship changes authors can't publish (kept only as the fallback if #1334 stops) |
+| Cuts 1 and 3 wait for #1334 whatever its outcome | The data-loss fixes would wait on a benchmark nobody has run |
 | Cut 2 changes only the admin's upload zone | A second tab, a script or the MCP server can still replace an image silently, which M2 says never happens |
 
 
