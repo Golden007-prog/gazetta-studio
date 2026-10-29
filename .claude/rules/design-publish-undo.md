@@ -151,6 +151,7 @@ Decided: maintainer, 2026-10-29 (#1535)
 |---|---|
 | Re-check each item's hash before writing and refuse on a mismatch | The author has to publish again, and the HTML and the manifests can still come from different reads. |
 | One snapshot plus a re-check that warns a newer save wasn't included | More code for what the unpublished-change dot already shows. |
+| The history record keeps its own read | A save during a publish can land in the revision without having been published, so undo could restore unpublished content. |
 
 ## UX check
 
