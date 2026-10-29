@@ -106,3 +106,51 @@ describe('gazetta publish on a one-target site', { timeout: 120000 }, () => {
     expect(await snapshotTree(join(projectDir, 'sites/main/targets'))).toEqual(before)
   })
 })
+
+const TWO_TARGET_CONFIG = `import { defineSite, filesystemStorage } from 'gazetta'
+
+export default defineSite({
+  name: 'Gazetta Starter',
+  version: '1.0.0',
+  systemPages: ['404'],
+  targets: {
+    local: {
+      storage: filesystemStorage({ path: './targets/local' }),
+      publicStorage: false,
+    },
+    staging: {
+      storage: filesystemStorage({ path: './dist/staging' }),
+      publicStorage: false,
+      environment: 'staging',
+    },
+  },
+})
+`
+
+// Naming the editing source as the destination copies the site onto itself,
+// and the parallel copies read each other's half-written temp files (#1526).
+describe('gazetta publish into its editing source', { timeout: 120000 }, () => {
+  let projectDir: string
+
+  beforeEach(async () => {
+    projectDir = tempDir(`cli-publish-into-source-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await cp(starterDir, projectDir, {
+      recursive: true,
+      filter: src => !src.includes('/node_modules') && !src.includes('/dist'),
+    })
+    await writeFile(resolve(projectDir, 'sites/main/site.config.ts'), TWO_TARGET_CONFIG)
+  })
+
+  afterEach(async () => {
+    await rm(projectDir, { recursive: true, force: true })
+  })
+
+  it('refuses and writes nothing when the editing source is named', async () => {
+    const before = await snapshotTree(join(projectDir, 'sites/main/targets'))
+    const res = await runCli(projectDir, ['publish', 'local'])
+
+    expect(res.code).toBe(1)
+    expect(res.output).toContain('"local" is the editing source')
+    expect(await snapshotTree(join(projectDir, 'sites/main/targets'))).toEqual(before)
+  })
+})

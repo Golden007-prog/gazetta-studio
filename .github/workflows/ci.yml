@@ -78,14 +78,14 @@ jobs:
           include-hidden-files: true
           retention-days: 1
       # Render gazetta.studio, so a change that breaks the real site fails
-      # here instead of in the production deploy. Filesystem `local` target
-      # only. No secrets are referenced: the R2 values are placeholders (the
+      # here instead of in the production deploy. Filesystem `ci` target
+      # only (publishing into `local`, the editing source, is refused, #1526). No secrets are referenced: the R2 values are placeholders (the
       # site config builds its R2 client at load), so even a mistaken
       # `publish production` could not authenticate. Production publishes
       # only from deploy-site.yml on main. One shard is enough.
-      - name: Publish gazetta.studio to its local target
+      - name: Publish gazetta.studio to its ci target
         if: matrix.shard == 1
-        run: npx tsx packages/gazetta/src/cli/index.ts publish local sites/gazetta.studio --force
+        run: npx tsx packages/gazetta/src/cli/index.ts publish ci sites/gazetta.studio --force
         env:
           R2_ACCESS_KEY_ID: ci-placeholder
           R2_SECRET_ACCESS_KEY: ci-placeholder

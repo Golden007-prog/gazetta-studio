@@ -709,11 +709,19 @@ async function runPublish(siteDir: string, targetName?: string, opts: { force?: 
     process.exit(1)
   }
 
-  // Determine which targets to publish to
-  const targetNames = targetName ? [targetName] : Object.keys(siteYaml.targets)
+  // Determine which targets to publish to. Never the editing source: the
+  // copy would write the site onto itself, and parallel copies read each
+  // other's half-written temp files (#1526).
+  const sourceTarget = source.targetName
+  const targetNames = targetName ? [targetName] : Object.keys(siteYaml.targets).filter(name => name !== sourceTarget)
   for (const name of targetNames) {
     if (!siteYaml.targets[name]) {
       console.error(`\n  Error: Unknown target "${name}". Available: ${Object.keys(siteYaml.targets).join(', ')}\n`)
+      process.exit(1)
+    }
+    if (name === sourceTarget) {
+      console.error(`\n  Error: "${name}" is the editing source, so there's nothing to publish it from.`)
+      console.error(`  Publish to another target.\n`)
       process.exit(1)
     }
   }

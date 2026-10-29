@@ -274,7 +274,7 @@ npx gazetta deploy production         # deploy a target's worker
 
 `build` creates the production admin UI in `dist/admin/`; only `gazetta admin` needs it. `publish` pre-renders pages and uploads to storage. `deploy` bundles the installed Gazetta into the worker and embeds the locales, `siteUrl` and bucket, so deploy again after a Gazetta upgrade or a change to any of those.
 
-There is no default target for `publish`: with several targets it asks which one, and in CI it stops until you name one. A site with a single target can't publish at all — that target is the editing source, so publishing would render the site into its own storage. Add a second target in `site.config.ts` first.
+There is no default target for `publish`: with several targets it asks which one, and in CI it stops until you name one. A site with a single target can't publish at all — that target is the editing source, so publishing would render the site into its own storage. Add a second target in `site.config.ts` first. For the same reason, naming the editing source as the destination (`gazetta publish local`) is refused, in the admin too.
 
 The publish mode comes from the target's [`type`](./targets.md#type): `dynamic` pages keep ESI placeholders that a worker (or `gazetta serve`) assembles at request time; `static` pages are fully assembled at publish time.
 

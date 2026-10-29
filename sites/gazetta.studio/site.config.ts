@@ -11,6 +11,13 @@ export default defineSite({
       publicStorage: false,
       // Defaults: environment=local (editable)
     },
+    ci: {
+      // CI renders the site here so a change that breaks it fails the PR
+      // (.github/workflows/ci.yml). Never deployed; gitignored under dist/.
+      storage: filesystemStorage({ path: './dist/ci' }),
+      publicStorage: false,
+      editable: false,
+    },
     production: {
       type: 'dynamic',
       // The bucket has no public access; visitors reach it only through the worker.

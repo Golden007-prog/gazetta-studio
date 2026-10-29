@@ -374,6 +374,11 @@ export function publishRoutes(
         yield { kind: 'fatal', error: `Unknown target: ${name}` }
         return
       }
+      // Publishing into the source copies the site onto itself (#1526).
+      if (name === source.targetName) {
+        yield { kind: 'fatal', error: `Cannot publish to ${name}: it is the editing source` }
+        return
+      }
     }
 
     const allItems = await resolveDependencies(source.contentRoot, items)
