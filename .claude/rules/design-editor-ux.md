@@ -24,8 +24,10 @@ A target's `editable` flag determines what the author can do when that target is
 
 | `editable` | Author can | Author cannot |
 |-----------|-----------|---------------|
-| `yes` | Edit form, save, receive publishes from other targets | — |
-| `no` | View tree, inspect editor (read-only), view preview, publish *from* this target to others | Save, receive publishes |
+| `yes` | Edit form, save, publish to and from this target | — |
+| `no` | View tree, inspect editor (read-only), view preview, publish to and from this target | Save |
+
+Editability doesn't limit Publish: production is read-only by default and receives publishes (`design-decisions.md` #16; the server doesn't check `editable` on publish).
 
 The workspace chrome reflects the current state: read-only active targets lock the editor,
 hide the save button, and show read-only indicators.
@@ -354,6 +356,5 @@ The design above is forward-looking. Current code state:
 - **Permissions / roles / authentication** — per-user capabilities
 - **Split-preview comparison** — side-by-side view of two targets for the same page
 - **Target configuration surface** — where targets are declared (YAML file vs in-CMS settings)
-- **Splitting `editable`** — potentially into `writable` (form-edit) and `publishable` (receive publishes)
-  if teams need "publish to prod, but don't edit it directly"
+- **A publish-protected target** — a setting that refuses publishes into a target (today any target receives them)
 - **Overwrite warning** — when publishing would replace newer content on the destination
