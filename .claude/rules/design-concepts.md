@@ -57,7 +57,7 @@ the CMS adapts its UI progressively based on what's configured (see design-edito
 |----------|--------|---------|
 | **Type** | `static` / `dynamic` | When rendering happens (publish time vs request time) |
 | **Environment** | `local` / `staging` / `production` (or unset) | Drives UI treatment (colors, prod warnings) and suggestion hints. No custom values. |
-| **Editable** | `yes` / `no` | Whether author can save form-edits to this target and receive publishes into it. Default: `yes` for `environment: local`, `no` for `staging` and `production`. Explicit override always wins. |
+| **Editable** | `yes` / `no` | Whether author can save form-edits to this target and receive publishes into it. Default: `no` when the target's storage is public, otherwise `yes` for `environment: local` and `no` for `staging` and `production`. Explicit override always wins. |
 
 Properties are independent. Examples: `{type: static, environment: local, editable: yes}` for
 a local dev target; `{type: static, environment: production, editable: no}` for a publish-only
@@ -68,11 +68,12 @@ Environments have no system-defined hierarchy — the CMS suggests flows (e.g. "
 setups use the same `environment` value across peer targets (e.g. `prod-us` and `prod-eu`
 both have `environment: production`); they're distinguished by target name, not by environment.
 
-**Current code:** `environment` is already implemented on `TargetConfig`
-([packages/gazetta/src/types.ts](../../packages/gazetta/src/types.ts)). `type` replaces
-the existing `publishMode` field (`esi` → `dynamic`, `static` → `static`) with no
-backward-compatible alias — all `site.config.ts` files must be migrated in the same change.
-`editable` is a new optional field, defaulting to `true`.
+**Current code:** `type`, `environment` and `editable` are all on `TargetConfig`
+([packages/gazetta/src/types.ts](../../packages/gazetta/src/types.ts); `publishMode` is gone).
+`isEditable` resolves public storage first ([`design-public-storage.md`](design-public-storage.md) Q6):
+storage is public unless the target sets `publicStorage: false`, is a filesystem target with
+`editable: true`, or is deployed by a copy adapter. So in practice an editing target sets
+`editable: true` (or `publicStorage: false`) explicitly, as `gazetta init` writes it.
 
 ## Active Target
 
