@@ -9,13 +9,13 @@ Configure storage, target `type`, environments and history in [Targets](./target
 1. Open **Publish** in the top bar, or click a target's sync chip.
 2. Check **From**. It defaults to the active target when that target is editable, otherwise the first editable target. When several targets are editable, choose the source in the dropdown. This lets you promote content from staging without making it the active target.
 3. Select one or more destinations under **To**. The selected source is not a destination. A target marked read-only can still receive a publish: read-only prevents editing there, not publishing into it.
-4. Review **Items**. The list combines differences across the selected destinations, showing added, modified and destination-only items, with each destination's state. Changed items start selected; use the checkboxes or **Select all** / **Select none** to choose what to publish.
+4. Review **Items**. The list combines differences across the selected destinations, showing added, modified and destination-only items, with each destination's state. Changed items start selected, including destination-only rows affected by [#1159](https://github.com/gazetta-studio/gazetta-studio/issues/1159); see the workaround below before publishing. Use the checkboxes or **Select all** / **Select none** to choose what to publish.
 5. Click **Publish**. If a selected destination has `environment: 'production'`, the panel warns that live content will change and asks **Yes, publish to ...** before proceeding.
 6. Watch progress and check the result for each destination. Successful results show the copied-file count; failures show an error. A success on one destination does not mean every destination succeeded.
 
 With four or more configured targets, destinations are grouped by environment; a group checkbox selects its members. A sync chip opens the panel with that destination selected, but still review the source and items before publishing.
 
-Items that exist only on a destination count toward its sync status, but publishing cannot remove them today ([#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094)). They appear as deleted in the comparison, without a publish checkbox; that label is not a promise that publishing deletes them.
+Items that exist only on a destination count toward its sync status, and publishing cannot remove them yet ([#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094)). The panel currently selects them anyway, with no checkbox to clear, and the publish then fails with "Unknown item" ([#1159](https://github.com/gazetta-studio/gazetta-studio/issues/1159)). To publish the other items, click **Select none**, then select the ones you want. **Select all** selects the destination-only rows again. Their deleted label is not a promise that publishing deletes them.
 
 ### Production confirmation and validation
 
@@ -38,17 +38,19 @@ The source is the first editable target in declaration order. Unlike the admin p
 npx gazetta publish staging sites/main
 ```
 
-There is no default destination when several targets are configured. Without a target argument, an interactive run asks you to choose; in CI it stops and asks you to specify one. A site with a single target cannot publish because that target is the editing source. Add another target first. Naming the editing source as the destination is also refused, in both the CLI and the admin.
+There is no default destination when several targets are configured. Without a target argument, an interactive run asks you to choose a destination other than the editing source; in CI it stops and asks you to specify one. A site with a single target cannot publish because that target is the editing source. Add another target first. Naming the editing source as the destination is also refused, in both the CLI and the admin.
 
 Publish pre-renders pages and uploads content to storage. Its output follows the destination's [`type`](./targets.md#type): `dynamic` pages keep ESI placeholders assembled by a worker or `gazetta serve` at request time; `static` pages are assembled at publish time. For missing routes, see [Custom 404 page](./pages-and-fragments.md#custom-404-page).
 
-`npx gazetta build` builds the production admin UI and custom editors/fields; it is not a content publish. `npx gazetta deploy production` runs the target's deploy adapter; see [Deploy](./deploy.md) for its contract and platform guides.
+`npx gazetta build` writes the production admin UI and custom editors/fields to `dist/admin/`; only `gazetta admin` needs that output, and it is not a content publish.
+
+`npx gazetta deploy production` runs the target's deploy adapter; see [Deploy](./deploy.md) for its contract and platform guides. For a Cloudflare worker, deploy bundles the installed Gazetta and embeds the locales, `siteUrl` and bucket, so deploy again after upgrading Gazetta or changing any of those.
 
 ## Sync chips and unpublished-change dots
 
 These are two different comparisons:
 
-- **Top-bar sync chips** show each non-active target relative to the active target. A chip shows a changed-item count, **in sync** or **not yet published**. The count includes added, modified and destination-only items. Clicking a target chip opens Publish with that destination selected. With four or more targets, environment groups can collapse several chips; expand a group to choose a member.
+- **Top-bar sync chips** show each non-active target relative to the active target. A chip shows **N behind** (the changed-item count), **in sync** or **not yet published**. The count includes added, modified and destination-only items. Clicking a target chip opens Publish with that destination selected. With four or more targets, environment groups can collapse several chips; expand a group to choose a member.
 - **Amber dots in the site tree** mark pages and fragments with unpublished changes against one automatically chosen target. The admin tries targets by environment: production, then staging, then local. It skips targets never published to when a previously published comparison is available. If every comparison is a first publish, items show the not-yet-published state instead. Hover a dot to see the comparison target.
 
 A dot disappears when that item matches the chosen target. Comparisons refresh after saves and publishes. The dots are not separate counts for every destination, so use the chips or Publish panel to inspect a particular target.
