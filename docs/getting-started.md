@@ -71,34 +71,9 @@ The staging target serves from your own disk. To put the site in front of a real
 
 To replace a template's form or add a custom field widget, see [Customize the editor](./customize-editor.md).
 
-## Publishing
+## Publishing guide
 
-> **Deploying to Cloudflare?** See the [Cloudflare deployment guide](./cloudflare.md).
-> **Self-hosting?** See the [self-hosted deployment guide](./self-hosted.md) for VPS, Docker, and Fly.io.
-> **Configuring targets?** See [`targets.md`](./targets.md) for storage factories, environments, caching and secrets.
-
-### Unpublished change indicators
-
-The site tree shows a small amber dot next to any page or fragment that has unpublished changes against the most relevant target.
-
-The admin picks the target automatically: it prefers `production` if available, then `staging`, then `local`, but skips any target that has never been published to (so a brand-new production target doesn't make every item look dirty). Until the first publish to any target, every item shows the dot ("Not yet published to …"). Hover the dot to see which target the comparison is against.
-
-The dot disappears when the item matches the target. It refreshes after every save and publish.
-
-### Publish and deploy
-
-```bash
-npx gazetta build                     # build admin UI + custom editors/fields
-npx gazetta publish                   # publish (which target: see below)
-npx gazetta publish production        # publish to a specific target
-npx gazetta deploy production         # deploy a target's worker
-```
-
-`build` creates the production admin UI in `dist/admin/`; only `gazetta admin` needs it. `publish` pre-renders pages and uploads to storage. `deploy` bundles the installed Gazetta into the worker and embeds the locales, `siteUrl` and bucket, so deploy again after a Gazetta upgrade or a change to any of those.
-
-There is no default target for `publish`: with several targets it asks which one, and in CI it stops until you name one. A site with a single target can't publish at all — that target is the editing source, so publishing would render the site into its own storage. Add a second target in `site.config.ts` first. For the same reason, naming the editing source as the destination (`gazetta publish local`) is refused, in the admin too.
-
-The publish mode comes from the target's [`type`](./targets.md#type): `dynamic` pages keep ESI placeholders that a worker (or `gazetta serve`) assembles at request time; `static` pages are fully assembled at publish time.
+For publishing from the admin or CLI, sync chips, unpublished-change dots, history and today's destination-undo limitation, see [Publishing](./publishing.md).
 
 For missing-route handling and the starter 404 page, see [Custom 404 page](./pages-and-fragments.md#custom-404-page).
 
