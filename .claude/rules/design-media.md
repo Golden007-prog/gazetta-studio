@@ -1264,7 +1264,7 @@ The link also removing `hero-2`: Decided: maintainer, 2026-10-29 (#1553)
 |---|---|
 | The link only replaces; `hero-2` stays for the author to delete | Every clash followed by the intended replace leaves an unused entry in the library |
 
-**Known limit.** The server picks the next free name by checking, then writing: storage has no "create only if absent", so two uploads of the same name at the same moment (two tabs, two admin instances, a script) can both take `hero-2`, and one overwrites the other. The gap closes when the "create only if absent" write (`ifNoneMatch: '*'`, specified as scheduling cut 2 in `design-scheduling-implementation.md`) lands; it's filed on its own as [#1554](https://github.com/gazetta-studio/gazetta-studio/issues/1554), since scheduling is bucketed Later, and the name pick then uses it.
+**Simultaneous uploads.** Storage has no "create only if absent" write today, so a check-then-write name pick would let two uploads of the same name at the same moment (two tabs, two admin instances, a script) both take `hero-2`, one overwriting the other. That write (`ifNoneMatch: '*'`, specified as scheduling cut 2 in `design-scheduling-implementation.md`) is filed on its own as [#1554](https://github.com/gazetta-studio/gazetta-studio/issues/1554), since scheduling is bucketed Later; cut 2 waits for it and its name pick uses it from the start, so two simultaneous uploads can't collide.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1370,7 +1370,7 @@ A summary of M1–M7; it decides nothing new.
 - **Actors:** content authors (upload, replace, alt per language, per-use alt and focal point, rename, documents, fonts and their per-language characters); template developers (the field options, M6, and the `fontAsset()` and `downloadable()` fields, M5).
 - **Absence as state:** an upload under a free name looks as it does today; the "Saved as hero-2" note shows only on a clash (M2); the Replace check note shows only after a replace and goes when dismissed (M3); "Using English" shows only while a language has no alt of its own (M4).
 - **Same behaviour in every language:** uploads behave the same in every language (M2); language versions are added from the detail pane (M2, M5).
-- **Failure states:** a clash never replaces (M2, with the known limit for simultaneous uploads); a replace keeps alt, focal point and uses (M3); adding or removing a language version keeps its alt (M4); a rename that would leave a use unedited, or that the caller can't make, is refused before any write, and the permission refusal is made on the server too (M7).
+- **Failure states:** a clash never replaces, even for two simultaneous uploads (M2); a replace keeps alt, focal point and uses (M3); adding or removing a language version keeps its alt (M4); a rename that would leave a use unedited, or that the caller can't make, is refused before any write, and the permission refusal is made on the server too (M7).
 
 ### Cut sequence
 
@@ -1395,7 +1395,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | 7 | Fonts: upload form, per-language characters, preview, `variable` (M5, M6) | 6 | api + component | Medium |
 | 8 | Docs: `docs/content-assets.md`, `docs/template-assets.md` | 1–7 | docs | Low |
 
-Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note saying plainly that until the hash input is redesigned the admin can't publish these changes (its publish list comes from compare, which ignores assets) and an operator runs `gazetta publish <target> --force`. In that case the Replace result and the alt editor also say "Publish from the command line with --force to update targets", and targets that need publish approval (where the CLI is refused) can't take these changes until the redesign. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`, and #1554 so its name pick uses the atomic write and the known limit never ships; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
+Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note saying plainly that until the hash input is redesigned the admin can't publish these changes (its publish list comes from compare, which ignores assets) and an operator runs `gazetta publish <target> --force`. In that case the Replace result and the alt editor also say "Publish from the command line with --force to update targets", and targets that need publish approval (once that gate ships, the CLI is refused there) can't take these changes until the redesign. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`, and #1554 so its name pick uses the atomic write and simultaneous uploads never collide; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1404,7 +1404,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | Only a note that until #1334 lands, changes reach targets with `gazetta publish --force` | Cuts 1 and 3 would ship changes authors can't publish (kept only as the fallback if #1334 stops) |
 | Cuts 1 and 3 wait for #1334 whatever its outcome | The data-loss fixes would wait on a benchmark nobody has run |
 | If #1334 stops, cut 1 also adds a way to republish an asset's pages from the admin's publish panel | More building for a case that only arises if #1334 stops; an operator can publish with `--force` until the redesign |
-| In that fallback, a docs note only | The Replace result and the sync chip would tell authors their change is done and in sync |
+| In that fallback, a docs note only | The Replace result and the alt editor would say the change is done, while the admin can't publish it |
 | Cut 2 changes only the admin's upload zone | A second tab, a script or the MCP server can still replace an image silently, which M2 says never happens |
 
 
