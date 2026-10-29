@@ -18,7 +18,7 @@
     "@primeuix/themes": "^2.0.3",
     "@tanstack/query-async-storage-persister": "^5.104.4",
     "@tanstack/vue-query": "^5.104.4",
-    "@vueuse/core": "^14.3.0",
+    "@vueuse/core": "^15.0.0",
     "gazetta": "*",
     "hono": "^4.13.13",
     "idb": "^8.0.4",
