@@ -500,7 +500,7 @@ URLs are always valid during rename — old bytes stay until refs are rewritten.
 
 Rename rewrites all references. No CMS in our research does this automatically; it's distinctive and deliberate. Authors coming from Sanity/Contentful will expect rename to be free metadata — document as deliberate choice.
 
-**v1 limitation — rename refuses on assets with locale/theme overrides.**
+**v1 limitation — rename refuses on assets with locale/theme overrides** (superseded by M7: rename moves language versions).
 The default-only happy path is in v1; full override-aware rename
 (copy each override slice to the new name, rewrite locale manifests,
 delete old slices, all atomically in one history revision) is a
@@ -725,12 +725,10 @@ Empty state: "Drop files here to upload, or paste a URL for an external asset."
   pane (per kind)
 - Each successful upload commits one history revision (per file, not
   per batch — granular undo)
-- **Locale-bytes upload prompt:** when active locale ≠ default AND the
-  derived name collides with an existing asset, the upload zone opens a
-  modal asking "Replace default bytes / Add {locale} override / Cancel"
-  (see "Locale-specific bytes at upload" below)
+- **Same-name upload:** saved under a new name, with "Replace hero instead"
+  in the row; no dialog, in any language (M2)
 
-**Locale-specific bytes at upload:**
+**Locale-specific bytes at upload** (superseded by M2: language versions are added from the detail pane, and the upload zone has no dialog):
 
 When the active locale is not the default and the author is uploading a file that matches an existing asset's name (e.g., dragging `hero.jpg` while French is active, and `hero` already exists as a default asset), the dialog asks:
 
@@ -759,7 +757,7 @@ When the active locale is default (or no other locale is active), upload always 
   - `French (fr) — 1.2 MB, 1920×1080` — locale override, with "Remove override" button (falls back to default, doesn't affect refs)
   - `+ Add locale bytes…` — prompts for locale selection and file upload
 - **Usage**: collapsible list of refs with clickable paths to the referencing page/fragment, showing which locales reference the asset
-- **Actions**: Download (original or active-locale bytes), Replace (opens upload with replacement intent), Rename, Delete
+- **Actions**: Download (original or active-locale bytes), Replace (M3), Rename (M7), Delete
 
 ### Picker (opened from schema field)
 
@@ -767,7 +765,7 @@ When the active locale is default (or no other locale is active), upload always 
 
 1. **Library browser** — filtered to schema's `accept`, same search/sort as main library
 2. **Asset detail** — read-only preview and metadata for the selected asset
-3. **Reference options** — alt override and focal-point editor (images only, if schema allows); skipped for downloadables
+3. **Reference options** — alt override and focal-point editor (images only, if schema allows; M1, M6); for downloadables, title and description when `titleOverride` / `descriptionOverride` allow (M6)
 
 Flow: browse → select → detail → (reference options) → confirm → picker closes, form data updates.
 
@@ -1229,6 +1227,120 @@ Either dimension absent means "use the default for this dimension."
 Both absent on a `locale-bytes` route is a 400 — the route exists to
 write a non-default selector. The default asset's bytes are written
 via `POST /api/assets` (the `alt`-prompting upload path).
+
+## Editor flow decisions (#1357)
+
+Seven parts of the editor flow above were unbuilt or undecided on 2026-10-29 ([#1357](https://github.com/gazetta-studio/gazetta-studio/issues/1357); its discovery research compares Sanity, Payload, Strapi, Storyblok, Contentful and Directus). Where these decisions differ from the sections above, these win; the sections above point here.
+
+What the code does today (checked 2026-10-29): `altOverride`, `focalPointOverride`, `titleOverride`, `descriptionOverride` and `variable` are declared (`schema/helpers.ts`) and read nowhere; a same-name upload in the default language silently replaces the image and drops its alt and focal point ([#1349](https://github.com/gazetta-studio/gazetta-studio/issues/1349)); `PATCH /api/assets/:name` has no language, so alt edited with French active, or an AI suggestion accepted then, overwrites the default alt; uploads accept images and audio only (`assets/validate.ts`) and ingest always writes `kind: 'embedded'`; Replace exists only inside the delete flow and Rename has no UI.
+
+### M1 — Alt and focal point per use
+
+When an author picks an image for a page, the picker's third step (Picker, panel 3) lets them give that use its own alt text and focal point, showing what the alt falls back to. The override is stored on the reference in the page manifest, as "Reference shape" already allows. A logo can be meaningful in the hero and decorative in the footer.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Focal point per use only (Sanity's model) | A logo needing different alt in two places needs two assets |
+| Nothing per use (Strapi, Storyblok) | Alt can't follow how the image is used, which WCAG asks for |
+
+### M2 — An upload never replaces an image
+
+Uploading a file whose name matches an existing image saves it under a new name (`hero-2`), and its upload row says so: "Saved as hero-2 · Replace hero instead". The link runs the detail pane's Replace (M3), which keeps alt, focal point and uses. This is the same in every language: a language version is added from the image's detail pane ("+ Add French version"), so the upload zone's language dialog ("Locale-specific bytes at upload" above) goes.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Today's behaviour: silent replace in the default language, a dialog in others | Loses work without telling the author (#1349), and behaves differently by language |
+| A dialog on every clash: Replace / Keep both / Cancel, plus "Add French version" in other languages | One dialog per clashing file; a decision before the author has seen anything |
+| Refuse until the author chooses: the row waits with Replace / Keep both | Nothing is saved until the author picks |
+| As chosen, plus "Use as French version of hero" in the row when another language is active | The row would differ by language; the detail pane shows which languages already have a version |
+
+### M3 — Replace keeps alt and focal point, and asks the author to check them
+
+Replace (detail pane, or the upload row's link) puts a new file of the same kind into the same asset: same name, new hash, alt text, focal point, per-use overrides and uses kept. The result shows the new image with its alt and focal point: "Check the alt text and focal point still fit the new image", with Edit alt, Edit focal point and, when AI alt is set up, Suggest; it mentions pages with their own alt for this image. It goes away when dismissed; nothing is stored. Replace changes no page manifest.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Show nothing | Wrong alt goes live unnoticed when the new picture shows something else |
+| The note plus a "check alt" library badge until someone confirms | New stored state, and a badge that stays after the author checked |
+| Confirm in the Replace dialog before saving | A decision on every replace, before the new image is in place |
+| Reset the focal point to the centre | Drops a focal point that usually still fits |
+| Clear alt and re-run AI | Loses work; sites without AI end up with no alt |
+
+### M4 — Alt text is edited in the active language
+
+As "Asset metadata edits target the active locale" above designs it: with French active, the alt field edits French alt (`hero.asset.fr.json`). Until there is one, the field shows the default alt greyed, "Using English", with "Copy English to edit"; a French alt can be cleared to fall back. AI suggestions write to the active language too. The metadata `PATCH` takes the language like the other asset routes (`?locale=`).
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Default language only; read-only elsewhere ("Alt text is set in English") | French screen-reader users hear English alt |
+| Edit anywhere, always save the default, with a label | Keeps today's trap, only labelled |
+| An alt field per language at once, whatever language is active | Ignores the language switcher that drives every other screen, and grows with every language |
+| French alt only through per-use alt on French pages (M1) | The same French alt retyped on every page using the image |
+
+### M5 — Documents and fonts upload now
+
+Documents (PDF, Word, Excel, PowerPoint, ZIP) upload as `kind: downloadable` and fill `downloadable()` fields. Fonts upload as `kind: font` with a short form (family name, weight, style; characters guessed from the active language) and a sample-text preview; each language adds its characters to the same family from the font's detail pane ("+ Add Japanese characters"), as "Fonts: locale manifest ADDS a variant" above designs. The resolver for both already exists.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Documents now, fonts after Stage 1 | Arabic and CJK sites keep hand-writing `@font-face` in template code, and the built resolver stays unused |
+| Fonts now, documents later | Linking a PDF, a common author task, stays impossible |
+| Defer both | No download links and no per-language fonts |
+| Fonts only as template files | Undoes the locked font kind and pushes per-language fonts into template code |
+
+### M6 — Field options do what they say
+
+Each option controls its per-use step: `altOverride: false` and `focalPointOverride: false` hide those parts of the picker's third step (M1); `titleOverride` and `descriptionOverride` let authors name a download link per page (M5); `variable: true` lets the picker offer only variable fonts (M5).
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Keep them, marked "reserved, no effect yet" | Options that do nothing are stubs (team rule 18) |
+| Remove them | M1 and M5 need them at once; re-adding later breaks templates |
+
+### M7 — Rename is all or nothing, checked first
+
+Rename's dialog lists the pages it will change and moves the image's language versions with it, in one revision. If the author can't edit one of those pages, or has unsaved edits on one, it says which and renames nothing ("Can't rename: you can't edit pricing"; "you have unsaved changes on home. Save or discard them first"). This replaces the "v1 limitation" under Rename above.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| Rejected | Why |
+|---|---|
+| Rename what it can and report the rest | Leaves pages pointing at a name that no longer exists |
+| Rename only the display name (Sanity, Contentful) | Reverses the deliberate choice that rename changes the real name and the file name in URLs |
+
+### Cut sequence
+
+Fixes first, then features: after cuts 1–3 nothing authors do today can lose work.
+
+Decided: maintainer, 2026-10-29 (#PR)
+
+| # | What | Depends on | Test tier | Risk |
+|---|---|---|---|---|
+| 1 | Replace in place keeping alt, focal point, overrides and uses, with the check note (M3; fixes #1349) | — | api + component | Medium |
+| 2 | Uploads never replace: new name plus the row's "Replace hero instead" link; the language dialog goes (M2) | 1 | component + e2e | Low |
+| 3 | Alt in the active language: `PATCH ?locale=`, "Using English", Copy English, clear; AI writes the active language (M4) | — | api + component | Medium |
+| 4 | Per-use alt and focal point in the picker's third step, with `altOverride` and `focalPointOverride` (M1, M6) | — | component + e2e | Medium-high |
+| 5 | Rename, all or nothing, with language versions (M7) | 1 | api + component | High |
+| 6 | Documents and download links, with `titleOverride` and `descriptionOverride` (M5, M6) | — | api + component | Medium |
+| 7 | Fonts: upload form, per-language characters, preview, `variable` (M5, M6) | 6 | api + component | Medium |
+| 8 | Docs: `docs/content-assets.md`, `docs/template-assets.md` | 1–7 | docs | Low |
+
+| Rejected | Why |
+|---|---|
+| By screen: upload zone, detail pane, picker, new kinds, docs | #1349's data loss is fixed with the upload-zone work, not first |
+| Documents and fonts first | The silent-replace data loss stays longer |
 
 ## Distinctive choices (for reviewers coming from other CMSes)
 
