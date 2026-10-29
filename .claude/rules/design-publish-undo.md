@@ -139,9 +139,9 @@ Decided: maintainer, 2026-10-25 (#1432)
 | Leave admin sitemaps without hreflang | Per-domain sites keep missing what the design requires, and the CLI and the admin write different sitemaps. |
 | Keep the CLI's behaviour with no follow-up | Leaves the duplicate and the publish-order gap untracked. |
 
-**One snapshot per publish.** A publish reads the source once. The audit (the server's publish gate), the history record, the render loop and the manifest copy all use that one loaded copy of the source, and the manifests copied to the target are written from it, not read from storage again. A save that lands while a publish runs isn't published: the target gets exactly what was audited, its HTML, its manifests and the revision undo restores come from the same version, and the newer save shows as an unpublished change for the next publish. Today the gate, the history record, the render and the copy each read the source separately ([#1527](https://github.com/gazetta-studio/gazetta-studio/issues/1527)). The approval gate checks a request's hashes against this snapshot and publishes the snapshot (`design-review-workflow.md` lock 3).
+**One snapshot per publish.** A publish reads the source once. The audit (the server's publish gate), the history record, the render loop and the manifest copy all use that one loaded copy of the source, and the manifests copied to the target are written from it, not read from storage again. A save that lands while a publish runs isn't published: the target gets exactly what was audited, its HTML, its manifests and the revision undo restores come from the same version, and the newer save shows as an unpublished change for the next publish. Today the gate, the history record, the render and the copy each read the source separately ([#1527](https://github.com/gazetta-studio/gazetta-studio/issues/1527)). The approval gate checks a request's hashes against this snapshot and publishes the snapshot (`design-review-workflow.md` lock 3); that comparison is built in review workflow cut 13.
 
-Decided: maintainer, 2026-10-29 (#1527)
+Decided: maintainer, 2026-10-29 (#1535)
 
 The history record comes from the snapshot too.
 
