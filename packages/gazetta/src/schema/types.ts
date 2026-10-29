@@ -409,16 +409,18 @@ export type HasFontBrand<T> = T extends $brand<'font'> ? true : false
  * keep the mapper's direct brand checks in sync. Direct conditional checks
  * distribute over unions, unlike a boolean helper checked with `extends true`.
  */
-export type Content<T> = T extends z.ZodType
-  ? Content<z.infer<T>>
-  : T extends $brand<'embedded'>
-    ? ResolvedEmbeddedAsset
-    : T extends $brand<'downloadable'>
-      ? ResolvedDownloadableAsset
-      : T extends $brand<'font'>
-        ? ResolvedFontAsset
-        : T extends ReadonlyArray<infer U>
-          ? ReadonlyArray<Content<U>>
-          : T extends object
-            ? { [K in keyof T]: Content<T[K]> }
-            : T
+export type Content<T> = 0 extends 1 & T
+  ? T
+  : T extends z.ZodType
+    ? Content<z.infer<T>>
+    : T extends $brand<'embedded'>
+      ? ResolvedEmbeddedAsset
+      : T extends $brand<'downloadable'>
+        ? ResolvedDownloadableAsset
+        : T extends $brand<'font'>
+          ? ResolvedFontAsset
+          : T extends ReadonlyArray<infer U>
+            ? ReadonlyArray<Content<U>>
+            : T extends object
+              ? { [K in keyof T]: Content<T[K]> }
+              : T
