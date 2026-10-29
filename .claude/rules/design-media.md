@@ -1264,13 +1264,14 @@ The link also removing `hero-2`: Decided: maintainer, 2026-10-29 (#1553)
 |---|---|
 | The link only replaces; `hero-2` stays for the author to delete | Every clash followed by the intended replace leaves an unused entry in the library |
 
-**Known limit.** The server picks the next free name by checking, then writing: storage has no "create only if absent", so two uploads of the same name at the same moment (two tabs, two admin instances, a script) can both take `hero-2`, and one overwrites the other. The gap closes when scheduling cut 2's "create only if absent" write (`ifNoneMatch: '*'`, `design-scheduling-implementation.md`) lands; the name pick then uses it.
+**Known limit.** The server picks the next free name by checking, then writing: storage has no "create only if absent", so two uploads of the same name at the same moment (two tabs, two admin instances, a script) can both take `hero-2`, and one overwrites the other. The gap closes when the "create only if absent" write (`ifNoneMatch: '*'`, specified as scheduling cut 2 in `design-scheduling-implementation.md`) lands; it's filed on its own as [#1554](https://github.com/gazetta-studio/gazetta-studio/issues/1554), since scheduling is bucketed Later, and the name pick then uses it.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
 | Rejected | Why |
 |---|---|
-| Media cut 2 builds the create-if-absent write itself | It's scheduling cut 2's write, designed there; media waits for it rather than building it twice |
+| Media cut 2 builds the create-if-absent write itself | It's scheduling cut 2's write, designed there; media waits for it instead of building it first |
+| Leave the write with scheduling (#198) | Scheduling is bucketed Later, so the limit would stay open with no date |
 
 ### M3 — Replace keeps alt and focal point, and asks the author to check them
 
@@ -1393,7 +1394,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | 7 | Fonts: upload form, per-language characters, preview, `variable` (M5, M6) | 6 | api + component | Medium |
 | 8 | Docs: `docs/content-assets.md`, `docs/template-assets.md` | 1–7 | docs | Low |
 
-Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note that their changes reach targets only with `gazetta publish --force` until the hash input is redesigned. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
+Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note saying plainly that until the hash input is redesigned the admin can't publish these changes (its publish list comes from compare, which ignores assets) and an operator runs `gazetta publish <target> --force`. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1401,6 +1402,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 |---|---|
 | Only a note that until #1334 lands, changes reach targets with `gazetta publish --force` | Cuts 1 and 3 would ship changes authors can't publish (kept only as the fallback if #1334 stops) |
 | Cuts 1 and 3 wait for #1334 whatever its outcome | The data-loss fixes would wait on a benchmark nobody has run |
+| If #1334 stops, cut 1 also adds a way to republish an asset's pages from the admin's publish panel | More building for a case that only arises if #1334 stops; an operator can publish with `--force` until the redesign |
 | Cut 2 changes only the admin's upload zone | A second tab, a script or the MCP server can still replace an image silently, which M2 says never happens |
 
 
