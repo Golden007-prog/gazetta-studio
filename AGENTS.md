@@ -31,6 +31,7 @@ These are the instructions for any coding agent working in this repository. Clau
 - `docs/pages-and-fragments.md` - Pages, routes, fragments, translations, custom 404 pages and project layout
 - `docs/customize-editor.md` - Custom editors, field widgets and admin theme overrides
 - `docs/getting-started.md` — Onboarding tutorial
+- `docs/publishing.md` - Publishing from the admin and CLI, sync status, history and undo limitations
 - `docs/template-assets.md` — Template developer guide for asset references
 - `docs/content-assets.md` — Content author guide for the asset library
 - `docs/migration.md` — Migrating templates from `z.string()` URLs to `embeddedAsset()` references
