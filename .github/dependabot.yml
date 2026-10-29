@@ -24,6 +24,16 @@ updates:
       types:
         patterns: ["@types/*"]
         update-types: ["patch", "minor"]
+    # PrimeUI moved to a proprietary licence ("PrimeUI License", licence key
+    # required) in @primeuix/themes 3, @primeuix/styled 1 and PrimeVue 5.
+    # Stay on the MIT lines (#1519).
+    ignore:
+      - dependency-name: "@primeuix/themes"
+        versions: [">=3"]
+      - dependency-name: "@primeuix/styled"
+        versions: [">=1"]
+      - dependency-name: "primevue"
+        versions: [">=5"]
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
