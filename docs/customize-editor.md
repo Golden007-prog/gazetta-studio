@@ -9,7 +9,7 @@ default form with a custom editor for any template.
 
 ### Create a custom editor
 
-Create `admin/editors/{template-name}.tsx`, exporting an `EditorMount` as the default export. Editors are separate project-level files, not exports from the template module. Use a flat `.tsx` or `.ts` file: although detection recognizes `{template-name}/index.ts(x)`, the admin route and production bundler currently resolve only flat editor files. For the `hero` template:
+Create `admin/editors/{template-name}.tsx`, exporting an `EditorMount` as the default export. Editors are separate project-level files, not exports from the template module. Lookup also accepts `{template-name}.ts`. For the `hero` template:
 
 ```tsx
 // admin/editors/hero.tsx
@@ -101,24 +101,21 @@ const PRESETS = [
   { label: 'Coral', value: '#f97066' },
 ]
 
-// This widget accepts six-digit hex colors only, including persisted values.
-const safeColor = (value: string) => /^#[0-9a-f]{6}$/i.test(value) ? value : '#667eea'
-
 function BrandColorPicker({ value, onChange }: { value: string; theme: 'dark' | 'light'; onChange: (v: string) => void }) {
-  const [color, setColor] = useState(safeColor(value))
+  const [color, setColor] = useState(value || '#667eea')
   // The form calls mount() again with the new value on each change, so
   // the prop updates under a reused root - sync on undo/redo, revert
   // and draft restores.
-  useEffect(() => { setColor(safeColor(value)) }, [value])
-  const handleChange = (v: string) => { const next = safeColor(v); setColor(next); onChange(next) }
+  useEffect(() => { setColor(value || '#667eea') }, [value])
+  const handleChange = (v: string) => { setColor(v); onChange(v) }
 
   return (
     <div>
-      <div style={{ height: 48, borderRadius: 8, backgroundColor: color }} />
+      <div style={{ height: 48, borderRadius: 8, background: color }} />
       <div style={{ display: 'flex', gap: '0.375rem' }}>
         {PRESETS.map(p => (
           <button key={p.value} type="button" aria-label={p.label} onClick={() => handleChange(p.value)}
-            style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: p.value, border: 'none', cursor: 'pointer' }} />
+            style={{ width: 28, height: 28, borderRadius: 6, background: p.value, border: 'none', cursor: 'pointer' }} />
         ))}
       </div>
       <input type="color" value={color} onChange={e => handleChange(e.target.value)} />
@@ -141,9 +138,6 @@ const brandColor: FieldMount = {
 }
 export default brandColor
 ```
-
-The picker accepts only six-digit hex colors and falls back to indigo for other
-stored values; it never puts arbitrary persisted text into a CSS background.
 
 ### Reference a custom field in a template schema
 
