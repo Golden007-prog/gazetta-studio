@@ -28,7 +28,7 @@ October's designs fix wrong results on live sites: deleted pages stay live, undo
 |---|---|
 | Live check ([`design-live-check.md`](.claude/rules/design-live-check.md)) | planner [#1081](https://github.com/gazetta-studio/gazetta-studio/issues/1081) |
 | Public storage ([`design-public-storage.md`](.claude/rules/design-public-storage.md)) | planner [#1085](https://github.com/gazetta-studio/gazetta-studio/issues/1085) |
-| Publish undo ([`design-publish-undo.md`](.claude/rules/design-publish-undo.md)) | planner [#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092) |
+| Publish undo ([`design-publish-undo.md`](.claude/rules/design-publish-undo.md)) | planner [#1092](https://github.com/gazetta-studio/gazetta-studio/issues/1092); one snapshot per publish ([#1527](https://github.com/gazetta-studio/gazetta-studio/issues/1527)) is its cut 7 |
 | Target indices ([`sidecars.md`](.claude/rules/sidecars.md)) | planner [#1093](https://github.com/gazetta-studio/gazetta-studio/issues/1093) |
 | Target removal ([`design-target-removal.md`](.claude/rules/design-target-removal.md)) | [#1094](https://github.com/gazetta-studio/gazetta-studio/issues/1094); its planner issue opens after publish undo cut 2, target indices cut 2 and review workflow cuts 12–13 |
 | Archived pages on plain-static hosts ([`design-soft-delete.md`](.claude/rules/design-soft-delete.md) Q10) | [#1152](https://github.com/gazetta-studio/gazetta-studio/issues/1152); cut 1 shipped; cut 2 waits for target removal cut 1 |
@@ -47,7 +47,7 @@ The back end's first cuts, the UI primitives, the story runner and screenshots i
 
 ### Website and channels
 
-The plan in [`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md): every channel (the site, the repo, npm, communities, newsletters) opens at one of five stages, and a stage opens only when its gate is met. Each channel is kept true by a check, or the maintainer writes it. Stage 0 starts now, with Contribute as the home page's main button and a small "Try it" beside it. Stage 1 makes "Use it" the main button; its gate is the Onboarding sprint's release that matches the docs ([#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178)) and a first publish that reaches a second target ([#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177)), checked by a tutorial in CI and by 3–5 people completing it without help. The tutorial and its CI check are designed in [`design-tutorial.md`](.claude/rules/design-tutorial.md) (#1338).
+The plan in [`docs/audits/website-and-channels.md`](docs/audits/website-and-channels.md): every channel (the site, the repo, npm, communities, newsletters) opens at one of five stages, and a stage opens only when its gate is met. Each channel is kept true by a check, or the maintainer writes it. Stage 0 starts now, with Contribute as the home page's main button and a small "Try it" beside it. Stage 1 makes "Use it" the main button; its gate is the Onboarding sprint's release that matches the docs ([#1178](https://github.com/gazetta-studio/gazetta-studio/issues/1178)) and a first publish that reaches a second target ([#1177](https://github.com/gazetta-studio/gazetta-studio/issues/1177)), checked by a tutorial in CI and by 3–5 people completing it without help. The tutorial and its CI check are designed in [`design-tutorial.md`](.claude/rules/design-tutorial.md) (#1338); planner [#1497](https://github.com/gazetta-studio/gazetta-studio/issues/1497). The tutorial rewrite ([#1543](https://github.com/gazetta-studio/gazetta-studio/issues/1543)) waits for the scaffold's hero image field ([#1545](https://github.com/gazetta-studio/gazetta-studio/issues/1545)).
 
 Stage 0:
 
@@ -71,7 +71,7 @@ Decided: maintainer, 2026-10-24 (#1358)
 
 ### Bug backlog
 
-User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162), which waits for its contributor:
+User-visible bugs, with fix-bot or outside contributors ([#1162](https://github.com/gazetta-studio/gazetta-studio/issues/1162) waits for its contributor):
 
 - [#1068](https://github.com/gazetta-studio/gazetta-studio/issues/1068) closing the tab during a publish stops it
 - [#1146](https://github.com/gazetta-studio/gazetta-studio/issues/1146) publish and serving ignore a target's language settings
@@ -85,9 +85,23 @@ User-visible bugs, all with fix-bot except [#1162](https://github.com/gazetta-st
 - [#1183](https://github.com/gazetta-studio/gazetta-studio/issues/1183) a new site fails its own broken-links check
 - [#1184](https://github.com/gazetta-studio/gazetta-studio/issues/1184) `gazetta dev` on a busy port prints a Node stack trace
 - [#1193](https://github.com/gazetta-studio/gazetta-studio/issues/1193) the offline docs say offline saves are sent later, and "Send now" only checks the connection
+- [#1465](https://github.com/gazetta-studio/gazetta-studio/issues/1465) pages and fragments with a dot in the name can be created but not saved
+- [#1471](https://github.com/gazetta-studio/gazetta-studio/issues/1471) History treats a stray file in `revisions/` as the newest revision
+- [#1499](https://github.com/gazetta-studio/gazetta-studio/issues/1499) `gazetta dev` logs `.json` changes outside the content root
+- [#1538](https://github.com/gazetta-studio/gazetta-studio/issues/1538) publishing a page also copies its nested pages' manifests
 - [#1262](https://github.com/gazetta-studio/gazetta-studio/issues/1262) requests refused before a route is matched (401) aren't recorded in the audit log. Decided: maintainer, 2026-10-24 (#1259).
 
 Decided: maintainer, 2026-10-23 (#1179)
+
+### Discovery in progress
+
+Research by discovery-prep-bot, then a design round with the maintainer where one is needed:
+
+- [#1483](https://github.com/gazetta-studio/gazetta-studio/issues/1483) Markdown in the admin: which Markdown support authors and template developers need
+- [#1484](https://github.com/gazetta-studio/gazetta-studio/issues/1484) content trust: whether editors can put markup or script on published pages
+- [#1485](https://github.com/gazetta-studio/gazetta-studio/issues/1485) AI direction: forms, AI helpers in forms, or agents operating the CMS; its answer feeds the MCP design pass ([#49](https://github.com/gazetta-studio/gazetta-studio/issues/49))
+- [#1540](https://github.com/gazetta-studio/gazetta-studio/issues/1540) executable specifications for AI-written code (Dave Farley's four layers)
+- [#1542](https://github.com/gazetta-studio/gazetta-studio/issues/1542) PrimeVue 5 and `@primeuix/themes` 3 are no longer MIT; the admin stays on the MIT 4.x line until a choice is made
 
 ## Next (planned, the quarter after Now)
 
@@ -260,6 +274,7 @@ Decided: maintainer, 2026-10-24 (#1243)
 | Markdown versions of every site's pages, served when an agent asks for Markdown | gazetta.studio's own logs show agents fetching its Markdown docs (Stage 0 experiment); coding agents already ask for Markdown |
 | Agent instructions (skills) for template developers | The MCP server ships |
 | Asset folders and a crop rectangle | Operators ask |
+| Per-target publish lock: one write to a target at a time ([#1537](https://github.com/gazetta-studio/gazetta-studio/issues/1537)) | Concurrent publishes to one target become common, or two writes to a target overwrite each other |
 
 Decided: maintainer, 2026-10-23 (#1179)
 
@@ -397,6 +412,9 @@ Closes [#40](https://github.com/gazetta-studio/gazetta-studio/issues/40).
 
 ## Other shipped
 
+- ✓ [#1348](https://github.com/gazetta-studio/gazetta-studio/issues/1348) `Content<T>` types optional, nullable and array asset fields (closed 2026-10-29)
+- ✓ [#1490](https://github.com/gazetta-studio/gazetta-studio/issues/1490) `gazetta init`'s templates are typed (closed 2026-10-26)
+- ✓ [#1491](https://github.com/gazetta-studio/gazetta-studio/issues/1491) the worker answers routes with a trailing slash (closed 2026-10-26)
 - ✓ [#1271](https://github.com/gazetta-studio/gazetta-studio/issues/1271) GitHub topics and a steady supply of good first issues (closed 2026-10-24)
 - ✓ [#1274](https://github.com/gazetta-studio/gazetta-studio/issues/1274) GitHub Discussions with a pinned "How did you find Gazetta?" (closed 2026-10-24)
 - ✓ [#88](https://github.com/gazetta-studio/gazetta-studio/issues/88) nested route tree + search/filter (closed 2026-05-04)
