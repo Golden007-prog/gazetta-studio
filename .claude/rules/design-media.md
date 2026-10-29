@@ -1361,6 +1361,15 @@ Decided: maintainer, 2026-10-29 (#1553)
 | The check stays in the dialog only | A script or the MCP server bypasses it |
 | Rename keeps refusing documents and fonts that have language versions | Rename would behave differently by kind |
 
+### UX check
+
+A summary of M1–M7; it decides nothing new.
+
+- **Actors:** content authors (upload, replace, alt per language, per-use alt and focal point, rename, documents); template developers (the field options, M6; fonts, M5).
+- **Absence as state:** an upload under a free name looks as it does today; the "Saved as hero-2" note shows only on a clash (M2); the Replace check note shows only after a replace and goes when dismissed (M3); "Using English" shows only while a language has no alt of its own (M4).
+- **Same behaviour in every language:** uploads behave the same in every language (M2); language versions are added from the detail pane (M2, M5).
+- **Failure states:** a clash never replaces (M2, with the known limit for simultaneous uploads); a replace keeps alt, focal point and uses (M3); adding or removing a language version keeps its alt (M4); a rename that would leave a use unedited, or that the caller can't make, is refused before any write, on the server too (M7).
+
 ### Cut sequence
 
 Fixes first, then features: after cuts 1–3 nothing authors do today can lose work.
