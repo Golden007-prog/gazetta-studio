@@ -1271,7 +1271,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | Rejected | Why |
 |---|---|
 | Media cut 2 builds the create-if-absent write itself | It's scheduling cut 2's write, designed there; media waits for it instead of building it first |
-| Leave the write with scheduling (#198) | Scheduling is bucketed Later, so the limit would stay open with no date |
+| Leave the write with scheduling (#198) | Scheduling is bucketed Later, so simultaneous uploads could collide until it lands, with no date |
 | Cut 2 ships with check-then-write and switches to the atomic write later | Needs a follow-up nobody owns; cut 2 already waits behind #1334, so #1554 costs no time |
 
 ### M3 — Replace keeps alt and focal point, and asks the author to check them
