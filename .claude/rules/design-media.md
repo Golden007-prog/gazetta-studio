@@ -1272,6 +1272,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 |---|---|
 | Media cut 2 builds the create-if-absent write itself | It's scheduling cut 2's write, designed there; media waits for it instead of building it first |
 | Leave the write with scheduling (#198) | Scheduling is bucketed Later, so the limit would stay open with no date |
+| Cut 2 ships with check-then-write and switches to the atomic write later | Needs a follow-up nobody owns; cut 2 already waits behind #1334, so #1554 costs no time |
 
 ### M3 — Replace keeps alt and focal point, and asks the author to check them
 
@@ -1386,7 +1387,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | # | What | Depends on | Test tier | Risk |
 |---|---|---|---|---|
 | 1 | Replace in place keeping alt, focal point, overrides and uses, with the check note; adds an in-place replace route next to the Admin API's `replace-with` (M3; fixes #1349) | #1334 | api + component | Medium |
-| 2 | Uploads never replace: the server saves an upload under an existing name as the next free name, whatever sent it; the row's "Replace hero instead" link; the language dialog goes (M2) | 1 | api + component + e2e | Low |
+| 2 | Uploads never replace: the server saves an upload under an existing name as the next free name, whatever sent it, using #1554's create-if-absent write; the row's "Replace hero instead" link; the language dialog goes (M2) | 1, #1554 | api + component + e2e | Low |
 | 3 | Alt in the active language in the detail pane: `PATCH ?locale=`, "Using English", Copy English, clear, AI suggestions there; the upload row keeps the default alt and suggests in the default language; adding or removing a language version keeps its alt (M4) | #1334 | api + component | Medium |
 | 4 | Per-use alt and focal point in the picker's third step, with `altOverride` and `focalPointOverride` (M1, M6) | — | component + e2e | Medium-high |
 | 5 | Rename, all or nothing, with language versions (M7) | — | api + component | High |
@@ -1394,7 +1395,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | 7 | Fonts: upload form, per-language characters, preview, `variable` (M5, M6) | 6 | api + component | Medium |
 | 8 | Docs: `docs/content-assets.md`, `docs/template-assets.md` | 1–7 | docs | Low |
 
-Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note saying plainly that until the hash input is redesigned the admin can't publish these changes (its publish list comes from compare, which ignores assets) and an operator runs `gazetta publish <target> --force`. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
+Cuts 1 and 3 need [#1334](https://github.com/gazetta-studio/gazetta-studio/issues/1334): a page's publish hash ignores its assets, so without it publish reports the pages unchanged and targets keep the old picture and alt. #1334 measures its cost first and stops if it doesn't fit the 5-second admin budget; if it stops, cuts 1 and 3 ship anyway, with a note saying plainly that until the hash input is redesigned the admin can't publish these changes (its publish list comes from compare, which ignores assets) and an operator runs `gazetta publish <target> --force`. In that case the Replace result and the alt editor also say "Publish from the command line with --force to update targets", and targets that need publish approval (where the CLI is refused) can't take these changes until the redesign. Cut 2 needs cut 1 because its row link runs Replace and removes `hero-2`, and #1554 so its name pick uses the atomic write and the known limit never ships; cut 7 needs cut 6 because both teach upload a new kind. The server check in cut 2 makes M2 hold for every caller (a second tab, a script, the MCP server), not only the admin's upload zone.
 
 Decided: maintainer, 2026-10-29 (#1553)
 
@@ -1403,6 +1404,7 @@ Decided: maintainer, 2026-10-29 (#1553)
 | Only a note that until #1334 lands, changes reach targets with `gazetta publish --force` | Cuts 1 and 3 would ship changes authors can't publish (kept only as the fallback if #1334 stops) |
 | Cuts 1 and 3 wait for #1334 whatever its outcome | The data-loss fixes would wait on a benchmark nobody has run |
 | If #1334 stops, cut 1 also adds a way to republish an asset's pages from the admin's publish panel | More building for a case that only arises if #1334 stops; an operator can publish with `--force` until the redesign |
+| In that fallback, a docs note only | The Replace result and the sync chip would tell authors their change is done and in sync |
 | Cut 2 changes only the admin's upload zone | A second tab, a script or the MCP server can still replace an image silently, which M2 says never happens |
 
 
