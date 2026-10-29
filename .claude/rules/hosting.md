@@ -34,10 +34,13 @@ Serve modes, hosting platforms, deployment workflows, and production operations.
 | **Admin UI** | Publish button → `POST /api/publish` | Browser → dev server API | Per-page/fragment publish during editing |
 | **CI/CD** | `gazetta publish production` in GitHub Actions | CI runner | Automated publish on push |
 
-CLI and CI use the same publish functions. Publish mode (ESI vs static) is determined by
-the target's `publishMode` field (default: `esi` if worker configured, `static` otherwise).
-The admin API resolves dependencies (fragments required by a page) and handles per-item
-cache purge, but **always uses ESI mode** — does not check `publishMode` (see configurations.md Known Gaps).
+CLI, CI and the admin all publish through the same shared function (`publishToTarget`).
+The target's `type` decides how pages are published (`getType` in `packages/gazetta/src/types.ts`):
+`static` pages are fully assembled at publish time; `dynamic` pages keep ESI placeholders
+that a worker or `gazetta serve` assembles per request. Default: `dynamic` when the target's
+deploy adapter bundles a worker, `static` otherwise. The admin API also resolves dependencies
+(on static targets, the pages that use a published fragment are republished) and handles
+per-item cache purge.
 
 ### CI/CD Pattern (GitHub Actions)
 
