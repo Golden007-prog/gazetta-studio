@@ -1376,7 +1376,7 @@ A summary of M1–M7; it decides nothing new.
 
 The states each UI cut builds, with their exact wording and `data-testid`s, per [ADR-0016](../../docs/adr/0016-storybook-for-bot-executable-ux-specs.md): the cut transcribes its table into the component's `.stories.ts` and builds the component to it. `{id}` is the upload row's id; English is the default language and French the active one where a table needs two.
 
-Decided: maintainer, 2026-10-29 (#PR)
+Decided: maintainer, 2026-10-29 (#1555)
 
 #### Replace (cut 1, M3), in the image's detail pane
 
