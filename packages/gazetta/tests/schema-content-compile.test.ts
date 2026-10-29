@@ -1,9 +1,11 @@
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import ts from 'typescript'
 import { expect, it } from 'vitest'
 import { tempDir } from './_helpers/temp.js'
 
+// Public-export checks require the package build, as do the existing scaffold tests.
+// CI runs `npm run build -w packages/gazetta` before every package test shard.
 const options: ts.CompilerOptions = {
   strict: true,
   noEmit: true,
@@ -42,8 +44,9 @@ it('compiles the actual migration guide optional-asset sample in strict mode', a
   const doc = await readFile(resolve(import.meta.dirname, '../../../docs/migration.md'), 'utf8')
   const section = doc.split('### Optional asset')[1].split('### Required-alt enforcement')[0]
   const sample = section.match(/```ts\n([\s\S]*?)```/)![1]
-  const dir = tempDir(`migration-optional-${Date.now()}`)
-  await mkdir(dir, { recursive: true })
+  const parent = tempDir('migration-optional')
+  await mkdir(parent, { recursive: true })
+  const dir = await mkdtemp(join(parent, 'sample-'))
   try {
     const file = join(dir, 'sample.ts')
     await writeFile(file, sample)
