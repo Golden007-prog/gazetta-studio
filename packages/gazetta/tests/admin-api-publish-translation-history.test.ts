@@ -116,7 +116,10 @@ function publishRevision(revisions: RevisionManifest[]): RevisionManifest {
   return rev
 }
 
-describe('publish route — translation manifests copied and recorded (#1174)', () => {
+// In-process publishes through the starter's real templates: the first
+// template import compiles on demand and can pass vitest's 5 s default on a
+// loaded CI shard (failed twice on main, 2026-10-26), as in #1466.
+describe('publish route — translation manifests copied and recorded (#1174)', { timeout: 30_000 }, () => {
   it('a translation-only page publish copies page.fr.json to the target and records it in the revision', async () => {
     const { app, sourceStorage, targetStorage } = buildApp()
 
