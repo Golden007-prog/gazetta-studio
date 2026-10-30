@@ -18,7 +18,7 @@ import { ref, computed } from 'vue'
 import type { AssetSummary } from 'gazetta/schema'
 import { api } from '../api/client.js'
 
-export type LoadAssetList = () => Promise<AssetSummary[]>
+type LoadAssetList = () => Promise<AssetSummary[]>
 
 export interface AssetsListStoreOptions {
   loadList?: LoadAssetList
