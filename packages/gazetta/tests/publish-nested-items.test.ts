@@ -106,3 +106,101 @@ it('can explicitly include nested items for fetching an entire content subtree',
   ).toEqual({ copiedFiles: 3 })
   for (const [key, value] of Object.entries(files)) expect(await target.readFile(key)).toBe(value)
 })
+
+describe('nested-item classification uses the copied directory listing', () => {
+  it.each(['page', 'fragment'])('excludes a %s created just before the recursive listing', async manifest => {
+    const source = memoryStorage()
+    const target = memoryStorage()
+    const parent = 'pages/about/page.json'
+    const child = 'pages/about/media'
+    source.seed({ [parent]: JSON.stringify({ template: 'parent' }), [`${child}/notes.txt`]: 'ordinary before save' })
+    const readDir = source.readDir.bind(source)
+    let saved = false
+    source.readDir = async path => {
+      if (path === child) {
+        source.seed({ [`${child}/${manifest}.json`]: JSON.stringify({ template: 'new-item' }) })
+        saved = true
+      }
+      return readDir(path)
+    }
+
+    expect(await publishItems(createContentRoot(source), createContentRoot(target), ['pages/about'])).toEqual({
+      copiedFiles: 1,
+    })
+    expect(saved).toBe(true)
+    expect([...target.dump().keys()]).toEqual([parent])
+  })
+
+  it.each(['page', 'fragment'])('does not copy a %s created after the recursive listing', async manifest => {
+    const source = memoryStorage()
+    const target = memoryStorage()
+    const parent = 'pages/about/page.json'
+    const child = 'pages/about/media'
+    source.seed({ [parent]: JSON.stringify({ template: 'parent' }), [`${child}/notes.txt`]: 'already listed' })
+    const readDir = source.readDir.bind(source)
+    let saved = false
+    source.readDir = async path => {
+      const entries = await readDir(path)
+      if (path === child) {
+        source.seed({
+          [`${child}/${manifest}.json`]: JSON.stringify({ template: 'new-item' }),
+          [`${child}/new.txt`]: 'created with the new item',
+        })
+        saved = true
+      }
+      return entries
+    }
+
+    expect(await publishItems(createContentRoot(source), createContentRoot(target), ['pages/about'])).toEqual({
+      copiedFiles: 2,
+    })
+    expect(saved).toBe(true)
+    expect([...target.dump().keys()].sort()).toEqual([parent, `${child}/notes.txt`].sort())
+  })
+
+  it('lists each directory once without probing manifest paths on ordinary subdirectories', async () => {
+    const source = memoryStorage()
+    const target = memoryStorage()
+    source.seed({
+      'pages/about/page.json': JSON.stringify({ template: 'parent' }),
+      'pages/about/media/notes.txt': 'ordinary subfolder',
+      'pages/about/media/deep/notes.txt': 'ordinary deep subfolder',
+    })
+    const exists = source.exists.bind(source)
+    const readDir = source.readDir.bind(source)
+    const existsPaths: string[] = []
+    const listedPaths: string[] = []
+    source.exists = async path => {
+      existsPaths.push(path)
+      return exists(path)
+    }
+    source.readDir = async path => {
+      listedPaths.push(path)
+      return readDir(path)
+    }
+
+    expect(await publishItems(createContentRoot(source), createContentRoot(target), ['pages/about'])).toEqual({
+      copiedFiles: 3,
+    })
+    const directories = ['pages/about', 'pages/about/media', 'pages/about/media/deep']
+    expect(existsPaths.sort()).toEqual(directories)
+    expect(listedPaths.sort()).toEqual(directories)
+    expect(await target.readFile('pages/about/media/deep/notes.txt')).toBe('ordinary deep subfolder')
+  })
+
+  it.each(['page', 'fragment'])(
+    'copies an ordinary directory named %s.json rather than treating it as a manifest',
+    async manifest => {
+      const source = memoryStorage()
+      const target = memoryStorage()
+      const parent = 'pages/about/page.json'
+      const ownFile = `pages/about/media/${manifest}.json/notes.txt`
+      source.seed({ [parent]: JSON.stringify({ template: 'parent' }), [ownFile]: 'directory content' })
+
+      expect(await publishItems(createContentRoot(source), createContentRoot(target), ['pages/about'])).toEqual({
+        copiedFiles: 2,
+      })
+      expect(await target.readFile(ownFile)).toBe('directory content')
+    },
+  )
+})

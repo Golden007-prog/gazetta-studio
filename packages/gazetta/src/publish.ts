@@ -32,7 +32,7 @@ export async function publishItems(
     const sourcePath = join(sourceBase, item)
     const targetPath = join(targetBase, item)
     const skipNestedItems = !options.includeNestedItems && (item.startsWith('pages/') || item.startsWith('fragments/'))
-    return copyRecursive(sourceStorage, sourcePath, targetStorage, targetPath, skipNestedItems)
+    return copyRecursive(sourceStorage, sourcePath, targetStorage, targetPath, skipNestedItems, true)
   })
   const copiedFiles = counts.reduce((a, b) => a + b, 0)
 
@@ -45,6 +45,7 @@ async function copyRecursive(
   target: StorageProvider,
   targetPath: string,
   skipNestedItems: boolean,
+  isSelectedItem = false,
 ): Promise<number> {
   // Check if sourcePath is a file
   try {
@@ -60,6 +61,15 @@ async function copyRecursive(
   if (!(await source.exists(sourcePath))) return 0
 
   const entries = await source.readDir(sourcePath)
+  // Classify and copy the same listing: no separate marker probes or
+  // second listing that could include an item created between those reads.
+  if (
+    skipNestedItems &&
+    !isSelectedItem &&
+    entries.some(entry => !entry.isDirectory && (entry.name === 'page.json' || entry.name === 'fragment.json'))
+  ) {
+    return 0
+  }
   await target.mkdir(targetPath)
 
   // Bounded-parallel copy of children. Sequential would be O(n) wall time;
@@ -68,13 +78,6 @@ async function copyRecursive(
     const childSource = join(sourcePath, entry.name)
     const childTarget = join(targetPath, entry.name)
     if (entry.isDirectory) {
-      if (
-        skipNestedItems &&
-        ((await source.exists(join(childSource, 'page.json'))) ||
-          (await source.exists(join(childSource, 'fragment.json'))))
-      ) {
-        return 0
-      }
       return copyRecursive(source, childSource, target, childTarget, skipNestedItems)
     }
     const content = await source.readFile(childSource)
