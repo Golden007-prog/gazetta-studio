@@ -50,9 +50,11 @@ export function historyRoutes(
       targets = new Map()
       return targets
     }
+    // Assigned before any await so concurrent first requests share one init.
     if (!targetsInitPromise) {
-      const { createTargetRegistry } = await import('../../targets.js')
-      targetsInitPromise = createTargetRegistry(targetConfigs)
+      const configs = targetConfigs
+      targetsInitPromise = import('../../targets.js')
+        .then(({ createTargetRegistry }) => createTargetRegistry(configs))
         .then(t => {
           targets = t
           return t
