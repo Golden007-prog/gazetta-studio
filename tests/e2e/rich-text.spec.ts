@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test, expect } from './fixtures'
 import { openEditor } from './helpers'
@@ -13,7 +13,19 @@ import { ComponentTreePom } from './pages/ComponentTree'
  * Uses the starter's `showcase` page, whose `showcase-demo` component has a
  * rich-text `body` field.
  */
+const pageJsonPath = (projectDir: string) => join(projectDir, 'sites/main/targets/local/pages/showcase/page.json')
+
 test.describe('Rich-text field', () => {
+  // The worker's site copy is shared with other spec files: put the page
+  // back as this test found it.
+  let original: string | undefined
+  test.beforeEach(({ testSite }) => {
+    original = readFileSync(pageJsonPath(testSite.projectDir), 'utf8')
+  })
+  test.afterEach(({ testSite }) => {
+    if (original !== undefined) writeFileSync(pageJsonPath(testSite.projectDir), original)
+  })
+
   test('toolbar formatting is saved as HTML and shown in the preview', async ({ page, testSite }) => {
     await openEditor(page, 'showcase')
     await new ComponentTreePom(page).open('showcase-demo')
@@ -63,8 +75,7 @@ test.describe('Rich-text field', () => {
     await saveBtn.click()
     await expect(saveBtn).toBeDisabled({ timeout: 10000 })
 
-    const pageJsonPath = join(testSite.projectDir, 'sites/main/targets/local/pages/showcase/page.json')
-    const saved = JSON.parse(readFileSync(pageJsonPath, 'utf8'))
+    const saved = JSON.parse(readFileSync(pageJsonPath(testSite.projectDir), 'utf8'))
     const demo = saved.components.find((c: { name?: string }) => c.name === 'showcase-demo')
     expect(demo.content.body).toContain('<h2>E2E heading</h2>')
     expect(demo.content.body).toContain('<p>Plain then <strong>bold words</strong> <a ')
@@ -72,5 +83,13 @@ test.describe('Rich-text field', () => {
     const link = demo.content.body.match(/<a [^>]*>docs<\/a>/)?.[0]
     expect(link).toContain('href="https://example.com/docs"')
     expect(link).toContain('rel="noopener noreferrer"')
+
+    // The saved HTML loads back into the editor.
+    await page.reload()
+    await new ComponentTreePom(page).open('showcase-demo')
+    const reloaded = page.locator('[data-testid="richtext-editor"] .tiptap')
+    await expect(reloaded.locator('h2', { hasText: 'E2E heading' })).toBeVisible({ timeout: 20000 })
+    await expect(reloaded.locator('strong', { hasText: 'bold words' })).toBeVisible()
+    await expect(reloaded.locator('a[href="https://example.com/docs"]', { hasText: 'docs' })).toBeVisible()
   })
 })
