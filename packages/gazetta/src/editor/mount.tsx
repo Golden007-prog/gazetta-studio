@@ -1,6 +1,6 @@
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import Form from '@rjsf/core'
+import Form, { getDefaultRegistry } from '@rjsf/core'
 import validator from '@rjsf/validator-ajv8'
 import { AssetEmbeddedWidget } from './AssetEmbeddedWidget.js'
 import { AssetEmbeddedField } from './AssetEmbeddedField.js'
@@ -490,6 +490,9 @@ function summarizeItem(data: unknown): string {
 // Widgets
 // ---------------------------------------------------------------------------
 
+/** Test id of a widget's input: `field-root_title-input`. */
+const inputTestId = (props: WidgetProps, suffix = 'input') => `field-${props.id}-${suffix}`
+
 function MarkdownWidget(props: WidgetProps) {
   return (
     <div className="gz-markdown">
@@ -525,8 +528,19 @@ function ColorWidget(props: WidgetProps) {
   const val = props.value ?? ''
   return (
     <div className="gz-color-widget">
-      <input type="color" value={val || '#667eea'} onChange={e => props.onChange(e.target.value)} />
-      <input type="text" value={val} onChange={e => props.onChange(e.target.value)} placeholder="#667eea" />
+      <input
+        type="color"
+        value={val || '#667eea'}
+        onChange={e => props.onChange(e.target.value)}
+        data-testid={inputTestId(props)}
+      />
+      <input
+        type="text"
+        value={val}
+        onChange={e => props.onChange(e.target.value)}
+        placeholder="#667eea"
+        data-testid={inputTestId(props, 'text-input')}
+      />
     </div>
   )
 }
@@ -601,6 +615,7 @@ function ImageWidget(props: WidgetProps) {
         value={url}
         onChange={e => props.onChange(e.target.value)}
         placeholder="https://example.com/image.png"
+        data-testid={inputTestId(props)}
       />
       <div className={`gz-image-preview${url && !broken ? ' has-image' : ''}`}>
         {url && !broken ? (
@@ -620,6 +635,7 @@ function LinkWidget(props: WidgetProps) {
       value={props.value ?? ''}
       onChange={e => props.onChange(e.target.value)}
       placeholder="https://..."
+      data-testid={inputTestId(props)}
     />
   )
 }
@@ -637,6 +653,7 @@ function SlugWidget(props: WidgetProps) {
         value={props.value ?? ''}
         onChange={e => props.onChange(toSlug(e.target.value))}
         placeholder="my-page-slug"
+        data-testid={inputTestId(props)}
       />
       <div className="gz-slug-hint">URL-safe identifier — lowercase, hyphens only</div>
     </div>
@@ -653,6 +670,7 @@ function CodeWidget(props: WidgetProps) {
         placeholder={props.placeholder}
         rows={15}
         spellCheck={false}
+        data-testid={inputTestId(props)}
       />
       {language && <div className="gz-code-hint">{language}</div>}
     </div>
@@ -680,12 +698,15 @@ function JsonWidget(props: WidgetProps) {
     }
   }
 
+  // A string field stores the JSON text as typed; other fields store the parsed value.
+  const storesText = (props.schema as JsonSchema).type === 'string'
+
   const handleChange = (value: string) => {
     setText(value)
     try {
       const parsed = JSON.parse(value)
       setError(null)
-      props.onChange(parsed)
+      props.onChange(storesText ? value : parsed)
     } catch {
       // Don't set error while typing — only on blur
     }
@@ -700,6 +721,7 @@ function JsonWidget(props: WidgetProps) {
         placeholder='{ "key": "value" }'
         rows={10}
         spellCheck={false}
+        data-testid={inputTestId(props)}
       />
       {error && <div className="gz-json-error">{error}</div>}
     </div>
@@ -1117,6 +1139,16 @@ function getCustomFieldWidget(fieldName: string): React.FC<WidgetProps> {
 // Registries
 // ---------------------------------------------------------------------------
 
+const CoreSelectWidget = getDefaultRegistry().widgets.SelectWidget
+
+function SelectWidget(props: WidgetProps) {
+  return (
+    <div data-testid={inputTestId(props)}>
+      <CoreSelectWidget {...props} />
+    </div>
+  )
+}
+
 const builtinWidgets: Record<string, React.FC<WidgetProps>> = {
   markdown: MarkdownWidget,
   toggle: ToggleWidget,
@@ -1128,6 +1160,7 @@ const builtinWidgets: Record<string, React.FC<WidgetProps>> = {
   slug: SlugWidget,
   code: CodeWidget,
   json: JsonWidget,
+  SelectWidget,
   'embedded-asset': AssetEmbeddedWidget,
 }
 
