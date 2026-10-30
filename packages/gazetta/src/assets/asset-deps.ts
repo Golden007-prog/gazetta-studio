@@ -11,14 +11,7 @@
  *     null and let callers re-read manifests for breadcrumb display.
  */
 import type { ContentRoot } from '../content-root.js'
-import {
-  type DepRelation,
-  type ItemRef,
-  type ManifestLike,
-  applyDepDiff,
-  rebuildItemDeps,
-  readDepsFor,
-} from '../dep-sidecars.js'
+import { type DepRelation, type ItemRef, type ManifestLike, rebuildItemDeps, readDepsFor } from '../dep-sidecars.js'
 import type { AssetRef } from './refs.js'
 import { collectAssetRefs } from './scan-manifest-for-asset.js'
 
@@ -61,16 +54,6 @@ export function rebuildAssetRefs(
   newManifest: ManifestLike | null,
 ): Promise<void> {
   return rebuildItemDeps(ASSET_REFS, contentRoot, item, oldManifest, newManifest)
-}
-
-/** Apply a pre-computed diff (used in tests + cases where caller has the sets already). */
-export function applyAssetRefsDiff(
-  contentRoot: ContentRoot,
-  item: ItemRef,
-  oldAssets: ReadonlySet<string>,
-  newAssets: ReadonlySet<string>,
-): Promise<void> {
-  return applyDepDiff(ASSET_REFS, contentRoot, item, oldAssets, newAssets)
 }
 
 // Re-export the generic types/utilities so asset-side callers don't
