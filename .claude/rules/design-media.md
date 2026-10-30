@@ -1445,6 +1445,14 @@ All checks run before anything is written; the server repeats the permission che
 | Done | "Renamed to spring-hero on 4 pages and fragments." | `rename-done` |
 | Stopped | "Rename stopped: {reason}. Nothing is broken: hero stays until every use moves. Try again." | `rename-error` |
 
+The name error allows underscores, matching what upload accepts.
+
+Decided: maintainer, 2026-10-30 (#1555)
+
+| Rejected | Why |
+|---|---|
+| Rename accepts only lowercase letters, numbers and hyphens | An image named `hero_v2` could be uploaded but not renamed to a name like it |
+
 #### Documents (cut 6, M5)
 
 | State | What shows | `data-testid` |
