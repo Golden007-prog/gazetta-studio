@@ -9,8 +9,9 @@
  *      write (design-publish-undo.md Q4 / design-target-removal.md
  *      Q13). Do not implement it in this cut.
  *   1. History record - one `publish` revision, baseline pre-publish.
- *   2. Source manifest copy - whole folders for bare items, single
- *      variant manifests for `item:locale` forms.
+ *   2. Source item copy - own files and ordinary subfolders for bare
+ *      items, excluding descendant items; single variant manifests
+ *      for `item:locale` forms.
  *   3. Render loop - `publishRun` (per-item renders, dependency
  *      indices, site manifest). Progress events pass through.
  *   4. sitemap.xml / robots.txt / host-format redirects - generated
@@ -69,8 +70,9 @@ export interface PublishToTargetInput {
    * Item strings (`pages/about`, `pages/about:fr`, `fragments/footer`).
    * Drive the history record, the manifest copy and - for
    * `purgeScope: 'items'` - the set of URLs to purge. Bare items copy
-   * and record the whole folder (every translation manifest present);
-   * locale-qualified items copy and record exactly that variant.
+   * their own files and ordinary subfolders, excluding descendant items;
+   * history records their default and translation manifests only.
+   * Locale-qualified items copy and record exactly that variant.
    */
   readonly items: readonly string[]
   /** Render-loop input; publishRun treats it verbatim. */
@@ -166,10 +168,10 @@ export async function publishToTarget(input: PublishToTargetInput): Promise<Publ
     }
   }
 
-  // Step 2 - source manifest copy. Bare items copy the whole folder
-  // (publishItems); a locale-qualified item (`pages/about:fr`) names one
-  // manifest variant, not a folder, so the variant file is copied
-  // directly - fail closed on anything isValidLocale rejects (#1174).
+  // Step 2 - source item copy. Bare items copy their own files and
+  // ordinary subfolders, excluding descendant items (publishItems).
+  // A locale-qualified item (`pages/about:fr`) names one variant manifest,
+  // copied directly - fail closed on anything isValidLocale rejects (#1174).
   const folderItems: string[] = []
   const variantKeys: string[] = []
   for (const it of items) {
@@ -504,8 +506,8 @@ async function collectPublishedItemsForHistory(
       // Fail closed on an invalid locale - it never reaches a path.
       if (isValidLocale(m[3])) names.push(localeFilename(base, m[3]))
     } else {
-      // Bare item: the copy writes the whole folder, so record the
-      // default manifest plus every translation manifest present.
+      // Bare item: record the default and translation manifests in this
+      // item's own folder. Descendant items are neither copied nor recorded.
       names.push(localeFilename(base, null))
       try {
         const entries = await sourceRoot.storage.readDir(sourceRoot.path(dir))
