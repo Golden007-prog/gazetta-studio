@@ -48,7 +48,7 @@
  */
 import { Hono } from 'hono'
 
-export interface HealthResponse {
+interface HealthResponse {
   ok: true
   /** ISO 8601 timestamp the server generated this response. */
   timestamp: string
