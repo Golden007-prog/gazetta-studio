@@ -1,6 +1,6 @@
 /**
- * Route-level contracts for `admin-api/routes/fragments.ts`: the
- * `target` query on reads, POST / PUT response bodies and error
+ * Route-level contracts for `admin-api/routes/fragments.ts`: the list's
+ * summary cache and error handling, the `target` query on reads, POST / PUT response bodies and error
  * mapping, the GET-by-name locale + archive + afterLoad branches, and
  * DELETE's archive-vs-purge dispatch.
  *
@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest'
 import type { Hono } from 'hono'
 import { createAdminApp } from '../src/admin-api/index.js'
 import { createSourceContext } from '../src/admin-api/source-context.js'
+import type { AdminCache, CacheStats, InvalidationEvent } from '../src/cache/types.js'
 import { HookCancellation, HookRegistry } from '../src/hooks/index.js'
 import { createValidatorRegistry } from '../src/validation/registry.js'
 import { memoryStorage, type MemoryStorage } from './_helpers/memory-storage.js'
@@ -27,12 +28,21 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
 interface Harness {
   app: Hono
   storage: MemoryStorage
+  source: ReturnType<typeof createSourceContext>
 }
 
-function setup(
-  files: Record<string, string>,
-  opts: { hooks?: HookRegistry; staging?: Record<string, string>; validators?: boolean } = {},
-): Harness {
+interface SetupOptions {
+  hooks?: HookRegistry
+  staging?: Record<string, string>
+  validators?: boolean
+  cache?: AdminCache
+  /** Build the source without a site manifest, so loading the site throws. */
+  withoutManifest?: boolean
+  /** No target registry: every request reads the source, as single-target setups do. */
+  sourceOnly?: boolean
+}
+
+function setup(files: Record<string, string>, opts: SetupOptions = {}): Harness {
   const storage = memoryStorage()
   storage.seed(files)
   const staging = memoryStorage()
@@ -45,26 +55,36 @@ function setup(
     storage,
     siteDir: '',
     projectSiteDir: '/test-project',
-    manifest: { name: SITE_NAME, targets: targetConfigs },
+    ...(opts.withoutManifest ? { siteName: SITE_NAME } : { manifest: { name: SITE_NAME, targets: targetConfigs } }),
+    ...(opts.cache ? { cache: opts.cache } : {}),
   })
   const app = createAdminApp({
     source,
     siteDir: '/test-project',
     templatesDir: '/test-project/templates',
-    targets: new Map([
-      ['local', storage],
-      ['staging', staging],
-    ]),
-    targetConfigs,
+    ...(opts.sourceOnly
+      ? {}
+      : {
+          targets: new Map([
+            ['local', storage],
+            ['staging', staging],
+          ]),
+          targetConfigs,
+        }),
     disableCacheStatsLogger: true,
     hooks: opts.hooks,
     ...(opts.validators ? {} : { validators: createValidatorRegistry([]) }),
   }) as unknown as Hono
-  return { app, storage }
+  return { app, storage, source }
 }
 
 const frag = (m: Record<string, unknown>) => JSON.stringify(m)
 const HEADER = { 'fragments/header/fragment.json': frag({ template: 'header-layout', content: { title: 'Hi' } }) }
+const ALPHA_BETA = {
+  'fragments/alpha/fragment.json': frag({ template: 'footer-layout', content: {} }),
+  'fragments/beta/fragment.json': frag({ template: 'footer-layout', content: {} }),
+}
+const SOURCE_SUMMARY_KEY = 'fragments:summary:target:__source__'
 
 function post(app: Hono, body: unknown, query = '') {
   return app.request(`/api/fragments${query}`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) })
@@ -77,6 +97,60 @@ function put(app: Hono, name: string, body: unknown, opts: { query?: string; hea
     body: JSON.stringify(body),
   })
 }
+
+describe('GET /api/fragments — summary cache', () => {
+  it('stores the list under the source key when no target is named', async () => {
+    const { app, source } = setup(ALPHA_BETA, { sourceOnly: true })
+    expect(await source.cache.get(SOURCE_SUMMARY_KEY)).toBeNull()
+
+    const res = await app.request('/api/fragments')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Array<{ name: string }>
+    expect(body.map(f => f.name).sort()).toEqual(['alpha', 'beta'])
+    expect(await source.cache.get(SOURCE_SUMMARY_KEY)).toEqual(body)
+  })
+
+  it('serves a cached list as is, without reading storage', async () => {
+    const { app, source } = setup(ALPHA_BETA, { sourceOnly: true })
+    // A name that isn't in storage, so only the cache can supply it.
+    await source.cache.set(SOURCE_SUMMARY_KEY, [{ name: 'only-in-cache', template: 'footer-layout' }])
+
+    const res = await app.request('/api/fragments')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([{ name: 'only-in-cache', template: 'footer-layout' }])
+  })
+})
+
+describe('GET /api/fragments — errors', () => {
+  it('returns an empty list when the site can not be loaded', async () => {
+    const { app } = setup(ALPHA_BETA, { withoutManifest: true, sourceOnly: true })
+    const res = await app.request('/api/fragments')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([])
+  })
+
+  it('answers 500 for any other error instead of an empty list', async () => {
+    const throwingCache: AdminCache = {
+      async get<T>(_key: string): Promise<T | null> {
+        throw new Error('cache-provider unavailable: connection reset')
+      },
+      async set<T>(_key: string, _value: T): Promise<void> {},
+      async invalidate(_key: string): Promise<void> {},
+      async invalidatePrefix(_prefix: string): Promise<number> {
+        return 0
+      },
+      subscribe(_handler: (event: InvalidationEvent) => void): () => void {
+        return () => {}
+      },
+      async stats(): Promise<CacheStats> {
+        return { hits: 0, misses: 0, size: 0 }
+      },
+    }
+    const { app } = setup(ALPHA_BETA, { cache: throwingCache, sourceOnly: true })
+    const res = await app.request('/api/fragments')
+    expect(res.status).toBe(500)
+  })
+})
 
 describe('GET /api/fragments — target query', () => {
   it('lists the fragments of the target named in ?target=', async () => {
