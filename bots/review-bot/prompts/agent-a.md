@@ -32,10 +32,11 @@ Recipe contracts available today:
 |---|---|---|
 | `tdd-first` | `correctness`, `security`, `architecture`, `types`, `comments`, `style` | Failing test commit → fix commit |
 | `coverage-shape` | `tests` | Single commit adding tests against working code, with anti-tautology counterfactual |
+| `mechanical-cleanup` | `comments`, `tests`, `correctness` whose action is a pure, no-behavior-change deletion | Single deletion-only commit; zero references + green suite instead of a counterfactual |
 
 Read the appended recipe carefully — it's the load-bearing contract
-for THIS candidate. Don't apply TDD-first to a coverage-shape
-candidate or vice versa.
+for THIS candidate. Don't apply one recipe's contract to
+another recipe's candidate.
 
 ## Stop conditions (every recipe)
 

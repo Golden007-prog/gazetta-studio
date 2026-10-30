@@ -288,7 +288,12 @@ Phase 3 — Make the change  (Agent A)
   - Orchestrator composes the shared agent-a.md base + the per-type
     recipe from prompts/recipes/ (selected by `recipe-select.ts`)
   - Recipes today: `tdd-first` (correctness/security/architecture/types/
-    comments/style) + `coverage-shape` (tests). New recipes land at
+    comments/style) + `coverage-shape` (tests) + `mechanical-cleanup`
+    (comments/tests/correctness candidates whose action is a pure,
+    no-behavior-change deletion: one deletion-only commit, with zero
+    references and a green suite in place of a counterfactual; the
+    orchestrator rejects a diff that adds lines, and Agent B is told
+    to treat any behavior change as CRITICAL). New recipes land at
     prompts/recipes/<shape>.md + one switch arm in `recipe-select.ts`
   - Agent A follows the recipe's commit shape + anti-tautology
     discipline; tdd-first emits 2 commits, coverage-shape emits 1

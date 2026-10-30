@@ -55,7 +55,8 @@ import { type AreaCandidate, scoreAreas } from './area-scorer.js'
 import { type Candidate, extractCandidatesFence, parseCandidatesFence, rankCandidates } from './candidates.js'
 import { collectBotPRsByArea, collectGitTouches, parsePickerOutput } from './phase0-collect.js'
 import { fingerprintToBranch, pastPROutcome } from './past-pr.js'
-import { selectRecipe } from './recipe-select.js'
+import { checkDeletionOnly } from './deletion-gate.js'
+import { type RecipeName, selectRecipe } from './recipe-select.js'
 import { appendReviewerLog } from './reviewer-log.js'
 import {
   type Fingerprint,
@@ -185,9 +186,31 @@ async function main(): Promise<void> {
       process.exit(0)
     }
 
+    // mechanical-cleanup has no counterfactual; its diff must be pure
+    // deletion, checked here rather than taken on Agent A's word.
+    const recipeName = selectRecipe(candidate)
+    if (recipeName === 'mechanical-cleanup') {
+      const gate = checkDeletionOnly(captureNumstat(branchName))
+      if (!gate.ok) {
+        printNotice(`Deletion-only gate failed: ${gate.reason}. Retrying without Agent B.`)
+        appendReviewerLog(REVIEWER_LOG_PATH, {
+          ts: new Date().toISOString(),
+          runId,
+          fingerprint,
+          fingerprintLabel: `${candidate.type}/${candidate.area}`,
+          attempt,
+          verdict: 'reject',
+          reasoning: `deletion-only gate: ${gate.reason}`,
+          agentASummary: agentAResult.summary ?? '(no summary)',
+        })
+        priorReviewerNote = `The deletion-only gate rejected the diff: ${gate.reason}. Delete lines only, or emit RESULT: STUCK if the candidate needs more than a deletion.`
+        continue
+      }
+    }
+
     // Phase 4 — reviewer (Agent B) via review-orchestrator skill
     printNotice(`Attempt ${attempt}/${MAX_ATTEMPTS}: invoking Agent B (review-orchestrator) on ${branchName}...`)
-    const reviewerOutput = await phase4Reviewer(branchName, runId, attempt)
+    const reviewerOutput = await phase4Reviewer(branchName, runId, attempt, recipeName)
 
     // Phase 5 — apply action policy
     const fenceBody = extractFindingsFence(reviewerOutput)
@@ -487,7 +510,7 @@ async function phase3AgentA(
   runId: string,
 ): Promise<AgentAResult> {
   const template = readFileSync(AGENT_A_PROMPT_PATH, 'utf-8')
-  const recipeName = selectRecipe(candidate.type)
+  const recipeName = selectRecipe(candidate)
   const recipeTemplate = readFileSync(resolve(RECIPES_DIR, `${recipeName}.md`), 'utf-8')
   const candidateBlock = JSON.stringify(candidate, null, 2)
 
@@ -531,18 +554,28 @@ function extractResultSummary(text: string): string {
   // RESULT: PUSHED can carry one of two shapes depending on recipe:
   //   - tdd-first: Branch + Test commit + Fix commit
   //   - coverage-shape (and other single-commit recipes): Branch + Commit + (optional) Counterfactuals
+  //   - mechanical-cleanup: Branch + Commit + References
   // Extract all known fields; concatenate the ones present.
   const branch = text.match(/^Branch:\s*(.+)$/m)?.[1]
   const test = text.match(/^Test commit:\s*(.+)$/m)?.[1]
   const fix = text.match(/^Fix commit:\s*(.+)$/m)?.[1]
   const single = text.match(/^Commit:\s*(.+)$/m)?.[1]
   const counterfactuals = text.match(/^Counterfactuals:\s*(.+)$/m)?.[1]
-  return [branch, test, fix, single, counterfactuals].filter(Boolean).join(' | ') || '(no summary)'
+  const references = text.match(/^References:\s*(.+)$/m)?.[1]
+  return [branch, test, fix, single, counterfactuals, references].filter(Boolean).join(' | ') || '(no summary)'
 }
 
 // --- Phase 4: Agent B (review-orchestrator) --------------------------
 
-async function phase4Reviewer(branchName: string, runId: string, attempt: number): Promise<string> {
+// Agent B's angle skills don't know the recipe. A mechanical-cleanup
+// diff claims to change no behavior, so the reviewer is told to treat
+// any behavior change as CRITICAL (which the action policy rejects).
+const MECHANICAL_CLEANUP_REVIEW_NOTE = `
+
+This diff was made under the \`mechanical-cleanup\` recipe: it claims to be a pure deletion that changes no observable behavior and removes nothing still referenced. In addition to the orchestrator's findings, emit a CRITICAL finding (category \`correctness\`, rule \`bots/review-bot/prompts/recipes/mechanical-cleanup.md\`) in the findings fence for each deletion that changes observable behavior (a test assertion, a return value, an export, a side effect) or removes a symbol that still has references (check with grep).
+`
+
+async function phase4Reviewer(branchName: string, runId: string, attempt: number, recipe: RecipeName): Promise<string> {
   const prompt = `Invoke the \`review-orchestrator\` skill via the Skill tool with arguments \`--base main\` while the working tree is on branch \`${branchName}\` (already checked out by the orchestrator).
 
 The orchestrator's diff source is \`git diff main\`. Let it dispatch the appropriate angle skills + aggregate findings.
@@ -550,7 +583,7 @@ The orchestrator's diff source is \`git diff main\`. Let it dispatch the appropr
 Emit ONLY the orchestrator's output to stdout — the markdown summary + the aggregated \`findings\` JSONL fence. Don't add prose around it.
 
 If review-orchestrator emits an empty findings fence (no concerns ≥ 80 confidence), emit it verbatim — the bot's verdict logic treats empty as APPROVE.
-`
+${recipe === 'mechanical-cleanup' ? MECHANICAL_CLEANUP_REVIEW_NOTE : ''}`
   const transcriptPath = resolve(TRANSCRIPT_DIR, `agent-b-${runId}-attempt${attempt}.jsonl`)
   const result = await runClaude({
     prompt,
@@ -677,6 +710,19 @@ function captureDiffStat(branchName: string): string {
       maxBuffer: 1 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
+  } catch {
+    return ''
+  }
+}
+
+function captureNumstat(branchName: string): string {
+  try {
+    return execFileSync('git', ['diff', '--numstat', `main...${branchName}`], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      maxBuffer: 1 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
   } catch {
     return ''
   }

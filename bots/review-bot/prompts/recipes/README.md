@@ -25,11 +25,17 @@ the specific RESULT format Agent A emits on success.
 |---|---|---|
 | `tdd-first.md` | `correctness`, `security`, `architecture`, `types`, `comments`, `style` | Failing test commit → fix commit |
 | `coverage-shape.md` | `tests` (coverage gap) | Single test commit against working code, with anti-tautology counterfactuals |
+| `mechanical-cleanup.md` | `comments`, `tests`, `correctness` whose suggested action is a pure, no-behavior-change deletion | Single deletion-only commit; zero references + green suite instead of a counterfactual |
 
-The candidate-type → recipe mapping lives in `../../recipe-select.ts`
-(typed exhaustive switch — adding a new `CandidateType` forces a
-compile error if no recipe is assigned, so this layer can't silently
-drop a type).
+The candidate → recipe mapping lives in `../../recipe-select.ts`.
+The candidate's type decides (typed exhaustive switch — adding a new
+`CandidateType` forces a compile error if no recipe is assigned, so
+this layer can't silently drop a type), except that a candidate whose
+suggested action is a pure deletion selects `mechanical-cleanup`. That
+check errs toward not matching: a candidate that only might be a pure
+deletion keeps its type's recipe, which goes STUCK if it doesn't fit.
+The orchestrator also checks a `mechanical-cleanup` diff adds no lines
+(`../../deletion-gate.ts`) before Agent B runs.
 
 ## Adding a new recipe
 
@@ -45,11 +51,13 @@ drop a type).
 
 2. **Add to `recipe-select.ts`**: extend the `RecipeName` union with
    the new recipe's filename (minus `.md`) and add an entry to
-   `RECIPE_BY_TYPE` for the candidate types that select it.
+   `RECIPE_BY_TYPE` for the candidate types that select it, or a
+   candidate check like `isPureDeletionCandidate` when the type alone
+   doesn't decide.
 
 3. **Add a vitest case** in `bots/review-bot/tests/recipe-select.test.ts`
    pinning the dispatch (e.g.,
-   `expect(selectRecipe('refactor')).toBe('refactor-shape')`).
+   `expect(selectRecipe(refactorCandidate)).toBe('refactor-shape')`).
 
 4. **Update this README's "Available recipes" table.**
 
@@ -77,5 +85,6 @@ Today (v1):
 - fix-bot has its own per-issue prompt that COULD adopt this pattern
   (its TDD-first contract is structurally identical to ours); not
   refactored yet — would land as a separate fix-bot consolidation cut
-- dead-code-watcher's deletion shape doesn't fit either recipe;
-  unlikely to use this directory
+- dead-code-watcher deletes exported symbols with its own reviewer
+  checks; `mechanical-cleanup` is narrower (inert lines only) and
+  isn't shared with it
