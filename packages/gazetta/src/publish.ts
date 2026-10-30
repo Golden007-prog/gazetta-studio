@@ -13,12 +13,16 @@ export interface PublishResult {
 /**
  * Copy items from source storage to target storage.
  * Items are relative paths like "pages/home" or "fragments/header".
- * All files under each item directory are copied recursively.
+ * Page and fragment items copy their own files and ordinary subfolders,
+ * excluding descendant directories with their own page/fragment manifest.
+ * Other item kinds retain recursive copying. Fetch callers can opt into
+ * including nested items to copy an entire content subtree.
  */
 export async function publishItems(
   sourceRoot: ContentRoot,
   targetRoot: ContentRoot,
   items: string[],
+  options: { includeNestedItems?: boolean } = {},
 ): Promise<{ copiedFiles: number }> {
   const { storage: sourceStorage, rootPath: sourceBase } = sourceRoot
   const { storage: targetStorage, rootPath: targetBase } = targetRoot
@@ -27,7 +31,8 @@ export async function publishItems(
   const counts = await mapLimit(items, async item => {
     const sourcePath = join(sourceBase, item)
     const targetPath = join(targetBase, item)
-    return copyRecursive(sourceStorage, sourcePath, targetStorage, targetPath)
+    const skipNestedItems = !options.includeNestedItems && (item.startsWith('pages/') || item.startsWith('fragments/'))
+    return copyRecursive(sourceStorage, sourcePath, targetStorage, targetPath, skipNestedItems)
   })
   const copiedFiles = counts.reduce((a, b) => a + b, 0)
 
@@ -39,6 +44,7 @@ async function copyRecursive(
   sourcePath: string,
   target: StorageProvider,
   targetPath: string,
+  skipNestedItems: boolean,
 ): Promise<number> {
   // Check if sourcePath is a file
   try {
@@ -62,7 +68,14 @@ async function copyRecursive(
     const childSource = join(sourcePath, entry.name)
     const childTarget = join(targetPath, entry.name)
     if (entry.isDirectory) {
-      return copyRecursive(source, childSource, target, childTarget)
+      if (
+        skipNestedItems &&
+        ((await source.exists(join(childSource, 'page.json'))) ||
+          (await source.exists(join(childSource, 'fragment.json'))))
+      ) {
+        return 0
+      }
+      return copyRecursive(source, childSource, target, childTarget, skipNestedItems)
     }
     const content = await source.readFile(childSource)
     await target.writeFile(childTarget, content)

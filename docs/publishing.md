@@ -2,6 +2,8 @@
 
 Publish copies content from an editing source to one or more destinations and renders it for those targets. Saving in the admin changes the active editing target; it does not publish to the other targets. To create your first site and publish to staging, follow [Getting started](./getting-started.md#publish-and-view-your-site).
 
+Publishing a page or fragment copies its own files, including translations and ordinary subfolders. Nested pages and fragments are separate items: publishing `pages/about` does not copy `pages/about/team` when that folder has its own manifest. Select the nested item too when you want to publish it.
+
 Configure storage, target `type`, environments and history in [Targets](./targets.md). For putting the site online, see [Cloudflare](./cloudflare.md) or [Self-hosted](./self-hosted.md).
 
 ## Publish from the admin

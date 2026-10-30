@@ -1077,7 +1077,9 @@ export function publishRoutes(
 
     try {
       const targetRoot = createContentRoot(targetStorage)
-      const { copiedFiles } = await publishItems(targetRoot, destination.contentRoot, items)
+      const { copiedFiles } = await publishItems(targetRoot, destination.contentRoot, items, {
+        includeNestedItems: true,
+      })
       console.log(`    ${copiedFiles} files copied to working copy`)
       return c.json({ success: true, copiedFiles, items })
     } catch (err) {

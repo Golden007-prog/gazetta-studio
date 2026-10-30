@@ -103,6 +103,28 @@ describe('POST /api/fetch — input validation (covers publish.ts:886-890)', () 
 })
 
 describe('POST /api/fetch — discovery walk (covers publish.ts:900-927)', () => {
+  it('fetches nested items when discovery lists only their parent directories', async () => {
+    const { app, remoteStorage, sourceStorage } = buildApp()
+    const files = {
+      'pages/about/page.json': JSON.stringify({ template: 'parent' }),
+      'pages/about/team/page.json': JSON.stringify({ template: 'child' }),
+      'pages/about/team/page.fr.json': JSON.stringify({ template: 'child-fr' }),
+      'fragments/header/fragment.json': JSON.stringify({ template: 'header' }),
+      'fragments/header/nested/fragment.json': JSON.stringify({ template: 'nested' }),
+    }
+    remoteStorage.seed(files)
+
+    const res = await app.request('/api/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'remote' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ success: true, copiedFiles: 5, items: ['pages/about', 'fragments/header'] })
+    for (const [key, value] of Object.entries(files)) expect(await sourceStorage.readFile(key)).toBe(value)
+  })
+
   it('returns 404 when the target is empty and no explicit items were requested', async () => {
     // Kills the ConditionalExpression at line 929 (`items.length ===
     // 0` → `false` would skip the 404 and try to copy an empty
