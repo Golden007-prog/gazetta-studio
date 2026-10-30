@@ -18,6 +18,12 @@ import { memoryStorage } from './_helpers/memory-storage.js'
 
 const repoRoot = resolve(import.meta.dirname, '../../..')
 const r2 = () => r2Storage({ accountId: 'a', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' })
+/** Cloud-like storage the validator can read: no `kind`, so it resolves public by default. */
+const cloud = (entries: Record<string, string> = {}) => {
+  const storage = memoryStorage()
+  storage.seed(entries)
+  return storage
+}
 
 function cliInput(targets: Record<string, TargetConfig>): ValidatorInput {
   const storage = memoryStorage()
@@ -56,14 +62,14 @@ describe('public-storage-config', () => {
   })
 
   it('errors on a public target with history enabled explicitly', async () => {
-    const issues = await run({ production: { storage: r2(), publicStorage: true, history: { enabled: true } } })
+    const issues = await run({ production: { storage: cloud(), publicStorage: true, history: { enabled: true } } })
     expect(issues).toHaveLength(1)
     expect(issues[0]).toMatchObject({ severity: 'error', itemPath: 'site.config.ts:targets.production' })
     expect(issues[0].message).toContain('history')
   })
 
   it('errors on a public target with editable: true explicitly', async () => {
-    const issues = await run({ production: { storage: r2(), editable: true } })
+    const issues = await run({ production: { storage: cloud(), editable: true } })
     const errors = issues.filter(i => i.severity === 'error')
     expect(errors.map(i => i.message)).toEqual([
       '`production` is editable, so its storage must be private (`publicStorage: false`).',
@@ -71,7 +77,7 @@ describe('public-storage-config', () => {
   })
 
   it('reports an info line, and no error, for a cloud target assumed public', async () => {
-    const issues = await run({ production: { storage: r2() } })
+    const issues = await run({ production: { storage: cloud() } })
     expect(issues).toEqual([
       expect.objectContaining({
         severity: 'info',
@@ -82,7 +88,7 @@ describe('public-storage-config', () => {
   })
 
   it('reports no info line for a target that declares publicStorage: true', async () => {
-    expect(await run({ production: { storage: r2(), publicStorage: true } })).toEqual([])
+    expect(await run({ production: { storage: cloud(), publicStorage: true } })).toEqual([])
   })
 
   it.each<[string, TargetConfig]>([
@@ -90,6 +96,43 @@ describe('public-storage-config', () => {
     ['an explicitly editable filesystem target', { storage: filesystemStorage({ path: '/tmp/x' }), editable: true }],
   ])('reports nothing for %s', async (_label, target) => {
     expect(await run({ t: target })).toEqual([])
+  })
+
+  it.each<[Record<string, string>, string]>([
+    [{ '.gazetta/history/revisions/r.json': '{}' }, 'history'],
+    [{ '.gazetta/audit/a.json': '{}' }, 'audit'],
+    [{ '.gazetta/review/x.json': '{}' }, 'review'],
+    [{ '.gazetta/history/index.json': '[]', '.gazetta/audit/a.json': '{}' }, 'history and audit'],
+  ])('errors on a public target whose storage still holds %j', async (entries, list) => {
+    const issues = await run({ production: { storage: cloud(entries), publicStorage: true } })
+    expect(issues).toEqual([
+      expect.objectContaining({
+        severity: 'error',
+        itemPath: 'site.config.ts:targets.production',
+        message: `\`production\` is public but still holds ${list}; run \`gazetta state remove production\`.`,
+      }),
+    ])
+  })
+
+  it('reports nothing for a public target holding only safe state', async () => {
+    const storage = cloud({ '.gazetta/publish-generation': 'g', '.gazetta/fragment-deps/h/pages.home': '' })
+    expect(await run({ production: { storage, publicStorage: true } })).toEqual([])
+  })
+
+  it("never reads a private target's storage", async () => {
+    const storage = cloud({ '.gazetta/history/index.json': '[]' })
+    const readDir = vi.spyOn(storage, 'readDir')
+    expect(await run({ production: { storage, publicStorage: false } })).toEqual([])
+    expect(readDir).not.toHaveBeenCalled()
+  })
+
+  it('reports an error instead of throwing when the storage cannot be read', async () => {
+    const storage = cloud()
+    vi.spyOn(storage, 'readDir').mockRejectedValue(new Error('EACCES'))
+    vi.spyOn(storage, 'exists').mockResolvedValue(true)
+    const issues = await run({ production: { storage, publicStorage: true } })
+    expect(issues).toEqual([expect.objectContaining({ severity: 'error' })])
+    expect(issues[0].message).toContain("Couldn't check `production`'s storage")
   })
 
   it('logs the info line once per assumed-public target at admin boot', () => {

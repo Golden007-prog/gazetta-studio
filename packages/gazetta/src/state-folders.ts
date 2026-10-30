@@ -30,6 +30,17 @@ export const STATE_FOLDERS = {
 export type StateFolder = keyof typeof STATE_FOLDERS
 
 /**
+ * Folders holding sensitive state: past versions, actor identities and
+ * approvers (design-public-storage.md Q6). A public target that still
+ * holds any of them fails validation, and `gazetta state remove`
+ * deletes exactly these. The dependency indices aren't safe on public
+ * targets either, but they aren't sensitive, so they aren't listed.
+ */
+export const SENSITIVE_STATE_FOLDERS = ['history', 'audit', 'review'] as const satisfies readonly StateFolder[]
+
+export type SensitiveStateFolder = (typeof SENSITIVE_STATE_FOLDERS)[number]
+
+/**
  * Root-relative path `.gazetta/<folder>/<segments...>`, joined with
  * `/`. Callers that need a content-root-prefixed path pass the result
  * to `contentRoot.path(...)`.

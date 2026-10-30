@@ -221,6 +221,9 @@ async function resolveSiteDirForCommand(cmd: string, parsed: { positional: reado
     return resolveSiteDir(parsed.positional[1 + requiredArgs + 1])
   }
 
+  // `state remove <target> [site]`: site at positional[2].
+  if (cmd === 'state') return resolveSiteDir(parsed.positional[2])
+
   // Unknown command → auto-detect (main's switch will reject with a
   // clear "Unknown command" error after env-load runs).
   return resolveSiteDir(undefined)
@@ -286,6 +289,8 @@ function printHelp() {
                                     Unarchive an item (back to live)
     gazetta archive rename <oldname> <newname> [--kind=...] [--no-keep-alias] [target] [site]
                                     Rename a live item; keeps the redirect by default
+    gazetta state remove <target> [site]
+                                    Delete history, audit and review from a target's storage
     gazetta help                    Show this help message
 
   Options:
@@ -293,7 +298,8 @@ function printHelp() {
     --host <address>                Address to listen on (dev, and admin without auth: 127.0.0.1; otherwise all interfaces)
     --force, -f                     Publish all items (skip unchanged check)
     --yes, -y                       Skip confirmation prompt (required in CI
-                                    for undo/rollback on production targets)
+                                    for undo/rollback on production targets
+                                    and for state remove)
     --limit <n>                     Max revisions to list (default: 50)
 
   Auto-detection:
@@ -2554,6 +2560,16 @@ async function main() {
     const trailingStart = 1 + requiredArgs
     const targetArg = parsed.positional[trailingStart]
     targetName = targetArg ? await resolveTarget(targetArg, siteDir) : undefined
+  } else if (command === 'state') {
+    // gazetta state remove <target> [site]
+    const [subcmd, targetArg] = parsed.positional
+    if (subcmd !== 'remove' || !targetArg) {
+      console.error(`  Usage: gazetta state remove <target> [site]\n`)
+      printHelp()
+      process.exit(1)
+      return
+    }
+    targetName = await resolveTarget(targetArg, siteDir)
   } else {
     console.error(`  Unknown command: ${command}\n`)
     printHelp()
@@ -2658,6 +2674,12 @@ async function main() {
     case 'archive': {
       const { runArchiveSubcommand } = await import('./archive.js')
       await runArchiveSubcommand({ args: args.slice(1), siteDir, targetName })
+      break
+    }
+    case 'state': {
+      const { runStateRemove } = await import('./state.js')
+      const { config } = await resolveHistoryContext(siteDir, targetName!)
+      await runStateRemove({ targetName: targetName!, config }, { yes: parsed.yes })
       break
     }
   }

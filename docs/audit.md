@@ -120,6 +120,7 @@ What follows from the setting:
 
 - A public target defaults to `editable: false`. Setting `editable: true` on it is a validation error: an editing target keeps history, so its storage must be private.
 - `history: { enabled: true }` on a public target is a validation error.
+- A public target whose storage still holds history, audit or review is a validation error: "`production` is public but still holds history; run `gazetta state remove production`." See [Removing Gazetta's state from a target](#removing-gazettas-state-from-a-target).
 - A target assumed public (no `publicStorage` set) gets one info line in `gazetta validate` and when the admin starts: "storage assumed public, so history and audit aren't kept. Set `publicStorage: false` if visitors can't reach it."
 
 `gazetta init`, the starter and gazetta.studio set `publicStorage` on every target. Upcoming releases stop writing history and audit to public targets ([design](../.claude/rules/design-public-storage.md)).
@@ -160,9 +161,19 @@ Pick one, in this order of preference:
 
 3. **At least pseudonymise the audit log.** `actorPseudonym: 'sha256'` replaces actor IDs with salted hashes and drops email addresses (see [Pseudonymization](#pseudonymization)). This does **not** protect history: past versions of your pages are still readable. Only use it on its own if that's acceptable. To turn history off for a target instead, set `history: { enabled: false }`; that also removes undo and rollback there.
 
+### Removing Gazetta's state from a target
+
+`gazetta state remove <target>` deletes history, audit and review from a target's storage. Use it when you move a target that kept its state to public storage, and to clean up after `.gazetta/` was public:
+
+```bash
+npx gazetta state remove production
+```
+
+It lists what it will delete and asks before deleting anything; that can't be undone, and undo and rollback stop working on that target. Other files under `.gazetta/` (dependency indices, the publish id) and your pages stay. In CI, pass `--yes`; without it the command stops and deletes nothing. It works on any target, public or private.
+
 ### If it was already public
 
-Blocking the folder stops new downloads. It doesn't remove copies made before:
+Blocking the folder stops new downloads. It doesn't remove copies made before. If the target is meant to be public, also run `gazetta state remove <target>` so the files are gone from storage, not just blocked:
 
 - **Purge your CDN cache** for everything under `/.gazetta/`, using the method your CDN supports (some accept a `/.gazetta/*` prefix, some need every URL listed, or a full purge). Then rerun the `curl` check above to confirm the files aren't served any more.
 - **Assume the files were copied**: search engines, web archives and anyone who found the URL may have them.

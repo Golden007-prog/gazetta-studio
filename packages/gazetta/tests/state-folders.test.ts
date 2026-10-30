@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isStateFolderSafeOnPublic, isStatePath, STATE_ROOT, stateFolderPath } from '../src/state-folders.js'
+import {
+  isStateFolderSafeOnPublic,
+  isStatePath,
+  SENSITIVE_STATE_FOLDERS,
+  STATE_FOLDERS,
+  STATE_ROOT,
+  stateFolderPath,
+} from '../src/state-folders.js'
 
 describe('stateFolderPath', () => {
   it('builds the root-relative path for each registered folder', () => {
@@ -48,5 +55,14 @@ describe('isStatePath', () => {
     expect(isStatePath('dist/.gazetta-deploy')).toBe(false)
     expect(isStatePath('content/pages/index.yaml')).toBe(false)
     expect(isStatePath('gazette/history')).toBe(false)
+  })
+})
+
+describe('SENSITIVE_STATE_FOLDERS', () => {
+  it('is history, audit and review, each a registry key unsafe on public targets', () => {
+    expect(SENSITIVE_STATE_FOLDERS).toEqual(['history', 'audit', 'review'])
+    for (const folder of SENSITIVE_STATE_FOLDERS) {
+      expect(STATE_FOLDERS[folder].safeOnPublic).toBe(false)
+    }
   })
 })

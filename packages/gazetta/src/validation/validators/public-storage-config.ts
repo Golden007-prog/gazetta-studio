@@ -7,11 +7,14 @@
  *   - public storage with `history: { enabled: true }` set explicitly
  *   - public storage with `editable: true` set explicitly (an editing
  *     target must keep its own history)
+ *   - public storage that still holds history, audit or review, which
+ *     `gazetta state remove` clears. Only public targets' storage is read.
  *
  * A target that resolves public only because `publicStorage` is unset
  * gets one info line, so the assumption is visible without blocking a
  * valid setup.
  */
+import { findSensitiveState, formatFolderList } from '../../state-remove.js'
 import { isPublicStorage, type TargetConfig } from '../../types.js'
 import type { Issue, Validator, ValidatorInput } from '../types.js'
 
@@ -47,6 +50,17 @@ export function logDefaultedPublicTargets(
       target: name,
       message: defaultedPublicMessage(name),
     })
+  }
+}
+
+/** Validators don't throw, so a storage failure comes back as a message for the issue. */
+async function sensitiveStateOf(target: TargetConfig): Promise<{ folders: string[]; error?: string }> {
+  try {
+    const storage = target.storage as TargetConfig['storage'] & { init?: () => Promise<void> }
+    if (typeof storage.init === 'function') await storage.init()
+    return { folders: await findSensitiveState(storage) }
+  } catch (err) {
+    return { folders: [], error: (err as Error).message }
   }
 }
 
@@ -87,6 +101,21 @@ export const publicStorageConfig: Validator = {
       if (target.editable === true) {
         issues.push(
           issue(name, 'error', `\`${name}\` is editable, so its storage must be private (\`publicStorage: false\`).`),
+        )
+      }
+      const held = await sensitiveStateOf(target)
+      if (held.error) {
+        issues.push(
+          issue(name, 'error', `Couldn't check \`${name}\`'s storage for history, audit or review: ${held.error}`),
+        )
+      } else if (held.folders.length > 0) {
+        issues.push(
+          issue(
+            name,
+            'error',
+            `\`${name}\` is public but still holds ${formatFolderList(held.folders)}; ` +
+              `run \`gazetta state remove ${name}\`.`,
+          ),
         )
       }
     }
