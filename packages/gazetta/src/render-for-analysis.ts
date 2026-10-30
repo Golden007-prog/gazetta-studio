@@ -133,6 +133,12 @@ async function computeTemplateHashes(site: Site, templatesDir: string): Promise<
   }
   for (const page of site.pages.values()) collect(page)
   for (const frag of site.fragments.values()) collect(frag)
+  for (const entry of site.pageLocales.values()) {
+    for (const page of entry.locales.values()) collect(page)
+  }
+  for (const entry of site.fragmentLocales.values()) {
+    for (const frag of entry.locales.values()) collect(frag)
+  }
 
   for (const tplName of seen) {
     const hash = await tryHashTemplate(templatesDir, tplName)
