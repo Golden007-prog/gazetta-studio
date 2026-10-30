@@ -2,28 +2,34 @@
 
 A stateless CMS that structures websites as composable components.
 
-No database. No build step. Pages are composed from reusable components at serve time.
-The CMS stores nothing — all content lives in targets (filesystem, S3, Azure Blob).
+**Status:** early development, not ready for production sites. The release on npm (0.8.0) is behind `main` and its docs.
+
+**Contribute:** [CONTRIBUTING.md](https://github.com/gazetta-studio/gazetta-studio/blob/main/CONTRIBUTING.md) explains how to pick an issue, run the tests and open a PR.
+
+## Try it
+
+Run Gazetta from `main` with its starter site:
+
+```bash
+# Node.js 22.22.2+ in the 22 line, or Node.js 26 (24.15+ is accepted, not tested)
+git clone https://github.com/gazetta-studio/gazetta-studio.git
+cd gazetta-studio
+npm install
+npm run dev
+```
+
+Open http://localhost:3000/admin to edit the site; http://localhost:3000 shows it.
 
 ## Key Ideas
+
+No database. No build step. Pages are composed from reusable components at serve time.
+The CMS stores nothing — all content lives in targets (filesystem, S3, Azure Blob).
 
 - **Components** are the building block — each has a template, content, and optional children
 - **Fragments** are shared components reusable across pages (header, footer, nav)
 - **Pages** are components with a route and metadata
 - **Templates** are pure functions `(params) => { html, css, js }` — use any framework (React, Svelte, Vue, plain TS)
 - **The CMS is stateless** — it reads from and writes to targets. Lose the CMS, lose nothing.
-
-## Quick Start
-
-```bash
-# Requirements: Gazetta is tested on Node.js 22.22.2 or later in the 22 line, and on Node.js 26. Node 24.15+ is also accepted, but not tested. Odd-numbered releases such as 23 and 25 aren't supported.
-npm install
-npm run build
-npm run dev
-# Open http://localhost:3000 (site) and http://localhost:3000/admin (CMS editor)
-```
-
-This starts the dev server with the starter example site and CMS admin UI.
 
 ## Project Structure
 
@@ -39,7 +45,7 @@ examples/
 sites/
   gazetta.studio/   The gazetta.studio website (dogfooding)
 docs/
-  design.md         Full design document
+  getting-started.md  Create a site and edit it in the admin
 ```
 
 ## How It Works
