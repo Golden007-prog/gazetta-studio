@@ -23,6 +23,14 @@ The extra confirmation depends on the destination's `environment`, not its name.
 
 The publish flow also reports template or validation errors. If a publish is blocked, read the panel's errors and fix the content or template before retrying. The server checks publish validation too; a client-side selection is not a guarantee that the write will succeed.
 
+For each selected page or fragment, the publish audit follows publishing's locale
+selection. Bare items include translations enabled for the destination target;
+explicit `:locale` suffixes are case-insensitive. Checks use the manifest actually
+rendered, including existing fallback behavior when the requested translation is
+absent, and findings identify that manifest (for example, `pages/about/page.fr.json`).
+The server repeats the audit before writing to any destination, and refuses the
+publish when it finds an error; `publishAudit.strict` turns warnings into errors.
+
 ## Publish from the CLI
 
 Run these commands from a project with a configured site. Name the destination explicitly, especially in scripts:

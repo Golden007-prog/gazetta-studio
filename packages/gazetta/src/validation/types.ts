@@ -73,6 +73,8 @@ export interface SavedItem {
   kind: 'page' | 'fragment'
   /** Logical name, e.g. `home`, `blog/[slug]`, `header`. */
   name: string
+  /** Requested rendering locale; its manifest may use the publisher's fallback. */
+  locale?: string
   /** Filesystem path to the manifest, e.g. `pages/home/page.json`. */
   itemPath: string
 }

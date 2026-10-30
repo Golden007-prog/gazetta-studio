@@ -4,7 +4,7 @@ import { getType, getEnvironment, isEditable } from '../../types.js'
 import type { StorageProvider, TargetConfig } from '../../types.js'
 import { stateFolderPath } from '../../state-folders.js'
 import { publishItems, resolveDependencies, findFragmentDependents, findDependentsFromSidecars } from '../../publish.js'
-import { isValidLocale } from '../../locale.js'
+import { isValidLocale, normalizeLocale } from '../../locale.js'
 import type { SourceContextResolver } from '../source-context.js'
 import type { PublishResult } from '../../publish.js'
 import { loadSiteFromSource } from '../source-context.js'
@@ -30,6 +30,7 @@ import { makeAuditFiringEmitter } from '../hook-audit-emitter.js'
 import { runPublishAudit } from '../../validation/publish-audit.js'
 import type { Issue } from '../../validation/types.js'
 import { isSafeItemName } from '../../item-name.js'
+import { PublishAuditRequestSchema } from '../schemas/validation.js'
 
 /**
  * Progress events streamed by runPublish. Consumed both by the SSE route
@@ -170,7 +171,9 @@ export function publishRoutes(
       if (i.kind === 'page' || i.kind === 'fragment') items.push({ kind: i.kind, name: i.name })
     }
     if (items.length === 0) return []
-    const site = await loadSiteFromSource(source)
+    const site = await loadSiteFromSource(source, {
+      templatesDir: templatesDir ?? `${source.projectSiteDir}/templates`,
+    })
     const blocked: Array<{ target: string; issues: Issue[] }> = []
     for (const targetName of targetNames) {
       const targetCfg = source.manifest?.targets?.[targetName]
@@ -183,6 +186,7 @@ export function publishRoutes(
         registry: opts.validators,
         cache: source.cache,
         strict,
+        targetLocales: targetCfg?.locales,
         templatesDir: site.templatesDir,
       })
       const errors = issues.filter(i => i.severity === 'error')
@@ -453,7 +457,8 @@ export function publishRoutes(
         for (const it of targetItems) {
           if (it.startsWith('pages/')) {
             const raw = it.replace('pages/', '')
-            const [name, locale] = raw.includes(':') ? raw.split(':') : [raw, undefined]
+            const [name, rawLocale] = raw.includes(':') ? raw.split(':') : [raw, undefined]
+            const locale = rawLocale ? normalizeLocale(rawLocale) : undefined
             // Locale-qualified: just the requested variant. Else: default
             // + every supported locale (subject to target.locales filter).
             if (locale) {
@@ -470,7 +475,8 @@ export function publishRoutes(
             }
           } else if (it.startsWith('fragments/') && !isStatic) {
             const raw = it.replace('fragments/', '')
-            const [name, locale] = raw.includes(':') ? raw.split(':') : [raw, undefined]
+            const [name, rawLocale] = raw.includes(':') ? raw.split(':') : [raw, undefined]
+            const locale = rawLocale ? normalizeLocale(rawLocale) : undefined
             if (locale) {
               itemRefs.push({ kind: 'fragment', name, locale })
             } else {
@@ -1098,18 +1104,16 @@ export function publishRoutes(
    * errors, so a determined client can't bypass.
    */
   app.post('/api/publish/audit', requireCapability('publish:non-production'), async c => {
-    const body = await c.req.json().catch(() => null)
-    if (!body || typeof body !== 'object') {
-      return c.json({ error: 'invalid request body' }, 400)
-    }
-    const targetName = (body as { target?: unknown }).target
-    const items = (body as { items?: unknown }).items
-    if (typeof targetName !== 'string' || !Array.isArray(items)) {
+    const parsed = PublishAuditRequestSchema.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) {
       return c.json({ error: 'expected { target: string, items: SavedItem[] }' }, 400)
     }
+    const { target: targetName, items } = parsed.data
 
     const source = await resolve(c.req.query('target'))
-    const site = await loadSiteFromSource(source)
+    const site = await loadSiteFromSource(source, {
+      templatesDir: templatesDir ?? `${source.projectSiteDir}/templates`,
+    })
     const targetCfg = source.manifest?.targets?.[targetName]
     const strict = !!targetCfg?.publishAudit?.strict
 
@@ -1119,13 +1123,14 @@ export function publishRoutes(
     }
 
     const issues = await runPublishAudit({
-      items: items as Array<{ kind: 'page' | 'fragment'; name: string }>,
+      items,
       site,
       contentRoot: source.contentRoot,
       storage: source.storage,
       registry: opts.validators,
       cache: source.cache,
       strict,
+      targetLocales: targetCfg?.locales,
       templatesDir: site.templatesDir,
     })
 
@@ -1134,8 +1139,7 @@ export function publishRoutes(
     // When the publish set includes any archived items, surface the
     // destination target's capability info so the publish dialog can
     // warn operators (e.g., "this target won't emit 301 redirects").
-    const itemList = items as Array<{ kind: 'page' | 'fragment'; name: string }>
-    const includesArchived = itemList.some(i => {
+    const includesArchived = items.some(i => {
       const m = i.kind === 'page' ? site.pages.get(i.name) : site.fragments.get(i.name)
       return m?.archived === true
     })

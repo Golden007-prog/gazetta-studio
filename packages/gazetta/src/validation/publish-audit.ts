@@ -21,13 +21,16 @@
  */
 import type { AdminCache } from '../cache/types.js'
 import type { ContentRoot } from '../content-root.js'
+import { localeFilename, normalizeLocale, resolveSiteLocales } from '../locale.js'
 import { renderPageForAnalysis } from '../render-for-analysis.js'
+import { lookupFragmentForLocale } from '../resolver.js'
 import type { Site } from '../site-loader.js'
 import type { StorageProvider } from '../types.js'
 import type { ValidatorRegistry } from './registry.js'
 import type { Issue, RenderedOutputAccess, SavedItem } from './types.js'
 
 export interface RunPublishAuditOptions {
+  /** Publish-list names may include a `:locale` suffix for a translation. */
   items: ReadonlyArray<{ kind: 'page' | 'fragment'; name: string }>
   site: Site
   contentRoot: ContentRoot
@@ -37,27 +40,58 @@ export interface RunPublishAuditOptions {
   cache?: AdminCache
   /** Per-target strict flag — promotes warns to errors when true. */
   strict: boolean
+  /** Destination locale filter for variants expanded from bare item names. */
+  targetLocales?: readonly string[]
   templatesDir?: string
 }
 
 export async function runPublishAudit(opts: RunPublishAuditOptions): Promise<Issue[]> {
-  const { items, site, contentRoot, storage, registry, cache, strict, templatesDir } = opts
+  const { items, site, contentRoot, storage, registry, cache, strict, targetLocales, templatesDir } = opts
 
   const validators = registry.forStage('pre-publish')
   if (validators.length === 0) return []
 
-  // Map the request items to SavedItem with itemPath. Pages + fragments only;
-  // anything else is rejected by the route's body schema, but be defensive.
+  // Match the route's publish fanout: bare items include destination-enabled
+  // variants, while explicit locale requests retain the renderer's fallback.
   const savedItems: SavedItem[] = []
+  const seen = new Set<string>()
+  const resolvedLocales = resolveSiteLocales(site.manifest) ?? undefined
+  function addItem(kind: SavedItem['kind'], name: string, locale?: string): void {
+    const key = `${kind}:${name}:${locale ?? ''}`
+    if (seen.has(key)) return
+    const variant = kind === 'page' && locale ? site.pageLocales.get(name)?.locales.get(locale) : undefined
+    const manifest =
+      kind === 'page'
+        ? (variant ?? site.pages.get(name))
+        : lookupFragmentForLocale(name, { site, locale, resolvedLocales })
+    let manifestLocale = variant ? locale : undefined
+    if (kind === 'fragment') {
+      for (const [candidateLocale, variant] of site.fragmentLocales.get(name)?.locales ?? []) {
+        if (variant === manifest) {
+          manifestLocale = candidateLocale
+          break
+        }
+      }
+    }
+    if (!manifest) return
+    seen.add(key)
+    savedItems.push({
+      kind,
+      name,
+      ...(locale ? { locale } : {}),
+      itemPath: `${manifest.dir}/${localeFilename(kind, manifestLocale ?? null)}`,
+    })
+  }
   for (const i of items) {
-    if (i.kind === 'page') {
-      const page = site.pages.get(i.name)
-      if (!page) continue
-      savedItems.push({ kind: 'page', name: i.name, itemPath: `${page.dir}/page.json` })
-    } else if (i.kind === 'fragment') {
-      const frag = site.fragments.get(i.name)
-      if (!frag) continue
-      savedItems.push({ kind: 'fragment', name: i.name, itemPath: `${frag.dir}/fragment.json` })
+    const [name, rawLocale] = i.name.split(':')
+    const locale = rawLocale ? normalizeLocale(rawLocale) : undefined
+    addItem(i.kind, name, locale)
+    if (!locale) {
+      const variants = i.kind === 'page' ? site.pageLocales.get(name) : site.fragmentLocales.get(name)
+      for (const variantLocale of variants?.locales.keys() ?? []) {
+        if (targetLocales && !targetLocales.includes(variantLocale)) continue
+        addItem(i.kind, name, variantLocale)
+      }
     }
   }
   if (savedItems.length === 0) return []
@@ -67,7 +101,7 @@ export async function runPublishAudit(opts: RunPublishAuditOptions): Promise<Iss
       ? {
           async htmlFor(item: SavedItem) {
             if (item.kind !== 'page') return null
-            const out = await renderPageForAnalysis(item.name, { site, cache, templatesDir })
+            const out = await renderPageForAnalysis(item.name, { site, cache, templatesDir, locale: item.locale })
             return out?.html ?? null
           },
         }
